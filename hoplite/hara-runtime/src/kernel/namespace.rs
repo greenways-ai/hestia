@@ -1,0 +1,320 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
+
+use crate::kernel::{Var, VarMetadata, VarOrigin};
+use crate::lang::data::Symbol;
+use crate::lang::protocol::INamespaced;
+
+#[derive(Debug, Clone)]
+pub struct Namespace<V> {
+    name: Symbol,
+    mappings: Rc<RefCell<HashMap<Symbol, Var<V>>>>,
+    aliases: Rc<RefCell<HashMap<Symbol, Namespace<V>>>>,
+    imports: Rc<RefCell<HashMap<Symbol, String>>>,
+    native_flavor: Rc<RefCell<Option<String>>>,
+}
+impl<V> Namespace<V> {
+    pub fn new(name: impl AsRef<str>) -> Self {
+        Self {
+            name: Symbol::parse(name.as_ref()),
+            mappings: Rc::new(RefCell::new(HashMap::new())),
+            aliases: Rc::new(RefCell::new(HashMap::new())),
+            imports: Rc::new(RefCell::new(HashMap::new())),
+            native_flavor: Rc::new(RefCell::new(None)),
+        }
+    }
+    pub fn name(&self) -> &Symbol {
+        &self.name
+    }
+    pub fn same_identity(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.mappings, &other.mappings)
+    }
+    pub fn identity_address(&self) -> usize {
+        Rc::as_ptr(&self.mappings) as usize
+    }
+    pub fn intern(&self, name: impl AsRef<str>, value: V) -> Var<V>
+    where
+        V: Clone + 'static,
+    {
+        let local = Symbol::parse(name.as_ref());
+        if let Some(existing) = self.mappings.borrow().get(&local).cloned() {
+            existing.reset_value(value);
+            return existing;
+        }
+        let path = format!("{}/{}", self.name.as_str(), local.get_name());
+        let var = Var::new(path, value);
+        self.mappings.borrow_mut().insert(local, var.clone());
+        var
+    }
+    pub fn intern_with_metadata(
+        &self,
+        name: impl AsRef<str>,
+        value: V,
+        metadata: VarMetadata,
+    ) -> Var<V>
+    where
+        V: Clone + 'static,
+    {
+        let local = Symbol::parse(name.as_ref());
+        if let Some(existing) = self.mappings.borrow().get(&local).cloned() {
+            existing.reset_value(value);
+            existing.set_metadata(metadata);
+            return existing;
+        }
+        let path = format!("{}/{}", self.name.as_str(), local.get_name());
+        let var = Var::with_metadata(path, value, metadata);
+        self.mappings.borrow_mut().insert(local, var.clone());
+        var
+    }
+    pub fn intern_with_origin(&self, name: impl AsRef<str>, value: V, origin: VarOrigin) -> Var<V>
+    where
+        V: Clone + 'static,
+    {
+        self.intern_with_metadata(
+            name,
+            value,
+            VarMetadata {
+                origin,
+                ..VarMetadata::default()
+            },
+        )
+    }
+    pub fn map_var(&self, symbol: Symbol, var: Var<V>) {
+        self.mappings.borrow_mut().insert(symbol, var);
+    }
+    pub fn unmap(&self, symbol: &Symbol) -> Option<Var<V>> {
+        self.mappings.borrow_mut().remove(symbol)
+    }
+    pub fn resolve(&self, symbol: &Symbol) -> Option<Var<V>>
+    where
+        V: Clone,
+    {
+        if let Some(namespace) = symbol.get_namespace() {
+            let alias = Symbol::parse(namespace);
+            return self.aliases.borrow().get(&alias).and_then(|ns| {
+                ns.mappings
+                    .borrow()
+                    .get(&Symbol::parse(symbol.get_name()))
+                    .cloned()
+            });
+        }
+        self.mappings.borrow().get(symbol).cloned()
+    }
+    pub fn unalias(&self, alias: impl AsRef<str>) -> Option<Namespace<V>> {
+        self.aliases
+            .borrow_mut()
+            .remove(&Symbol::parse(alias.as_ref()))
+    }
+    pub fn alias(&self, alias: impl AsRef<str>, namespace: Namespace<V>) {
+        self.aliases
+            .borrow_mut()
+            .insert(Symbol::parse(alias.as_ref()), namespace);
+    }
+    pub fn import(&self, name: impl AsRef<str>, host_type: impl Into<String>) {
+        self.imports
+            .borrow_mut()
+            .insert(Symbol::parse(name.as_ref()), host_type.into());
+    }
+    pub fn imported(&self, name: &Symbol) -> Option<String> {
+        self.imports.borrow().get(name).cloned()
+    }
+    pub fn set_native_flavor(&self, flavor: Option<String>) {
+        *self.native_flavor.borrow_mut() = flavor;
+    }
+    pub fn native_flavor(&self) -> Option<String> {
+        self.native_flavor.borrow().clone()
+    }
+    pub fn mappings(&self) -> Vec<(Symbol, Var<V>)>
+    where
+        V: Clone,
+    {
+        self.mappings
+            .borrow()
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+    pub fn aliases(&self) -> Vec<(Symbol, Namespace<V>)>
+    where
+        V: Clone,
+    {
+        self.aliases
+            .borrow()
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+    pub fn imports(&self) -> Vec<(Symbol, String)> {
+        self.imports
+            .borrow()
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct NamespaceRegistry<V> {
+    namespaces: Rc<RefCell<HashMap<Symbol, Namespace<V>>>>,
+    current: Rc<RefCell<Symbol>>,
+}
+impl<V: Clone> Default for NamespaceRegistry<V> {
+    fn default() -> Self {
+        Self::new("user")
+    }
+}
+impl<V: Clone> NamespaceRegistry<V> {
+    pub fn new(initial: impl AsRef<str>) -> Self {
+        let name = Symbol::parse(initial.as_ref());
+        let namespace = Namespace::new(name.as_str());
+        let mut namespaces = HashMap::new();
+        namespaces.insert(name.clone(), namespace);
+        Self {
+            namespaces: Rc::new(RefCell::new(namespaces)),
+            current: Rc::new(RefCell::new(name)),
+        }
+    }
+    pub fn current(&self) -> Namespace<V> {
+        self.namespaces
+            .borrow()
+            .get(&*self.current.borrow())
+            .cloned()
+            .expect("current namespace exists")
+    }
+    pub fn find(&self, name: impl AsRef<str>) -> Option<Namespace<V>> {
+        self.namespaces
+            .borrow()
+            .get(&Symbol::parse(name.as_ref()))
+            .cloned()
+    }
+    pub fn find_or_create(&self, name: impl AsRef<str>) -> Namespace<V> {
+        let symbol = Symbol::parse(name.as_ref());
+        if let Some(namespace) = self.namespaces.borrow().get(&symbol).cloned() {
+            return namespace;
+        }
+        let namespace = Namespace::new(symbol.as_str());
+        self.namespaces
+            .borrow_mut()
+            .insert(symbol, namespace.clone());
+        namespace
+    }
+    pub fn set_current(&self, name: impl AsRef<str>) -> Namespace<V> {
+        let namespace = self.find_or_create(name);
+        *self.current.borrow_mut() = namespace.name().clone();
+        namespace
+    }
+    pub fn all(&self) -> Vec<Namespace<V>> {
+        self.namespaces.borrow().values().cloned().collect()
+    }
+    pub fn remove(&self, name: impl AsRef<str>) -> Option<Namespace<V>> {
+        let symbol = Symbol::parse(name.as_ref());
+        if symbol == *self.current.borrow() {
+            return None;
+        }
+        self.namespaces.borrow_mut().remove(&symbol)
+    }
+    pub fn resolve(&self, symbol: &Symbol) -> Option<Var<V>>
+    where
+        V: Clone,
+    {
+        if let Some(namespace_name) = symbol.get_namespace() {
+            let local = Symbol::parse(symbol.get_name());
+            if let Some(namespace) = self.find(namespace_name) {
+                return namespace.mappings.borrow().get(&local).cloned();
+            }
+            return self
+                .current()
+                .aliases
+                .borrow()
+                .get(&Symbol::parse(namespace_name))
+                .and_then(|namespace| namespace.mappings.borrow().get(&local).cloned());
+        }
+        self.current().resolve(symbol)
+    }
+    pub fn set_var(&self, symbol: Symbol, var: Var<V>) -> Result<Var<V>, String>
+    where
+        V: Clone,
+    {
+        let namespace = match symbol.get_namespace() {
+            Some(name) => self
+                .find(name)
+                .ok_or_else(|| format!("Namespace not found: {name}"))?,
+            None => self.current(),
+        };
+        namespace.map_var(Symbol::parse(symbol.get_name()), var.clone());
+        Ok(var)
+    }
+    pub fn visible_symbol_names(&self) -> Vec<String> {
+        let current = self.current();
+        let mut names = current
+            .mappings
+            .borrow()
+            .keys()
+            .map(|name| name.as_str().to_owned())
+            .collect::<Vec<_>>();
+        for (alias, namespace) in current.aliases.borrow().iter() {
+            names.extend(
+                namespace
+                    .mappings
+                    .borrow()
+                    .keys()
+                    .map(|name| format!("{}/{}", alias.as_str(), name.as_str())),
+            );
+        }
+        names.sort();
+        names.dedup();
+        names
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Namespace;
+    use crate::lang::data::Symbol;
+    use crate::lang::protocol::IDeref;
+    #[test]
+    fn resolves_local_and_aliased_vars() {
+        let source = Namespace::new("source");
+        source.intern("answer", 42);
+        let original = source.resolve(&Symbol::parse("answer")).unwrap();
+        let reinterned = source.intern("answer", 43);
+        assert!(original.same_identity(&reinterned));
+        assert_eq!(original.deref(), 43);
+        let target = Namespace::new("target");
+        target.alias("s", source.clone());
+        assert_eq!(
+            source.resolve(&Symbol::parse("answer")).unwrap().deref(),
+            43
+        );
+        assert_eq!(
+            target.resolve(&Symbol::parse("s/answer")).unwrap().deref(),
+            43
+        );
+    }
+    #[test]
+    fn registry_manages_lifecycle_resolution_and_visibility() {
+        let registry = super::NamespaceRegistry::new("user");
+        registry.current().intern("local", 1);
+        let library = registry.find_or_create("example.lib");
+        library.intern("answer", 42);
+        registry.current().alias("lib", library);
+        assert_eq!(
+            registry
+                .resolve(&Symbol::parse("example.lib/answer"))
+                .unwrap()
+                .deref(),
+            42
+        );
+        assert_eq!(
+            registry
+                .resolve(&Symbol::parse("lib/answer"))
+                .unwrap()
+                .deref(),
+            42
+        );
+        assert_eq!(registry.visible_symbol_names(), vec!["lib/answer", "local"]);
+        assert!(registry.remove("user").is_none());
+        assert!(registry.remove("example.lib").is_some());
+    }
+}
