@@ -1,0 +1,7 @@
+/backups/
+/supabase/.branches/
+/supabase/.temp/
+*.local
+.env
+.env.*
+!.env.example

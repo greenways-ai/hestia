@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+umask 077
+
+repo_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
+node_root="$repo_root"
+pin_file="$node_root/SUPABASE_CLI_VERSION"
+
+die() {
+  echo "hestia: $*" >&2
+  exit 1
+}
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+check_cli() {
+  need supabase
+  local expected actual
+  expected="$(tr -d '[:space:]' < "$pin_file")"
+  actual="$(supabase --version)"
+  [[ "$actual" == "$expected" ]] || die "Supabase CLI $expected required; found $actual"
+}
+
+run_supabase() {
+  supabase "$@" --workdir "$node_root"
+}
+
+database_url() {
+  run_supabase status --output env \
+    | sed -n 's/^DB_URL="\(.*\)"$/\1/p' \
+    | head -n 1
+}
+
+safe_status() {
+  run_supabase status --output env \
+    | sed -n '/^API_URL=/p; /^REST_URL=/p; /^GRAPHQL_URL=/p; /^FUNCTIONS_URL=/p; /^MAILPIT_URL=/p; /^STORAGE_S3_URL=/p'
+}
+
+client_env() {
+  run_supabase status --output env \
+    | sed -n '/^API_URL=/p; /^PUBLISHABLE_KEY=/p'
+}
+
+command="${1:-help}"
+shift || true
+
+case "$command" in
+  doctor)
+    check_cli
+    need docker
+    need psql
+    docker info >/dev/null 2>&1 || die "Docker daemon is unavailable"
+    echo "Hestia prerequisites are ready."
+    ;;
+  up)
+    check_cli
+    need docker
+    run_supabase start
+    ;;
+  down)
+    check_cli
+    run_supabase stop
+    ;;
+  status)
+    check_cli
+    safe_status
+    ;;
+  client-env)
+    check_cli
+    client_env
+    ;;
+  backup)
+    check_cli
+    timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+    destination="${1:-$node_root/backups/$timestamp}"
+    mkdir -p "$destination"
+    run_supabase db dump --local --file "$destination/schema.sql"
+    run_supabase db dump --local --data-only --use-copy \
+      --schema auth,gw_ledger --file "$destination/data.sql"
+    (cd "$destination" && sha256sum schema.sql data.sql > SHA256SUMS)
+    echo "Backup: $destination"
+    ;;
+  restore)
+    check_cli
+    need psql
+    source_dir="${1:-}"
+    confirmation="${2:-}"
+    [[ -n "$source_dir" ]] || die "usage: hestia restore BACKUP_DIR --confirm"
+    [[ "$confirmation" == "--confirm" ]] || die "restore replaces local state; add --confirm"
+    [[ -f "$source_dir/SHA256SUMS" && -f "$source_dir/data.sql" ]] || die "invalid backup directory: $source_dir"
+    (cd "$source_dir" && sha256sum --check SHA256SUMS)
+    run_supabase db reset --local
+    url="$(database_url)"
+    [[ -n "$url" ]] || die "could not resolve local database URL"
+    psql "$url" -v ON_ERROR_STOP=1 --single-transaction -f "$source_dir/data.sql"
+    echo "Restored: $source_dir"
+    ;;
+  help|-h|--help)
+    echo "usage: hestia {doctor|up|down|status|client-env|backup [DIR]|restore DIR --confirm}"
+    ;;
+  *)
+    die "unknown command: $command"
+    ;;
+esac
