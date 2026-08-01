@@ -1,74 +1,25 @@
-# Hestia local node
+# Local Hestia node
 
-Hestia is a local-first service distribution. It reuses the open-source
-Docker services composed by Supabase, but Supabase is not the product API or the
-source of truth for Greenways.
+Hestia requires Docker with the Compose plugin, OpenSSL and PostgreSQL client
+tools. `scripts/hestia init` creates `.hestia/env` with local secrets at mode
+0600. It never prints those secrets.
 
-The first distribution includes PostgreSQL 17, GoTrue auth, PostgREST,
-Realtime/Phoenix, Storage, the API gateway, Edge Runtime and local mail capture.
-Supabase Studio and vector storage are disabled: operators use the smaller
-`scripts/hestia` interface and Greenways owns the public schema.
+The server binds its development interfaces to loopback:
 
-## Boundary
-
-| Concern | Owner |
+| Interface | Address |
 | --- | --- |
-| User sessions, passkeys and OAuth | GoTrue/Supabase Auth |
-| PostgreSQL, REST transport, realtime transport and object storage | pinned upstream containers |
-| Provenance, authorisation, contracts and work receipts | Greenways ledger |
-| Browser execution, SSS ceremonies and portable semantics | Hara kernel |
-| Browser-facing database surface | `greenways_api` only |
+| Hoplite origin | http://127.0.0.1:58080 |
+| Supabase Auth | http://127.0.0.1:59999 |
+| WebRTC signalling | ws://127.0.0.1:58443 |
+| PostgreSQL | postgresql://127.0.0.1:55432/hestia |
 
-`gw_ledger`, `auth`, `storage`, `realtime` and upstream administrative schemas
-are not exposed through PostgREST. The initial public functions are
-`node_info()` and the authenticated, read-only `ledger_head(network)`.
-Application writes will be added as signed substrate actions, not generic table
-CRUD.
+A Cloudflare Tunnel may publish Hoplite without opening an inbound port. The
+tunnel token belongs in the operator's secret store, not this repository.
 
-## Operator interface
+Backups contain private identity, authority and work records. The backup command
+writes a PostgreSQL custom-format dump and SHA-256 checksum. Restore requires an
+explicit `--confirm` and replaces local database state. Content-addressed
+Studio assets and browser OPFS data require a separate export.
 
-Requirements are Docker, PostgreSQL client tools and Supabase CLI `2.106.0`.
-The version is pinned in `SUPABASE_CLI_VERSION` because that CLI resolves the
-upstream container set and generated configuration.
-
-```bash
-scripts/hestia doctor
-scripts/hestia up
-scripts/hestia status
-scripts/hestia client-env
-scripts/hestia backup
-scripts/hestia down
-```
-
-`status` prints only public service URLs. `client-env` additionally prints the
-browser-safe publishable key; neither command emits the database password,
-JWT secret, secret API key or service-role token.
-
-The Supabase local-development launcher publishes its ports on all host
-interfaces. This package is therefore a development node unless the host
-firewall limits the 5632x ports. The production distribution must use an
-explicitly bound Compose/Podman configuration and rotated secrets. Container
-volumes survive `down`.
-
-Backups are written beneath `backups/` as schema SQL plus
-restorable `auth` and `gw_ledger` data SQL, with SHA-256 checksums. They contain
-private identity and project information; copy them only to storage controlled
-by the user. Storage objects and browser OPFS audio are content-addressed files,
-not PostgreSQL data, and require a separate file backup/export workflow.
-
-Restore is intentionally explicit:
-
-```bash
-scripts/hestia restore backups/<timestamp> --confirm
-```
-
-## Updating upstream services
-
-Updating the CLI pin is an infrastructure migration. Review the Supabase
-changelog, run a backup, update the pin and generated `config.toml`, then reset
-and test a disposable node before touching user data. In particular, database
-major versions and API-gateway swaps are not ordinary image bumps.
-
-The initial ledger migration was generated from `gwdb-ledger/sql/full.sql` in
-`greenways-ai/web-infra`. Once released, add migrations instead of rewriting
-that imported history.
+GoTrue is the only retained Supabase service. GitHub OAuth stays disabled until
+the operator supplies a client ID and secret in `.hestia/env`.

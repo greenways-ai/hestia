@@ -1,6 +1,5 @@
 /backups/
-/supabase/.branches/
-/supabase/.temp/
+/.hestia/
 *.local
 .env
 .env.*

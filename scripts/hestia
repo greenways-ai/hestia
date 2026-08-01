@@ -4,8 +4,9 @@ set -euo pipefail
 umask 077
 
 repo_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
-node_root="$repo_root"
-pin_file="$node_root/SUPABASE_CLI_VERSION"
+state_dir="$repo_root/.hestia"
+env_file="$state_dir/env"
+compose_file="$repo_root/compose.yaml"
 
 die() {
   echo "hestia: $*" >&2
@@ -16,90 +17,106 @@ need() {
   command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
 }
 
-check_cli() {
-  need supabase
-  local expected actual
-  expected="$(tr -d '[:space:]' < "$pin_file")"
-  actual="$(supabase --version)"
-  [[ "$actual" == "$expected" ]] || die "Supabase CLI $expected required; found $actual"
+initialize() {
+  need openssl
+  if [[ -f "$env_file" ]]; then
+    echo "Hestia is already initialized."
+    return
+  fi
+  install -d -m 700 "$state_dir"
+  {
+    echo "HESTIA_POSTGRES_PASSWORD=$(openssl rand -hex 32)"
+    echo "HESTIA_APP_PASSWORD=$(openssl rand -hex 32)"
+    echo "HESTIA_JWT_SECRET=$(openssl rand -hex 48)"
+    echo "HESTIA_TURN_SECRET=$(openssl rand -hex 32)"
+    echo "HESTIA_SITE_URL=http://127.0.0.1:58080"
+    echo "HESTIA_GITHUB_ENABLED=false"
+    echo "HESTIA_GITHUB_CLIENT_ID="
+    echo "HESTIA_GITHUB_SECRET="
+  } > "$env_file"
+  chmod 600 "$env_file"
+  echo "Initialized private operator state in $state_dir"
 }
 
-run_supabase() {
-  supabase "$@" --workdir "$node_root"
+compose_command() {
+  if docker compose version >/dev/null 2>&1; then
+    docker compose "$@"
+  elif command -v docker-compose >/dev/null 2>&1; then
+    docker-compose "$@"
+  else
+    die "Docker Compose plugin or docker-compose is required"
+  fi
 }
 
-database_url() {
-  run_supabase status --output env \
-    | sed -n 's/^DB_URL="\(.*\)"$/\1/p' \
-    | head -n 1
-}
-
-safe_status() {
-  run_supabase status --output env \
-    | sed -n '/^API_URL=/p; /^REST_URL=/p; /^GRAPHQL_URL=/p; /^FUNCTIONS_URL=/p; /^MAILPIT_URL=/p; /^STORAGE_S3_URL=/p'
-}
-
-client_env() {
-  run_supabase status --output env \
-    | sed -n '/^API_URL=/p; /^PUBLISHABLE_KEY=/p'
+compose() {
+  [[ -f "$env_file" ]] || die "run scripts/hestia init first"
+  compose_command --project-name hestia --env-file "$env_file" --file "$compose_file" "$@"
 }
 
 command="${1:-help}"
 shift || true
 
 case "$command" in
+  init)
+    initialize
+    ;;
   doctor)
-    check_cli
     need docker
+    need openssl
     need psql
-    docker info >/dev/null 2>&1 || die "Docker daemon is unavailable"
-    echo "Hestia prerequisites are ready."
+    need pg_dump
+    need pg_restore
+    compose_command version >/dev/null
+    docker info >/dev/null
+    [[ -f "$env_file" ]] || die "run scripts/hestia init"
+    compose config --quiet
+    echo "Hestia prerequisites and Compose configuration are ready."
     ;;
   up)
-    check_cli
-    need docker
-    run_supabase start
+    initialize
+    compose up --detach --build "$@"
     ;;
   down)
-    check_cli
-    run_supabase stop
+    compose down
     ;;
   status)
-    check_cli
-    safe_status
+    compose ps
+    echo "Hoplite:  http://127.0.0.1:58080"
+    echo "Auth:     http://127.0.0.1:59999"
+    echo "Signal:   ws://127.0.0.1:58443"
+    echo "Postgres: 127.0.0.1:55432"
     ;;
-  client-env)
-    check_cli
-    client_env
+  logs)
+    compose logs --follow "$@"
     ;;
   backup)
-    check_cli
     timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
-    destination="${1:-$node_root/backups/$timestamp}"
-    mkdir -p "$destination"
-    run_supabase db dump --local --file "$destination/schema.sql"
-    run_supabase db dump --local --data-only --use-copy \
-      --schema auth,gw_ledger --file "$destination/data.sql"
-    (cd "$destination" && sha256sum schema.sql data.sql > SHA256SUMS)
+    destination="${1:-$repo_root/backups/$timestamp}"
+    install -d -m 700 "$destination"
+    compose exec --no-TTY postgres pg_dump \
+      --username postgres --dbname hestia --format custom \
+      --no-owner --file /tmp/hestia.dump
+    compose cp postgres:/tmp/hestia.dump "$destination/hestia.dump"
+    sha256sum "$destination/hestia.dump" > "$destination/SHA256SUMS"
     echo "Backup: $destination"
     ;;
   restore)
-    check_cli
-    need psql
     source_dir="${1:-}"
     confirmation="${2:-}"
-    [[ -n "$source_dir" ]] || die "usage: hestia restore BACKUP_DIR --confirm"
+    [[ -n "$source_dir" ]] || die "usage: scripts/hestia restore BACKUP_DIR --confirm"
     [[ "$confirmation" == "--confirm" ]] || die "restore replaces local state; add --confirm"
-    [[ -f "$source_dir/SHA256SUMS" && -f "$source_dir/data.sql" ]] || die "invalid backup directory: $source_dir"
+    [[ -f "$source_dir/hestia.dump" && -f "$source_dir/SHA256SUMS" ]] \
+      || die "invalid backup directory: $source_dir"
     (cd "$source_dir" && sha256sum --check SHA256SUMS)
-    run_supabase db reset --local
-    url="$(database_url)"
-    [[ -n "$url" ]] || die "could not resolve local database URL"
-    psql "$url" -v ON_ERROR_STOP=1 --single-transaction -f "$source_dir/data.sql"
+    compose up --detach postgres
+    compose cp "$source_dir/hestia.dump" postgres:/tmp/hestia-restore.dump
+    compose exec --no-TTY postgres pg_restore \
+      --username postgres --dbname hestia --clean --if-exists \
+      --no-owner /tmp/hestia-restore.dump
     echo "Restored: $source_dir"
     ;;
   help|-h|--help)
-    echo "usage: hestia {doctor|up|down|status|client-env|backup [DIR]|restore DIR --confirm}"
+    echo "usage: scripts/hestia {init|doctor|up|down|status|logs|backup [DIR]|restore DIR --confirm}"
     ;;
   *)
     die "unknown command: $command"

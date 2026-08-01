@@ -1,23 +1,16 @@
-(ns hoplite.app)
+(ns hestia.origin)
 
-(defn hello
+(defn health
   [request]
   {:status 200
-   :headers {"content-type" "text/plain; charset=utf-8"
-             "x-hoplite" "true"}
-   :body "Hello from Hoplite\n"})
-
-(defn ^:async delayed
-  [request]
-  (std.foundation.coroutine/await
-    (std.native.Host/call "nginx" "sleep" [25]))
-  {:status 200
-   :headers {"content-type" "text/plain; charset=utf-8"
-             "x-hoplite" "promise-resumed"}
-   :body "Hara coroutine resumed from the Nginx event loop\n"})
+   :headers {"content-type" "application/json; charset=utf-8"
+             "cache-control" "no-store"
+             "x-hoplite" "hestia"}
+   :body "{\"ok\":true,\"protocol\":\"hestia/1\",\"origin\":\"hoplite\"}\n"})
 
 (defn inspect
   [request]
   {:status 200
-   :headers {"content-type" "text/plain; charset=utf-8"}
-   :body "inspect"})
+   :headers {"content-type" "application/json; charset=utf-8"
+             "cache-control" "no-store"}
+   :body "{\"service\":\"hestia\",\"security\":\"local-first\",\"ledger\":\"postgresql\"}\n"})

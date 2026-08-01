@@ -1,0 +1,93 @@
+services:
+  postgres:
+    build:
+      context: .
+      dockerfile: gwdb-ledger/Dockerfile.postgres15-pgsodium
+    command: ["postgres", "-c", "shared_preload_libraries=pgsodium"]
+    environment:
+      POSTGRES_DB: hestia
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${HESTIA_POSTGRES_PASSWORD:?run scripts/hestia init}
+      HESTIA_APP_PASSWORD: ${HESTIA_APP_PASSWORD:?run scripts/hestia init}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - hestia-postgres:/var/lib/postgresql/data
+      - ./docker/postgres/00-roles.sh:/docker-entrypoint-initdb.d/00-roles.sh:ro
+      - ./docker/postgres/10-migrate.sh:/docker-entrypoint-initdb.d/10-migrate.sh:ro
+      - ./migrations:/hestia-migrations:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hestia"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  auth:
+    image: supabase/gotrue:v2.194.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      API_EXTERNAL_URL: http://127.0.0.1:59999
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://postgres:${HESTIA_POSTGRES_PASSWORD}@postgres:5432/hestia?sslmode=disable
+      GOTRUE_SITE_URL: ${HESTIA_SITE_URL:-http://127.0.0.1:58080}
+      GOTRUE_URI_ALLOW_LIST: ${HESTIA_SITE_URL:-http://127.0.0.1:58080}/**
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "false"
+      GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
+      GOTRUE_EXTERNAL_GITHUB_ENABLED: ${HESTIA_GITHUB_ENABLED:-false}
+      GOTRUE_EXTERNAL_GITHUB_CLIENT_ID: ${HESTIA_GITHUB_CLIENT_ID:-}
+      GOTRUE_EXTERNAL_GITHUB_SECRET: ${HESTIA_GITHUB_SECRET:-}
+      GOTRUE_JWT_SECRET: ${HESTIA_JWT_SECRET:?run scripts/hestia init}
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED: "true"
+      GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL: "10"
+    ports:
+      - "127.0.0.1:59999:9999"
+    restart: unless-stopped
+
+  hoplite:
+    build:
+      context: .
+      dockerfile: hoplite/docker/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HESTIA_DATABASE_URL: postgres://hestia_app:${HESTIA_APP_PASSWORD}@postgres:5432/hestia?sslmode=disable
+      HESTIA_AUTH_URL: http://auth:9999
+    ports:
+      - "127.0.0.1:58080:8080"
+    restart: unless-stopped
+
+  signaling:
+    build: ./services/signaling
+    environment:
+      HESTIA_SIGNAL_PORT: "8443"
+      HESTIA_SIGNAL_MAX_BYTES: "65536"
+    ports:
+      - "127.0.0.1:58443:8443"
+    restart: unless-stopped
+
+  turn:
+    image: coturn/coturn:4.6.3-r3
+    profiles: ["turn"]
+    command:
+      - --no-cli
+      - --fingerprint
+      - --use-auth-secret
+      - --static-auth-secret=${HESTIA_TURN_SECRET}
+      - --realm=hestia.local
+      - --min-port=49160
+      - --max-port=49200
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "49160-49200:49160-49200/udp"
+
+volumes:
+  hestia-postgres:
