@@ -9,6 +9,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${HESTIA_POSTGRES_PASSWORD:?run scripts/hestia init}
       HESTIA_APP_PASSWORD: ${HESTIA_APP_PASSWORD:?run scripts/hestia init}
+      HESTIA_PGSODIUM_ROOT_KEY: ${HESTIA_PGSODIUM_ROOT_KEY:?run scripts/hestia init}
     ports:
       - "127.0.0.1:55432:5432"
     volumes:

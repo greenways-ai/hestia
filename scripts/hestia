@@ -20,6 +20,11 @@ need() {
 initialize() {
   need openssl
   if [[ -f "$env_file" ]]; then
+    if ! grep -q '^HESTIA_PGSODIUM_ROOT_KEY=' "$env_file"; then
+      echo "HESTIA_PGSODIUM_ROOT_KEY=$(openssl rand -hex 32)" >> "$env_file"
+      chmod 600 "$env_file"
+      echo "Added a private pgSodium root key to existing operator state."
+    fi
     echo "Hestia is already initialized."
     return
   fi
@@ -27,6 +32,7 @@ initialize() {
   {
     echo "HESTIA_POSTGRES_PASSWORD=$(openssl rand -hex 32)"
     echo "HESTIA_APP_PASSWORD=$(openssl rand -hex 32)"
+    echo "HESTIA_PGSODIUM_ROOT_KEY=$(openssl rand -hex 32)"
     echo "HESTIA_JWT_SECRET=$(openssl rand -hex 48)"
     echo "HESTIA_TURN_SECRET=$(openssl rand -hex 32)"
     echo "HESTIA_SITE_URL=http://127.0.0.1:58080"

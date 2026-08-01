@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+: "${HESTIA_PGSODIUM_ROOT_KEY:?missing HESTIA_PGSODIUM_ROOT_KEY}"
+printf '%s\n' "$HESTIA_PGSODIUM_ROOT_KEY"

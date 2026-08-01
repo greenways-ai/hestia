@@ -60,7 +60,7 @@ BEGIN
 
   v_sequence := COALESCE(v_sequence, 0) + 1;
   v_previous := COALESCE(v_previous, decode(repeat('00', 32), 'hex'));
-  v_hash := digest(
+  v_hash := public.digest(
     v_previous
     || convert_to(p_stream || ':' || v_sequence || ':' || p_event_type || ':', 'UTF8')
     || convert_to(p_actor_key, 'UTF8')
@@ -102,7 +102,7 @@ BEGIN
     IF e.sequence <> v_sequence OR e.previous_hash <> v_previous THEN
       RETURN false;
     END IF;
-    v_expected := digest(
+    v_expected := public.digest(
       v_previous
       || convert_to(e.stream || ':' || e.sequence || ':' || e.event_type || ':', 'UTF8')
       || convert_to(e.actor_key, 'UTF8')
