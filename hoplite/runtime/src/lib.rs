@@ -1,18 +1,18 @@
 #![allow(clippy::missing_safety_doc)]
 
-#[path = "../../../src/core.rs"]
+#[path = "../../hara-runtime/src/core.rs"]
 mod core;
-#[path = "../../../src/hta.rs"]
+#[path = "../../hara-runtime/src/hta.rs"]
 mod hta;
-#[path = "../../../src/json.rs"]
+#[path = "../../hara-runtime/src/json.rs"]
 mod json;
-#[path = "../../../src/kernel.rs"]
+#[path = "../../hara-runtime/src/kernel.rs"]
 mod kernel;
-#[path = "../../../src/lang.rs"]
+#[path = "../../hara-runtime/src/lang.rs"]
 mod lang;
-#[path = "../../../src/snapshot.rs"]
+#[path = "../../hara-runtime/src/snapshot.rs"]
 mod snapshot;
-#[path = "../../../src/task.rs"]
+#[path = "../../hara-runtime/src/task.rs"]
 mod task;
 mod vm;
 
