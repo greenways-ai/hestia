@@ -78,8 +78,25 @@ nav a:hover { color: var(--gold-bright); }
 
 main {
   max-width: var(--page);
-  padding: 110px 24px 150px;
+  padding: 48px 24px 150px;
 }
+
+.architecture-note {
+  color: var(--stone-dim);
+  font: .58rem var(--mono);
+  letter-spacing: .08em;
+  margin-left: auto;
+  position: relative;
+  text-transform: uppercase;
+  width: max-content;
+  z-index: 5;
+}
+
+.architecture-note summary { cursor: pointer; list-style: none; }
+.architecture-note summary::-webkit-details-marker { display: none; }
+.architecture-note summary span { border: 1px solid var(--line-strong); display: inline-grid; height: 18px; margin-left: .45rem; place-items: center; width: 18px; }
+.architecture-note > div { background: #0b1514fa; border: 1px solid var(--line-strong); box-shadow: 0 18px 60px #0008; font: .76rem/1.55 var(--sans); letter-spacing: 0; padding: 1rem; position: absolute; right: 0; text-transform: none; top: calc(100% + .7rem); width: min(360px, calc(100vw - 28px)); }
+.architecture-note p + p { margin-top: .7rem; }
 
 .architecture-warning {
   background: linear-gradient(100deg, #b7603e20, #101b1ae8 58%);
@@ -168,22 +185,11 @@ main {
 .hero {
   border-bottom: 1px solid var(--line);
   max-width: none;
-  padding: 70px 0 100px;
+  padding: 36px 0 72px;
   position: relative;
 }
 
-.hero::after {
-  background: radial-gradient(circle, #d7b96c33, transparent 66%);
-  border: 1px solid var(--line);
-  content: "";
-  height: min(32vw, 390px);
-  position: absolute;
-  right: 3vw;
-  top: 38px;
-  transform: rotate(45deg);
-  width: min(32vw, 390px);
-  z-index: -1;
-}
+.hero::after { display: none; }
 
 .hero h1,
 h2,
@@ -196,9 +202,9 @@ h2,
 }
 
 .hero h1 {
-  font-size: clamp(2.8rem, 5vw, 5.2rem);
-  line-height: .96;
-  max-width: 760px;
+  font-size: clamp(1.9rem, 3vw, 3rem);
+  line-height: 1.05;
+  max-width: 640px;
 }
 
 .hero h1 i { color: var(--gold-bright); }
@@ -217,12 +223,9 @@ h2,
   max-width: 640px;
 }
 
-.story {
-  border: 1px solid var(--line-strong);
-  margin: 56px 0 0;
-  overflow: hidden;
-  position: relative;
-}
+.mechanism-head { align-items: end; display: flex; justify-content: space-between; gap: 2rem; }
+.mechanism-head .eyebrow { margin-bottom: .45rem; }
+.story { border: 1px solid var(--line-strong); display: grid; gap: 1px; margin: 32px 0 0; position: relative; }
 
 .story::after {
   background: linear-gradient(90deg, transparent, #d7b96c24, transparent);
@@ -234,49 +237,20 @@ h2,
   top: 0;
 }
 
-.story img {
-  aspect-ratio: 3 / 1;
-  object-fit: cover;
-  width: 100%;
-}
-
-.story figcaption {
-  background: #07100ef2;
-  border-top: 1px solid var(--line);
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-}
-
-.story figcaption > div {
-  border-right: 1px solid var(--line);
-  min-height: 128px;
-  padding: 16px;
-}
-
-.story figcaption > div:last-child { border-right: 0; }
-
-.story figcaption b,
-.story figcaption strong,
-.story figcaption span {
-  display: block;
-}
-
-.story figcaption b {
-  color: var(--gold);
-  font: .6rem var(--mono);
-}
-
-.story figcaption strong {
-  color: var(--stone-bright);
-  font: 1.35rem var(--display);
-  margin: .4rem 0;
-}
-
-.story figcaption span {
-  color: var(--stone-dim);
-  font-size: .78rem;
-  line-height: 1.45;
-}
+.story-step { background: #0b1514; display: grid; grid-template-columns: minmax(220px, .72fr) 1fr; min-height: 154px; position: relative; }
+.story-art { background-image: url("./hestia-ceremony-story.png"); background-repeat: no-repeat; background-size: 500% auto; border-right: 1px solid var(--line); }
+.story-step:nth-child(1) .story-art { background-position: 0% center; }
+.story-step:nth-child(2) .story-art { background-position: 25% center; }
+.story-step:nth-child(3) .story-art { background-position: 50% center; }
+.story-step:nth-child(4) .story-art { background-position: 75% center; }
+.story-step:nth-child(5) .story-art { background-position: 100% center; }
+.story-content { align-items: center; display: grid; gap: .4rem; grid-template-columns: 42px 1fr auto; padding: 1.25rem 1.5rem; position: relative; }
+.story-content b { color: var(--gold); font: .58rem var(--mono); }
+.story-content > strong { color: var(--stone-bright); font: clamp(1.35rem, 2.5vw, 2.1rem) var(--display); }
+.help-popover { position: relative; }
+.help-popover summary { border: 1px solid var(--line-strong); cursor: pointer; display: grid; font: .65rem var(--mono); height: 30px; list-style: none; place-items: center; width: 30px; }
+.help-popover summary::-webkit-details-marker { display: none; }
+.help-popover p { background: #0b1514fa; border: 1px solid var(--line-strong); box-shadow: 0 18px 60px #0008; color: var(--stone-dim); font-size: .78rem; line-height: 1.55; margin: 0; padding: 1rem; position: absolute; right: 0; top: calc(100% + .55rem); width: min(300px, calc(100vw - 42px)); z-index: 8; }
 
 .eyebrow,
 .progress,
@@ -317,7 +291,7 @@ h2,
 .panel.quiet { background: linear-gradient(145deg, #121e1cf7, #07100ef2); }
 
 h2 {
-  font-size: clamp(2.7rem, 5vw, 5.4rem);
+  font-size: clamp(1.8rem, 3.5vw, 3.4rem);
   line-height: 1;
 }
 
@@ -340,7 +314,7 @@ button.card:hover,
   transform: translateY(-2px);
 }
 
-.card h3 { font-size: clamp(1.6rem, 3vw, 2.5rem); }
+.card h3 { font-size: clamp(1.25rem, 2vw, 1.8rem); }
 .card p { color: var(--stone-dim); }
 
 button {
@@ -426,12 +400,20 @@ footer a { color: var(--gold-bright); }
   .architecture-warning summary { gap: .7rem; grid-template-columns: 1fr; padding: 18px 20px 18px 40px; }
   .architecture-warning summary i { text-align: left; }
   .architecture-explanation { grid-template-columns: 1fr; padding: 20px; }
-  .hero { padding: 60px 0 70px; }
-  .hero::after { opacity: .35; }
-  .hero h1 { font-size: clamp(2.7rem, 12vw, 4.2rem); }
-  .story { margin-top: 36px; overflow-x: auto; }
-  .story img { aspect-ratio: auto; height: 270px; max-width: none; object-fit: cover; width: 810px; }
-  .story figcaption { min-width: 810px; }
+  .architecture-note { margin-top: 12px; }
+  .masthead nav span { display: block; }
+  .hero { padding: 32px 0 56px; }
+  .hero h1 { font-size: clamp(1.8rem, 8vw, 2.5rem); }
+  .mechanism-head { align-items: start; flex-direction: column; gap: .3rem; }
+  .story { margin-top: 24px; }
+  .story-step { background-image: linear-gradient(90deg, #07100e26 0%, #07100eed 76%), url("./hestia-ceremony-story.png"); background-repeat: no-repeat; background-size: 100% 100%, 500% auto; grid-template-columns: 1fr; min-height: 210px; }
+  .story-step:nth-child(1) { background-position: center, 0% center; }
+  .story-step:nth-child(2) { background-position: center, 25% center; }
+  .story-step:nth-child(3) { background-position: center, 50% center; }
+  .story-step:nth-child(4) { background-position: center, 75% center; }
+  .story-step:nth-child(5) { background-position: center, 100% center; }
+  .story-art { display: none; }
+  .story-content { align-self: end; background: linear-gradient(0deg, #07100ef5, transparent); grid-template-columns: 34px 1fr auto; padding: 4rem 1rem 1rem; }
   .progress { overflow-x: auto; }
   .progress span { min-width: 110px; }
 }

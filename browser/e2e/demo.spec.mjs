@@ -140,6 +140,22 @@ test("Hara/WASM owns ceremony transitions, commands, and views", async ({ page }
   expect(result.connected.view.status_label).toBe("Connected");
 });
 
+test("guided demo presents the recovery mechanism without editorial framing", async ({ page }) => {
+  await page.goto(origin + "/recovery/");
+  await expect(page.getByText("Demo", { exact: true })).toBeVisible();
+  await expect(page.locator(".story-step")).toHaveCount(5);
+  await expect(page.getByText("Advanced lab", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/Custodia communis/)).toHaveCount(0);
+  const explanation = page.locator(".story-step").first().locator(".help-popover p");
+  await expect(explanation).not.toBeVisible();
+  await page.locator(".story-step").first().locator("summary[aria-label='About creation']").click();
+  await expect(explanation).toBeVisible();
+  await expect(page.locator(".story-art").first()).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator(".story-art").first()).not.toBeVisible();
+  await expect(page.locator(".story-step").first()).toHaveCSS("background-image", /hestia-ceremony-story/);
+});
+
 test("legacy v1 invite recovers to v2 ceremony creation", async ({ page }) => {
   await page.goto(origin + "/recovery/lab/#v=1&ceremony=EkrNjvfMxQ1d47GsvePTDA&cap=3DGUDZ7eZdaCR8mS55Wt0nY71-3drcM6EZtyQVUhckg&mode=reusable");
   await expect(page.locator("#statusLabel")).toHaveText("Invite expired");
