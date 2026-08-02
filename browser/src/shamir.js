@@ -1,44 +1,9 @@
-import { HtaContext } from "/hara-runtime/index.js";
-
-const workerUrl = "/hara-runtime/worker.js";
-const wasmUrl = "/hara-runtime/hara_wasm_raw.wasm";
-const resources = [["std.crypto.shamir", "/hara/shamir.hal"]];
+import { haraSession, requireWebCrypto } from "/hestia-browser/hara.js";
 
 let runtimePromise;
 
-function requireWebCrypto() {
-  if (!globalThis.isSecureContext && !["localhost", "127.0.0.1"].includes(location.hostname)) {
-    throw new Error("Hestia requires HTTPS so browser cryptography is available");
-  }
-  if (!globalThis.crypto?.subtle || !globalThis.crypto?.getRandomValues) {
-    throw new Error("Web Crypto is unavailable in this browser context");
-  }
-  return globalThis.crypto;
-}
-
 async function loadRuntime() {
-  const crypto = requireWebCrypto();
-  const context = new HtaContext({
-    worker: new Worker(workerUrl, { type: "module", name: "hestia-hara" }),
-    moduleUrl: wasmUrl,
-    hostCalls: {
-      "crypto.random/fill": (length) => {
-        if (!Number.isInteger(length) || length < 0 || length > 65_536) {
-          throw new Error("Hara requested an invalid random byte count");
-        }
-        return crypto.getRandomValues(new Uint8Array(length));
-      }
-    }
-  });
-  const sources = await Promise.all(resources.map(async ([namespace, url]) => {
-    const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) throw new Error(`Unable to load Hara module ${namespace} (${response.status})`);
-    return [namespace, await response.text()];
-  }));
-  await context.call("register-resources", [sources]);
-  const session = await context.createSession("HESTIA");
-  await session.eval("(require [std.crypto.shamir :as shamir])");
-  return { context, session };
+  return { session: await haraSession("HESTIA-CRYPTO", "[std.crypto.shamir :as shamir]") };
 }
 
 function runtime() {

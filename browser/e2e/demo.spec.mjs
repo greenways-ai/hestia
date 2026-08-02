@@ -118,6 +118,24 @@ test("Hara/WASM owns threshold split and reconstruction", async ({ page }) => {
   expect(result.info).toBeTruthy();
 });
 
+test("Hara/WASM owns ceremony transitions, commands, and views", async ({ page }) => {
+  await page.goto(origin + "/recovery/");
+  const result = await page.evaluate(async () => {
+    const { createCeremonyKernel } = await import("/hestia-browser/ceremony-kernel.js");
+    const kernel = await createCeremonyKernel();
+    const joined = await kernel.dispatch("ceremony/join", { mode: "single" });
+    const connected = await kernel.dispatch("transport/connected");
+    return { joined, connected };
+  });
+  expect(result.joined.state.phase).toBe("pairing");
+  expect(result.joined.view.status_label).toBe("Waiting for peer");
+  expect(result.joined.commands.map(({ capability }) => capability)).toEqual([
+    "persistence", "transport"
+  ]);
+  expect(result.connected.state.connected).toBe(true);
+  expect(result.connected.view.status_label).toBe("Connected");
+});
+
 test("reusable peers sharing one URL recover and reconnect", async ({ browser }) => {
   const state = await pairAndRecover(browser, "reusable");
   await state.first.close();
