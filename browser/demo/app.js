@@ -5,6 +5,7 @@ import { CeremonyPeer } from "/hestia-browser/peer.js";
 import { canonical, importSigningPublicKey, randomId, sha256 } from "/hestia-browser/protocol.js";
 import { generateCeremonyKey, openCeremonyShare, sealShareForCeremony } from "/hestia-browser/recovery.js";
 import { combineShares, splitSecret } from "/hestia-browser/shamir.js";
+import { createCeremonyKernel } from "/hestia-browser/ceremony-kernel.js";
 import {
   appendTranscript,
   createWrappingKey,
@@ -26,6 +27,85 @@ let pendingRequest;
 let pendingApproval;
 let stateRetry;
 let provisioning = false;
+let kernel;
+let kernelView;
+let nextCapabilityValue = 0;
+const capabilityValues = new Map();
+
+function retainCapabilityValue(value) {
+  const reference = `browser-value-${++nextCapabilityValue}`;
+  capabilityValues.set(reference, value);
+  return reference;
+}
+
+function takeCapabilityValue(reference) {
+  const value = capabilityValues.get(reference);
+  capabilityValues.delete(reference);
+  if (value === undefined) throw new Error("Hara requested an unknown browser capability value");
+  return value;
+}
+
+function applyKernelView(view) {
+  kernelView = view;
+  elements.statusLabel.textContent = view.status_label;
+  elements.statusDetail.textContent = view.status_detail;
+  elements.invitePanel.hidden = !view.invite_visible;
+  elements.ceremonyPanel.hidden = !view.ceremony_visible;
+  elements.approvalPanel.hidden = !view.approval_visible;
+  elements.requestRecovery.disabled = !view.request_enabled;
+  elements.result.hidden = !view.result;
+  elements.result.textContent = view.result ?? "";
+}
+
+async function executeKernelCommand(command) {
+  const [first, second] = command.args ?? [];
+  if (command.capability === "persistence" && command.action === "append-and-save") {
+    await appendTranscript(record, first, second ?? {});
+    await saveCeremony(record);
+    render();
+    return;
+  }
+  if (command.capability === "persistence" && command.action === "save") {
+    await saveCeremony(record);
+    return;
+  }
+  if (command.capability === "transport" && command.action === "connect") {
+    await link.connect();
+    return;
+  }
+  if (command.capability === "transport" && command.action === "send-peer-state") {
+    await sendPeerState(Boolean(first));
+    return;
+  }
+  if (command.capability === "crypto" && command.action === "provision") {
+    await provisionPackage();
+    return;
+  }
+  if (command.capability === "crypto" && command.action === "create-request") {
+    await requestRecovery();
+    return;
+  }
+  if (command.capability === "crypto" && command.action === "release-share") {
+    await approveRecovery();
+    return;
+  }
+  if (command.capability === "crypto" && command.action === "restore-and-prove") {
+    await receiveRecoveryShare(takeCapabilityValue(second.ref));
+    return;
+  }
+  if (command.capability === "transport" && command.action === "send-rejection") {
+    await rejectRecovery();
+    return;
+  }
+  throw new Error(`unsupported Hara capability command: ${command.capability}/${command.action}`);
+}
+
+async function dispatchCeremony(type, data = {}) {
+  const outcome = await kernel.dispatch(type, data);
+  applyKernelView(outcome.view);
+  for (const command of outcome.commands) await executeKernelCommand(command);
+  return outcome;
+}
 
 function setStatus(label, detail) {
   elements.statusLabel.textContent = label;
@@ -43,8 +123,7 @@ function log(message) {
 }
 
 function render() {
-  elements.invitePanel.hidden = Boolean(invite);
-  elements.ceremonyPanel.hidden = !invite;
+  if (kernelView) applyKernelView(kernelView);
   if (!invite) return;
   elements.inviteUrl.value = location.href;
   elements.ceremonyId.textContent = invite.ceremony;
@@ -52,8 +131,7 @@ function render() {
   elements.localPeer.textContent = shortened(record?.peer_fingerprint);
   elements.remotePeer.textContent = shortened(link?.peerFingerprint);
   elements.transcriptHead.textContent = shortened(record?.transcript_head);
-  elements.requestRecovery.disabled = record?.status !== "ready" || link?.channel?.readyState !== "open";
-  elements.approvalPanel.hidden = !pendingApproval;
+  elements.requestRecovery.disabled ||= record?.status !== "ready" || link?.channel?.readyState !== "open";
   elements.approveShare.disabled = !pendingApproval;
   elements.rejectShare.disabled = !pendingApproval;
 }
@@ -73,7 +151,6 @@ async function initializeRecord() {
       status: "pairing",
       transcript: []
     };
-    await persist("ceremony/joined", { mode: invite.mode });
   } else if (record.mode !== invite.mode) {
     throw new Error("stored ceremony mode does not match invite");
   }
@@ -83,6 +160,7 @@ async function initializeRecord() {
 }
 
 async function startCeremony() {
+  kernel ??= await createCeremonyKernel();
   invite = parseInvite(location.href);
   await initializeRecord();
   setupKey = await generateCeremonyKey();
@@ -92,10 +170,8 @@ async function startCeremony() {
     render();
   });
   link.addEventListener("connected", async () => {
-    await saveCeremony(record);
-    setStatus("Connected", "Authenticated WebRTC DataChannel established.");
     log("WebRTC ceremony channel connected");
-    await sendPeerState(false);
+    await dispatchCeremony("transport/connected");
     let attempts = 0;
     clearInterval(stateRetry);
     stateRetry = setInterval(() => {
@@ -108,20 +184,17 @@ async function startCeremony() {
     render();
   });
   link.addEventListener("connection-state", ({ detail }) => {
-    if (detail.state === "connecting") setStatus("Connecting", "Negotiating a direct WebRTC channel.");
+    if (detail.state === "connecting") dispatchCeremony("transport/connecting").catch(showError);
   });
   link.addEventListener("message", ({ detail }) => {
     handleMessage(detail.type, detail.payload).catch(showError);
   });
   link.addEventListener("disconnected", () => {
     clearInterval(stateRetry);
-    setStatus("Disconnected", "Keep this page open while the other browser reconnects.");
-    render();
+    dispatchCeremony("transport/disconnected").catch(showError);
   });
   link.addEventListener("error", ({ detail }) => showError(detail.error));
-  setStatus("Waiting for peer", "Open this exact URL in a second browser.");
-  await link.connect();
-  render();
+  await dispatchCeremony("ceremony/join", { mode: invite.mode });
 }
 
 async function sendPeerState(response) {
@@ -138,29 +211,24 @@ async function handleMessage(type, payload) {
   if (type === "peer/state") {
     peerState = payload;
     clearInterval(stateRetry);
-    if (!payload.response) await sendPeerState(true);
-    if (payload.consumed) {
-      setStatus("Peer consumed", "The other browser has completed this single-use ceremony.");
-      return;
-    }
-    if (record.status === "ready" && payload.ready) {
-      setStatus("Ready", "Either browser can request an explicitly approved recovery.");
-      render();
-      return;
-    }
-    if (record.status === "ready" !== Boolean(payload.ready)) {
-      throw new Error("one browser is missing its persisted share; this pairing cannot be reprovisioned");
-    }
-    if (!payload.ready && record.peer_id < link.peerId && !provisioning) await provisionPackage();
+    await dispatchCeremony("peer/state", {
+      local_ready: record.status === "ready",
+      remote_ready: Boolean(payload.ready),
+      consumed: Boolean(payload.consumed),
+      response_required: !payload.response,
+      leader: record.peer_id < link.peerId && !provisioning
+    });
     return;
   }
   if (type === "setup/package") await acceptPackage(payload);
   if (type === "setup/ack") {
-    setStatus("Ready", "Both browsers hold one encrypted share.");
     await persist("setup/acknowledged", { peer: link.peerId });
+    await dispatchCeremony("setup/ready");
   }
   if (type === "recovery/request") await receiveRecoveryRequest(payload);
-  if (type === "recovery/share") await receiveRecoveryShare(payload);
+  if (type === "recovery/share") await dispatchCeremony("recovery/share-received", {
+    ref: retainCapabilityValue(payload)
+  });
   if (type === "recovery/reject") {
     pendingRequest = undefined;
     setStatus("Rejected", "The other browser rejected the recovery request.");
@@ -225,6 +293,7 @@ async function provisionPackage() {
       expected_public_key: expectedPublicKey,
       policy_hash: policy
     });
+    await dispatchCeremony("setup/ready");
     log("Encrypted recovery package split 2-of-2");
     render();
   } finally {
@@ -249,7 +318,7 @@ async function acceptPackage(payload) {
     record.status = "ready";
     await persist("setup/accepted", { peer: link.peerId, policy_hash: record.policy_hash });
     await link.send("setup/ack", { policy_hash: record.policy_hash });
-    setStatus("Ready", "Both browsers hold one encrypted share.");
+    await dispatchCeremony("setup/ready");
     log("One encrypted share stored in this browser");
     render();
   } finally {
@@ -278,12 +347,10 @@ async function receiveRecoveryRequest(payload) {
   if (new Date(payload.expires_at).getTime() <= Date.now()) throw new Error("recovery request expired");
   pendingApproval = payload;
   elements.requesterFingerprint.textContent = shortened(link.peerFingerprint);
-  await persist("recovery/approval-needed", {
-    request: payload.request_id,
+  await dispatchCeremony("recovery/approval-needed", {
+    ...payload,
     requester: link.peerFingerprint
   });
-  setStatus("Approval needed", "Review the requester fingerprint before releasing your share.");
-  render();
 }
 
 async function approveRecovery() {
@@ -354,9 +421,7 @@ async function receiveRecoveryShare(payload) {
   await persist("recovery/completed", { request: requestId, proof: "p256-signature-valid" });
   await link.send("recovery/complete", { request_id: requestId });
   if (record.mode === "single") await consumeCeremony(requestId);
-  setStatus("Recovery complete", "The restored identity signed and verified a fresh challenge.");
-  elements.result.hidden = false;
-  elements.result.textContent = "Identity proof verified";
+  await dispatchCeremony("recovery/complete", { request: requestId });
   log("Recovered identity verified locally");
   render();
 }
@@ -370,7 +435,8 @@ async function consumeCeremony(requestId) {
 
 function showError(error) {
   console.error(error);
-  setStatus("Error", error?.message ?? String(error));
+  if (kernel) dispatchCeremony("error", { message: error?.message ?? String(error) }).catch(console.error);
+  else setStatus("Error", error?.message ?? String(error));
   log("Error: " + (error?.message ?? String(error)));
 }
 
@@ -383,13 +449,14 @@ elements.copyInvite.addEventListener("click", async () => {
   await navigator.clipboard.writeText(location.href);
   elements.copyInvite.textContent = "Copied";
 });
-elements.requestRecovery.addEventListener("click", () => requestRecovery().catch(showError));
-elements.approveShare.addEventListener("click", () => approveRecovery().catch(showError));
-elements.rejectShare.addEventListener("click", () => rejectRecovery().catch(showError));
+elements.requestRecovery.addEventListener("click", () => dispatchCeremony("recovery/request").catch(showError));
+elements.approveShare.addEventListener("click", () => dispatchCeremony("recovery/approve").catch(showError));
+elements.rejectShare.addEventListener("click", () => dispatchCeremony("recovery/reject").catch(showError));
 window.addEventListener("beforeunload", () => link?.close());
 
 if (location.hash) startCeremony().catch(showError);
-else {
-  setStatus("Create a ceremony", "Choose a lifecycle and generate a private invite URL.");
+else createCeremonyKernel().then(async (created) => {
+  kernel = created;
+  applyKernelView(await kernel.view());
   render();
-}
+}).catch(showError);

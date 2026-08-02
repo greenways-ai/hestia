@@ -1,7 +1,12 @@
 import { haraSession, toHta, toPlain } from "/hestia-browser/hara.js";
 
+let nextKernel = 0;
+
 export async function createCeremonyKernel() {
-  const session = await haraSession("HESTIA-CEREMONY", "[hestia.ceremony :as ceremony]");
+  const session = await haraSession(
+    `HESTIA-CEREMONY-${++nextKernel}`,
+    "[hestia.ceremony :as ceremony]"
+  );
   let state = await session.eval("(ceremony/initial-state)");
   return Object.freeze({
     async dispatch(type, data = {}) {
