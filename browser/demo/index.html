@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' wss://signal.hestia-demo.greenways.ai ws://127.0.0.1:* ws://localhost:*; img-src 'self'; base-uri 'none'; form-action 'none'">
   <title>Hestia — Two-browser recovery</title>
   <link rel="stylesheet" href="./style.css">
 </head>
@@ -70,6 +71,7 @@
       </div>
     </section>
   </main>
+  <script src="./config.js"></script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
