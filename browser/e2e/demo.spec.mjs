@@ -146,14 +146,15 @@ test("guided demo presents the recovery mechanism without editorial framing", as
   await expect(page.locator(".story-step")).toHaveCount(5);
   await expect(page.getByText("Advanced lab", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/Custodia communis/)).toHaveCount(0);
+  await expect(page.getByText(/Claves tuae|Colloquium privatum|guardian/i)).toHaveCount(0);
   const explanation = page.locator(".story-step").first().locator(".help-popover p");
   await expect(explanation).not.toBeVisible();
-  await page.locator(".story-step").first().locator("summary[aria-label='About creation']").click();
+  await page.locator(".story-step").first().locator("summary[aria-label='About identity creation']").click();
   await expect(explanation).toBeVisible();
   await expect(page.locator(".story-art").first()).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator(".story-art").first()).not.toBeVisible();
-  await expect(page.locator(".story-step").first()).toHaveCSS("background-image", /hestia-ceremony-story/);
+  await expect(page.locator(".story-step").first()).toHaveCSS("background-image", /hestia-recovery-story/);
 });
 
 test("legacy v1 invite recovers to v2 ceremony creation", async ({ page }) => {
@@ -168,26 +169,29 @@ test("legacy v1 invite recovers to v2 ceremony creation", async ({ page }) => {
 test("guided v3 flow explains, recovers, and uses an identity", async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto(origin + "/recovery/");
-  await page.getByRole("button", { name: "Personal identity" }).click();
+  await page.getByRole("button", { name: "Choose recovery authorities" }).click();
   await expect(page.locator(".authority-option")).toHaveCount(6);
   await page.locator(".authority-option").nth(0).click();
   await page.locator(".authority-option").nth(2).click();
   await page.locator(".authority-option").nth(4).click();
-  await page.getByRole("button", { name: "Continue with these authorities" }).click();
-  await page.getByRole("button", { name: "Create identity" }).click();
-  await expect(page.getByRole("heading", { name: /chosen guardians/ })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText("Credential vault factor secured automatically")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "1. Identity key pair" })).toBeVisible();
-  await expect(page.getByText("Private JWK", { exact: true })).toBeVisible();
-  await expect(page.getByText("Managed user factor", { exact: true })).toBeVisible();
-  await expect(page.locator(".share-grid .secret-card")).toHaveCount(3);
-  await page.getByRole("button", { name: "Simulate losing this device" }).click();
+  await page.getByRole("button", { name: "Review protection" }).click();
+  await page.getByRole("button", { name: "Create demo identity" }).click();
+  await expect(page.getByRole("heading", { name: "Identity protection is active" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("2-of-3 protection configured")).toBeVisible();
+  await page.getByRole("button", { name: "Simulate a lost device" }).click();
+  await expect(page.getByRole("heading", { name: "This device no longer has access" })).toBeVisible();
+  await page.getByRole("button", { name: "Start recovery" }).click();
   await page.locator(".authority").nth(0).click();
   await page.locator(".authority").nth(1).click();
-  await page.getByRole("button", { name: "Recover with credential vault" }).click();
-  await expect(page.getByRole("heading", { name: "The key is useful again" })).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Send a signed chat message" }).click();
+  await page.getByRole("button", { name: "Restore identity" }).click();
+  await expect(page.getByRole("heading", { name: "Identity restored" })).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Send a signed demo message" }).click();
   await expect(page.locator("#chatBadge")).toHaveText("Verified identity");
+  await page.locator("#technical > summary").click();
+  await page.getByText("Show demo cryptographic values", { exact: true }).click();
+  await expect(page.getByText("Private identity key", { exact: true })).toBeVisible();
+  await expect(page.locator(".raw-values strong").filter({ hasText: "Device-secured factor" })).toBeVisible();
+  await expect(page.locator(".share-grid .secret-card")).toHaveCount(3);
 });
 
 test("reusable peers sharing one URL recover and reconnect", async ({ browser }) => {

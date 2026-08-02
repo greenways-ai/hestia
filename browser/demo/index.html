@@ -1,15 +1,61 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'"><title>Hestia — Identity recovery</title><link rel="stylesheet" href="./style.css"><link rel="stylesheet" href="./transparency.css"><link rel="stylesheet" href="./greenways-theme.css"></head>
-<body><header class="masthead"><a class="brand" href="./"><span class="flame">◆</span> HESTIA</a><nav><span>Demo</span></nav></header>
-<main><details class="architecture-note"><summary>Each authority runs its own Hara kernel <span aria-hidden="true">?</span></summary><div><p>Every authority owns its policy, evidence decision, chat state, and share-release decision. It cannot inspect another authority's kernel state.</p><p>This browser demo places the independent kernels together only to make the mechanism visible.</p></div></details><section class="hero" aria-labelledby="mechanism-title"><header class="mechanism-head"><p class="eyebrow">Identity recovery mechanism</p><h1 id="mechanism-title">Two of three, plus you.</h1></header><div class="story" role="list" aria-label="Five stages of identity recovery">
-  <article class="story-step" role="listitem"><div class="story-art" role="img" aria-label="A person creates a digital identity in a modern civic space"></div><div class="story-content"><b>01</b><strong>Create</strong><details class="help-popover"><summary aria-label="About creation">?</summary><p>The browser creates the identity key and encrypts it locally.</p></details></div></article>
-  <article class="story-step" role="listitem"><div class="story-art" role="img" aria-label="Three independent civic authorities receive encrypted recovery shares"></div><div class="story-content"><b>02</b><strong>Split 2 of 3</strong><details class="help-popover"><summary aria-label="About splitting the recovery secret">?</summary><p>Hara divides the recovery secret among three independent authorities. Any two shares can reconstruct it.</p></details></div></article>
-  <article class="story-step" role="listitem"><div class="story-art" role="img" aria-label="A lost device beside a protected digital identity"></div><div class="story-content"><b>03</b><strong>Lose</strong><details class="help-popover"><summary aria-label="About device loss">?</summary><p>The device is gone. No authority holds the complete recovery secret or the personal factor.</p></details></div></article>
-  <article class="story-step" role="listitem"><div class="story-art" role="img" aria-label="Two civic authorities approve an identity recovery"></div><div class="story-content"><b>04</b><strong>Approve</strong><details class="help-popover"><summary aria-label="About authority approval">?</summary><p>Two chosen authorities independently verify the request and release their shares.</p></details></div></article>
-  <article class="story-step" role="listitem"><div class="story-art" role="img" aria-label="A restored digital identity in a bright civic space"></div><div class="story-content"><b>05</b><strong>Restore</strong><details class="help-popover"><summary aria-label="About restoration">?</summary><p>The two shares combine with the personal factor to decrypt and restore the identity key.</p></details></div></article>
-</div></section>
-<section class="progress" aria-label="Recovery progress"><span class="active">I · Create</span><span>II · Entrust</span><span>III · Recover</span><span>IV · Use</span></section>
-<section id="screen" class="panel" aria-live="polite"><div class="loading">Waking the Hara kernel…</div></section>
-<section id="keys" class="panel quiet" hidden><div class="section-head"><div><p class="eyebrow">Claves tuae</p><h2>Your keys and shares</h2></div><span class="badge">Everything visible</span></div><div id="keyList" class="key-grid"></div><p class="fine">This demonstrator exposes all values to teach the ceremony. Production software must not render secret material.</p></section>
-<section id="chat" class="panel quiet" hidden><div class="section-head"><div><p class="eyebrow">Colloquium privatum</p><h2>Private authority chat</h2></div><span id="chatBadge" class="badge">Verified device</span></div><div id="messages" class="messages"><p class="empty">Messages live only in this browser session.</p></div><form id="chatForm" class="chat-form"><select id="chatAuthority" aria-label="Authority"></select><input id="chatInput" maxlength="2000" required placeholder="Ask an authority a question…"><button>Send</button></form></section></main>
-<footer><span>Hestia is a demonstrator; the people and documents are fictional.</span></footer><script type="module" src="./app.js"></script></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+  <title>Hestia — Identity recovery demo</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="masthead">
+    <a class="brand" href="./" aria-label="Hestia demo home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="7" cy="8" r="3"></circle><circle cx="25" cy="8" r="3"></circle><circle cx="16" cy="24" r="3"></circle><path d="M9.5 9.8 14.2 21M22.5 9.8 17.8 21M10 8h12"></path></svg>
+      <span>Hestia</span>
+    </a>
+    <span class="demo-badge">Demo</span>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="mechanism-title">
+      <header class="hero-copy">
+        <p class="eyebrow">Interactive identity recovery</p>
+        <h1 id="mechanism-title">Two of three,<br>plus you.</h1>
+        <p>Restore a personal digital identity with two independent approvals and a device-secured factor.</p>
+      </header>
+
+      <div class="story" role="list" aria-label="Five stages of identity recovery">
+        <article class="story-step" role="listitem"><div class="story-art" role="img" aria-label="A professional creates a secure digital identity"></div><div class="story-content"><b>01</b><strong>Create identity</strong><details class="help-popover"><summary aria-label="About identity creation">?</summary><p>The browser creates an identity key and encrypts it locally.</p></details></div></article>
+        <article class="story-step" role="listitem"><div class="story-art" role="img" aria-label="A recovery secret is distributed between three independent authorities"></div><div class="story-content"><b>02</b><strong>Protect with 2-of-3</strong><details class="help-popover"><summary aria-label="About threshold protection">?</summary><p>The recovery secret is divided between three independent authorities. Any two shares can reconstruct it.</p></details></div></article>
+        <article class="story-step" role="listitem"><div class="story-art" role="img" aria-label="A professional has lost access to a device"></div><div class="story-content"><b>03</b><strong>Lose device</strong><details class="help-popover"><summary aria-label="About device loss">?</summary><p>The device can disappear without giving any authority enough information to restore the identity alone.</p></details></div></article>
+        <article class="story-step" role="listitem"><div class="story-art" role="img" aria-label="Two independent authorities approve identity recovery"></div><div class="story-content"><b>04</b><strong>Approve recovery</strong><details class="help-popover"><summary aria-label="About recovery approval">?</summary><p>Two selected authorities independently verify the request and release their shares.</p></details></div></article>
+        <article class="story-step" role="listitem"><div class="story-art" role="img" aria-label="The professional's digital identity is restored"></div><div class="story-content"><b>05</b><strong>Restore identity</strong><details class="help-popover"><summary aria-label="About identity restoration">?</summary><p>The two shares combine with the device-secured factor to decrypt and restore the identity key.</p></details></div></article>
+      </div>
+    </section>
+
+    <section class="demo-workspace" aria-labelledby="demo-title">
+      <header class="workspace-head">
+        <div><p class="eyebrow">Guided demo</p><h2 id="demo-title">Try the recovery process</h2></div>
+        <p>Everything is fictional. Cryptography runs locally in this browser.</p>
+      </header>
+      <nav class="progress" aria-label="Recovery progress">
+        <span class="active">1 <b>Set up</b></span><span>2 <b>Protect</b></span><span>3 <b>Lose access</b></span><span>4 <b>Approve</b></span><span>5 <b>Restore</b></span>
+      </nav>
+      <section id="screen" class="panel" aria-live="polite"><div class="loading"><span></span>Starting the secure demo…</div></section>
+    </section>
+
+    <details id="technical" class="technical-panel" hidden>
+      <summary><span><b>Technical details</b><small>Keys, shares, policy engines and demo messages</small></span><i aria-hidden="true">+</i></summary>
+      <div class="technical-body">
+        <aside class="architecture-note"><strong>Independent policy engines</strong><p>Each authority makes its own evidence and share-release decision. This browser places the engines together only to make the mechanism observable.</p></aside>
+        <section id="keys" hidden><div class="section-head"><div><p class="eyebrow">Recovery material</p><h2>Keys and shares</h2></div><span class="badge">Demo transparency</span></div><div id="keyList" class="key-grid"></div></section>
+        <section id="chat" hidden><div class="section-head"><div><p class="eyebrow">Optional communication</p><h2>Authority messages</h2></div><span id="chatBadge" class="badge">Verified device</span></div><div id="messages" class="messages"><p class="empty">Messages remain in this browser session.</p></div><form id="chatForm" class="chat-form"><select id="chatAuthority" aria-label="Authority"></select><input id="chatInput" maxlength="2000" required placeholder="Ask an authority a question…"><button>Send</button></form></section>
+      </div>
+    </details>
+  </main>
+
+  <footer><span>Hestia recovery demo</span><span>Fictional people and records · Local browser processing</span></footer>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
