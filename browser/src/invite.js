@@ -6,7 +6,8 @@ const modes = new Set(["reusable", "single"]);
 
 export function createInvite(baseUrl, { mode = "reusable", random = crypto } = {}) {
   if (!modes.has(mode)) throw new Error("invalid ceremony mode");
-  const url = new URL("/recovery/", baseUrl);
+  const base = new URL(baseUrl);
+  const url = new URL(base.pathname.startsWith("/recovery/lab") ? "/recovery/lab/" : "/recovery/", base);
   const ceremony = bytesToBase64Url(random.getRandomValues(new Uint8Array(16)));
   const capability = bytesToBase64Url(random.getRandomValues(new Uint8Array(32)));
   url.hash = new URLSearchParams({ v: "2", ceremony, cap: capability, mode }).toString();

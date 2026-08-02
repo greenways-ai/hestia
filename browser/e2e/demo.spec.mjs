@@ -27,7 +27,11 @@ test.beforeAll(async () => {
   staticServer = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
     let file;
-    if (url.pathname === "/recovery/" || url.pathname === "/recovery") {
+    if (url.pathname === "/recovery/lab/" || url.pathname === "/recovery/lab") {
+      file = resolve(browserRoot, "lab/index.html");
+    } else if (url.pathname.startsWith("/recovery/lab/")) {
+      file = resolve(browserRoot, "lab", url.pathname.slice("/recovery/lab/".length));
+    } else if (url.pathname === "/recovery/" || url.pathname === "/recovery") {
       file = resolve(browserRoot, "demo/index.html");
     } else if (url.pathname.startsWith("/recovery/")) {
       file = resolve(browserRoot, "demo", url.pathname.slice("/recovery/".length));
@@ -87,7 +91,7 @@ async function pairAndRecover(browser, mode) {
       if (message.type() === "error") console.error(`${name} console:`, message.text());
     });
   }
-  await first.goto(origin + "/recovery/");
+  await first.goto(origin + "/recovery/lab/");
   await first.locator("#mode").selectOption(mode);
   await first.getByRole("button", { name: "Create private invite" }).click();
   await expect(first).toHaveURL(/#v=2&ceremony=/);
@@ -137,12 +141,29 @@ test("Hara/WASM owns ceremony transitions, commands, and views", async ({ page }
 });
 
 test("legacy v1 invite recovers to v2 ceremony creation", async ({ page }) => {
-  await page.goto(origin + "/recovery/#v=1&ceremony=EkrNjvfMxQ1d47GsvePTDA&cap=3DGUDZ7eZdaCR8mS55Wt0nY71-3drcM6EZtyQVUhckg&mode=reusable");
+  await page.goto(origin + "/recovery/lab/#v=1&ceremony=EkrNjvfMxQ1d47GsvePTDA&cap=3DGUDZ7eZdaCR8mS55Wt0nY71-3drcM6EZtyQVUhckg&mode=reusable");
   await expect(page.locator("#statusLabel")).toHaveText("Invite expired");
   await expect(page.locator("#invitePanel")).toBeVisible();
   await expect(page).not.toHaveURL(/#v=1/);
   await page.getByRole("button", { name: "Create private invite" }).click();
   await expect(page).toHaveURL(/#v=2&ceremony=/);
+});
+
+test("guided v3 flow explains, recovers, and uses an identity", async ({ page }) => {
+  await page.goto(origin + "/recovery/");
+  await page.getByRole("button", { name: "Personal identity" }).click();
+  await page.getByRole("button", { name: "Create identity" }).click();
+  const code = await page.locator(".code").textContent();
+  await page.getByRole("button", { name: "I have saved it" }).click();
+  await expect(page.getByRole("heading", { name: /Three independent guardians/ })).toBeVisible();
+  await page.getByRole("button", { name: "Simulate losing this device" }).click();
+  await page.locator(".authority").nth(0).click();
+  await page.locator(".authority").nth(1).click();
+  await page.locator("#codeInput").fill(code);
+  await page.getByRole("button", { name: "Recover identity" }).click();
+  await expect(page.getByRole("heading", { name: "The key is useful again" })).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Send a signed chat message" }).click();
+  await expect(page.locator("#chatBadge")).toHaveText("Verified identity");
 });
 
 test("reusable peers sharing one URL recover and reconnect", async ({ browser }) => {

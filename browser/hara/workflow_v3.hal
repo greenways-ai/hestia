@@ -1,0 +1,84 @@
+;; Guided 2-of-3 identity recovery workflow. Hara owns product state and emits
+;; capability commands; the browser is an IOC adapter only.
+(ns hestia.workflow-v3
+  (:require [std.foundation :refer [assoc conj count get merge nth]]))
+
+(def PERSONAL
+  {"id" "personal"
+   "title" "Recover a personal identity"
+   "authorities" [{"id" "notary" "name" "Community Notary" "required" ["passport"]}
+                  {"id" "bank" "name" "Community Bank" "required" ["address"]}
+                  {"id" "contact" "name" "Trusted Contact" "required" ["liveness"]}]})
+
+(def ORGANIZATION
+  {"id" "organization"
+   "title" "Recover an organization signer"
+   "authorities" [{"id" "legal" "name" "Legal Counsel" "required" ["board-resolution"]}
+                  {"id" "hr" "name" "People Operations" "required" ["employment"]}
+                  {"id" "finance" "name" "Finance Controller" "required" ["signing-authority"]}]})
+
+(defn scenario [id] (if (= id "organization") ORGANIZATION PERSONAL))
+(defn command [capability action args]
+  {"capability" capability "action" action "args" args})
+
+(defn initial-state []
+  {"phase" "choose-scenario" "scenario" nil "identity" nil
+   "factor_saved" false "lost" false "authorities" []
+   "approvals" [] "chat" [] "error" nil})
+
+(defn key-inventory [state]
+  [{"id" "identity" "name" "Identity signing key" "kind" "ECDSA P-256"
+    "status" (if (get state "lost") "lost" (if (get state "identity") "active" "not-created"))
+    "secret_visible" false}
+   {"id" "factor" "name" "Your recovery code" "kind" "256-bit user factor"
+    "status" (if (get state "factor_saved") "saved-by-user" "not-created")
+    "secret_visible" false}
+   {"id" "shares" "name" "Authority recovery shares" "kind" "Shamir 2-of-3"
+    "status" (if (get state "factor_saved") "distributed" "not-created")
+    "secret_visible" false}])
+
+(defn view [state]
+  {"phase" (get state "phase") "scenario" (get state "scenario")
+   "authorities" (get state "authorities") "approvals" (get state "approvals")
+   "approval_count" (count (get state "approvals"))
+   "threshold" 2 "chat" (get state "chat")
+   "keys" (key-inventory state) "identity" (get state "identity")})
+
+(defn outcome [state commands]
+  {"state" state "view" (view state) "commands" commands})
+
+(defn advance [state event]
+  (let [kind (get event "type") data (or (get event "data") {})]
+    (cond
+      (= kind "scenario/select")
+      (let [selected (scenario (get data "scenario"))]
+        (outcome (merge state {"phase" "explain-enrollment" "scenario" selected
+                               "authorities" (get selected "authorities")}) []))
+      (= kind "identity/create")
+      (outcome (assoc state "phase" "creating-identity")
+               [(command "crypto" "create-v3-identity" [])])
+      (= kind "identity/created")
+      (outcome (merge state {"phase" "save-recovery-code" "identity" data}) [])
+      (= kind "factor/confirmed")
+      (outcome (merge state {"phase" "enrollment" "factor_saved" true})
+               [(command "crypto" "split-authority-secret" [])])
+      (= kind "identity/lost")
+      (outcome (merge state {"phase" "lost" "lost" true})
+               [(command "crypto" "forget-active-identity" [])])
+      (= kind "recovery/start")
+      (outcome (assoc state "phase" "collecting-approvals") [])
+      (= kind "authority/approved")
+      (let [approvals (conj (get state "approvals") (get data "authority"))]
+        (outcome (merge state {"approvals" approvals
+                               "phase" (if (>= (count approvals) 2)
+                                         "enter-recovery-code"
+                                         "collecting-approvals")}) []))
+      (= kind "recovery/code-entered")
+      (outcome (assoc state "phase" "recovering")
+               [(command "crypto" "recover-v3-identity" [data])])
+      (= kind "recovery/complete")
+      (outcome (merge state {"phase" "recovered" "lost" false}) [])
+      (= kind "chat/message")
+      (outcome (assoc state "chat" (conj (get state "chat") data))
+               [(command "transport" "send-chat" [data])])
+      true (throw (ex-info "unknown v3 event" {"type" kind})))))

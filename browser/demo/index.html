@@ -1,77 +1,9 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' wss://signal.hestia-demo.greenways.ai ws://127.0.0.1:* ws://localhost:*; img-src 'self'; base-uri 'none'; form-action 'none'">
-  <title>Hestia — Two-browser recovery</title>
-  <link rel="stylesheet" href="./style.css">
-</head>
-<body>
-  <main>
-    <header>
-      <p class="eyebrow">Aedes Hestiae · Browser ceremony</p>
-      <h1>Guard the flame.<br>Restore together.</h1>
-      <p>Two guardians. One private summons. One encrypted share entrusted to each peer.</p>
-    </header>
-
-    <section class="status" aria-live="polite">
-      <span class="pulse"></span>
-      <div><strong id="statusLabel">Starting</strong><p id="statusDetail"></p></div>
-    </section>
-
-    <section id="invitePanel" class="card">
-      <h2>Create a two-browser ceremony</h2>
-      <label for="mode">After a successful recovery</label>
-      <select id="mode">
-        <option value="reusable">Keep the pair reusable</option>
-        <option value="single">Consume both shares</option>
-      </select>
-      <button id="createInvite" class="primary">Create private invite</button>
-      <p class="fine">The capability is generated locally and stored only in the URL fragment.</p>
-    </section>
-
-    <section id="ceremonyPanel" hidden>
-      <div class="card">
-        <h2>Invite the second browser</h2>
-        <div class="copy-row">
-          <input id="inviteUrl" readonly aria-label="Ceremony invite URL">
-          <button id="copyInvite">Copy URL</button>
-        </div>
-        <dl>
-          <div><dt>Ceremony</dt><dd id="ceremonyId"></dd></div>
-          <div><dt>Lifecycle</dt><dd id="modeLabel"></dd></div>
-          <div><dt>This browser</dt><dd id="localPeer">waiting</dd></div>
-          <div><dt>Other browser</dt><dd id="remotePeer">waiting</dd></div>
-          <div><dt>Transcript</dt><dd id="transcriptHead">empty</dd></div>
-        </dl>
-      </div>
-
-      <div class="card action-card">
-        <h2>Identity recovery</h2>
-        <p>Recovery requires this browser’s encrypted share and explicit approval from its peer.</p>
-        <button id="requestRecovery" class="primary" disabled>Request recovery</button>
-        <p id="result" class="success" hidden></p>
-      </div>
-
-      <div id="approvalPanel" class="card approval" hidden>
-        <p class="eyebrow">User presence required</p>
-        <h2>Release your share?</h2>
-        <p>Requester fingerprint: <code id="requesterFingerprint"></code></p>
-        <div class="actions">
-          <button id="approveShare" class="primary">Approve</button>
-          <button id="rejectShare">Reject</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>Local activity</h2>
-        <ol id="activity" class="activity"></ol>
-      </div>
-    </section>
-  </main>
-  <script src="./config.js"></script>
-  <script type="module" src="./app.js"></script>
-</body>
-</html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'"><title>Hestia — Identity recovery</title><link rel="stylesheet" href="./style.css"></head>
+<body><header class="masthead"><a class="brand" href="./"><span class="flame">◆</span> HESTIA</a><nav><span>Guided recovery</span><a href="./lab/">Advanced lab</a></nav></header>
+<main><section class="hero"><p class="eyebrow">Custodia communis · shared guardianship</p><h1>Lose a key.<br><i>Keep your identity.</i></h1><p>Create a digital identity, entrust three independent authorities, then see how any two can help recover it—with a code only you hold.</p></section>
+<section class="progress" aria-label="Recovery progress"><span class="active">I · Create</span><span>II · Entrust</span><span>III · Recover</span><span>IV · Use</span></section>
+<section id="screen" class="panel" aria-live="polite"><div class="loading">Waking the Hara kernel…</div></section>
+<section id="keys" class="panel quiet" hidden><div class="section-head"><div><p class="eyebrow">Claves tuae</p><h2>Your keys</h2></div><button id="toggleDetails" class="text-button">Show technical details</button></div><div id="keyList" class="key-grid"></div><p class="fine">Secrets are never displayed here. This inventory shows what exists, where it is held, and what it can do.</p></section>
+<section id="chat" class="panel quiet" hidden><div class="section-head"><div><p class="eyebrow">Colloquium privatum</p><h2>Private authority chat</h2></div><span id="chatBadge" class="badge">Verified device</span></div><div id="messages" class="messages"><p class="empty">Messages live only in this browser session.</p></div><form id="chatForm" class="chat-form"><select id="chatAuthority" aria-label="Authority"></select><input id="chatInput" maxlength="2000" required placeholder="Ask an authority a question…"><button>Send</button></form></section></main>
+<footer><span>Hestia is a demonstrator; the people and documents are fictional.</span><a href="./lab/">Open the protocol lab →</a></footer><script type="module" src="./app.js"></script></body></html>

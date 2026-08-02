@@ -2,7 +2,8 @@ import { HtaContext, HtaKeyword } from "/hara-runtime/index.js";
 
 const resources = [
   ["std.crypto.shamir", "/hara/shamir.hal"],
-  ["hestia.ceremony", "/hara/ceremony.hal"]
+  ["hestia.ceremony", "/hara/ceremony.hal"],
+  ["hestia.workflow-v3", "/hara/workflow_v3.hal"]
 ];
 
 let runtimePromise;
