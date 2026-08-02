@@ -1,0 +1,6 @@
+.git
+.hestia
+backups
+**/node_modules
+browser/playwright-report
+browser/test-results

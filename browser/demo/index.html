@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' wss://signal.hestia-demo.greenways.ai ws://127.0.0.1:* ws://localhost:*; img-src 'self'; base-uri 'none'; form-action 'none'">
+  <title>Hestia — Two-browser recovery</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">Hestia browser ceremony</p>
+      <h1>Recover together, without a custodian.</h1>
+      <p>Two browsers. One private URL. One encrypted share held by each peer.</p>
+    </header>
+
+    <section class="status" aria-live="polite">
+      <span class="pulse"></span>
+      <div><strong id="statusLabel">Starting</strong><p id="statusDetail"></p></div>
+    </section>
+
+    <section id="invitePanel" class="card">
+      <h2>Create a two-browser ceremony</h2>
+      <label for="mode">After a successful recovery</label>
+      <select id="mode">
+        <option value="reusable">Keep the pair reusable</option>
+        <option value="single">Consume both shares</option>
+      </select>
+      <button id="createInvite" class="primary">Create private invite</button>
+      <p class="fine">The capability is generated locally and stored only in the URL fragment.</p>
+    </section>
+
+    <section id="ceremonyPanel" hidden>
+      <div class="card">
+        <h2>Invite the second browser</h2>
+        <div class="copy-row">
+          <input id="inviteUrl" readonly aria-label="Ceremony invite URL">
+          <button id="copyInvite">Copy URL</button>
+        </div>
+        <dl>
+          <div><dt>Ceremony</dt><dd id="ceremonyId"></dd></div>
+          <div><dt>Lifecycle</dt><dd id="modeLabel"></dd></div>
+          <div><dt>This browser</dt><dd id="localPeer">waiting</dd></div>
+          <div><dt>Other browser</dt><dd id="remotePeer">waiting</dd></div>
+          <div><dt>Transcript</dt><dd id="transcriptHead">empty</dd></div>
+        </dl>
+      </div>
+
+      <div class="card action-card">
+        <h2>Identity recovery</h2>
+        <p>Recovery requires this browser’s encrypted share and explicit approval from its peer.</p>
+        <button id="requestRecovery" class="primary" disabled>Request recovery</button>
+        <p id="result" class="success" hidden></p>
+      </div>
+
+      <div id="approvalPanel" class="card approval" hidden>
+        <p class="eyebrow">User presence required</p>
+        <h2>Release your share?</h2>
+        <p>Requester fingerprint: <code id="requesterFingerprint"></code></p>
+        <div class="actions">
+          <button id="approveShare" class="primary">Approve</button>
+          <button id="rejectShare">Reject</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Local activity</h2>
+        <ol id="activity" class="activity"></ol>
+      </div>
+    </section>
+  </main>
+  <script src="./config.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

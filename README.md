@@ -31,5 +31,11 @@ scripts/hestia backup
 scripts/hestia down
 ```
 
-See [docs/local-node.md](docs/local-node.md) and
-[docs/recovery-protocol.md](docs/recovery-protocol.md).
+See [docs/local-node.md](docs/local-node.md),
+[docs/recovery-protocol.md](docs/recovery-protocol.md), and the runnable
+[two-browser recovery demo](docs/two-browser-demo.md). Publication instructions
+for GitHub Pages and Cloudflare are in
+[docs/publishing-demo.md](docs/publishing-demo.md).
+
+After `scripts/hestia up`, open <http://127.0.0.1:58080/recovery/>, create a
+private invite, and open that exact URL in a second browser.

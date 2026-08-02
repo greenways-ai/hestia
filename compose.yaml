@@ -58,6 +58,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      signaling:
+        condition: service_started
     environment:
       HESTIA_DATABASE_URL: postgres://hestia_app:${HESTIA_APP_PASSWORD}@postgres:5432/hestia?sslmode=disable
       HESTIA_AUTH_URL: http://auth:9999
@@ -70,6 +72,11 @@ services:
     environment:
       HESTIA_SIGNAL_PORT: "8443"
       HESTIA_SIGNAL_MAX_BYTES: "65536"
+      HESTIA_ALLOWED_ORIGINS: ${HESTIA_SITE_URL:-http://127.0.0.1:58080}
+      HESTIA_STUN_URLS: ${HESTIA_STUN_URLS:-}
+      HESTIA_TURN_URLS: ${HESTIA_TURN_URLS:-}
+      HESTIA_TURN_SECRET: ${HESTIA_TURN_SECRET:?run scripts/hestia init}
+      HESTIA_TURN_TTL_SECONDS: ${HESTIA_TURN_TTL_SECONDS:-600}
     ports:
       - "127.0.0.1:58443:8443"
     restart: unless-stopped
