@@ -10,9 +10,12 @@
                    {"type" "authorities/select"
                     "data" {"authorities" [(nth pool 0) (nth pool 2) (nth pool 5)]}})
         creating (hestia.workflow-v3/advance
-                  (get committee "state") {"type" "identity/create"})]
+                  (get committee "state") {"type" "identity/create"})
+        animated (hestia.workflow-v3/advance
+                  (get committee "state") {"type" "education/enrollment-start"})]
     [(= 6 (count pool))
      (= 3 (count (get (get committee "state") "authorities")))
      (= "crypto" (get (nth (get creating "commands") 0) "capability"))
+     (= 0 (get (get animated "view") "enrollment_step"))
      (= false (get (nth (get (hestia.workflow-v3/view (get selected "state")) "keys") 0)
                    "secret_visible"))]))

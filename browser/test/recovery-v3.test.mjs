@@ -10,6 +10,7 @@ test("v3 identity needs both the authority secret and managed user factor", asyn
   assert.equal(created.userFactor.length, 32);
   const restored = await restoreIdentityPackage(created);
   assert.equal(restored.data.name, "Aurelia");
+  assert.deepEqual(restored.packageKeyBytes, created.packageKeyBytes);
 
   const wrongFactor = created.userFactor.slice();
   wrongFactor[0] ^= 1;

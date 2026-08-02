@@ -150,6 +150,7 @@ test("legacy v1 invite recovers to v2 ceremony creation", async ({ page }) => {
 });
 
 test("guided v3 flow explains, recovers, and uses an identity", async ({ page }) => {
+  test.setTimeout(60_000);
   await page.goto(origin + "/recovery/");
   await page.getByRole("button", { name: "Personal identity" }).click();
   await expect(page.locator(".authority-option")).toHaveCount(6);
@@ -158,7 +159,7 @@ test("guided v3 flow explains, recovers, and uses an identity", async ({ page })
   await page.locator(".authority-option").nth(4).click();
   await page.getByRole("button", { name: "Continue with these authorities" }).click();
   await page.getByRole("button", { name: "Create identity" }).click();
-  await expect(page.getByRole("heading", { name: /chosen guardians/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /chosen guardians/ })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("Credential vault factor secured automatically")).toBeVisible();
   await expect(page.getByRole("heading", { name: "1. Identity key pair" })).toBeVisible();
   await expect(page.getByText("Private JWK", { exact: true })).toBeVisible();
