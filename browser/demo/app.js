@@ -65,6 +65,12 @@ function renderKeys() {
   $("keyList").innerHTML = `${inventory}<details class="raw-values"><summary>Show demo cryptographic values</summary><div class="raw-content"><p class="warning"><strong>Demo transparency:</strong> these values are displayed only for education. Production software must never render secret material.</p><article class="secret-card"><strong>Public identity key</strong><code>${esc(JSON.stringify(created.identity.public_jwk, null, 2))}</code></article><article class="secret-card"><strong>Private identity key</strong><code>${esc(JSON.stringify(created.privateJwk, null, 2))}</code><small>Production: encrypted locally and never rendered or logged.</small></article><article class="secret-card"><strong>Authority recovery secret</strong><code>${esc(bytesToBase64Url(created.authoritySecret))}</code></article><article class="secret-card"><strong>Device-secured factor</strong><code>${esc(bytesToBase64Url(created.userFactor))}</code><small>Recovery authorities never receive this factor.</small></article><div class="share-grid">${shareCards}</div><article class="secret-card"><strong>Encrypted identity package</strong><code>${esc(created.encryptedPackage.ciphertext)}</code><small>AES-GCM ciphertext and authentication tag.</small></article></div></details>`;
 }
 
+function generationSecrets() {
+  if (!created || !shares) return "";
+  const shareCards = shares.map((share, index) => `<article class="secret-card"><strong>Share ${index + 1} · ${esc(authorityName(authorities()[index]))}</strong><code>${esc(bytesToBase64Url(share))}</code></article>`).join("");
+  return `<details class="secrets-accordion"><summary><span><strong><span class="show-secrets">Show secrets</span><span class="hide-secrets">Hide secrets</span></strong><small>Inspect the values generated while protecting Mabel's identity</small></span><i aria-hidden="true"></i></summary><div class="secrets-content"><p class="warning"><strong>Demo transparency:</strong> production software must never render secret material.</p><div class="secrets-grid"><article class="secret-card"><strong>Private identity key</strong><code>${esc(JSON.stringify(created.privateJwk, null, 2))}</code></article><article class="secret-card"><strong>Authority recovery secret</strong><code>${esc(bytesToBase64Url(created.authoritySecret))}</code></article><article class="secret-card"><strong>Mabel's separately secured factor</strong><code>${esc(bytesToBase64Url(created.userFactor))}</code></article></div><div class="share-grid">${shareCards}</div></div></details>`;
+}
+
 function setupChat() {
   $("chat").hidden = false;
   $("chatAuthority").innerHTML = authorities().map((authority) => `<option value="${esc(authority.id)}">${esc(authorityName(authority))}</option>`).join("");
@@ -134,7 +140,7 @@ function protectedIdentity() {
   phase(1);
   renderKeys();
   setupChat();
-  screen.innerHTML = screenView(1, `${header("Step 2 of 5", "Mabel's identity is protected", "Each helper authority holds one encrypted share. Mabel's separate factor remains outside their control.")}<div class="success-callout"><span class="callout-icon">✓</span><div><strong>2-of-3 protection configured</strong><p>No single authority has enough information to restore the identity.</p></div></div><div class="authority-grid">${authorities().map((authority, index) => `<article class="card"><span class="status good">Share ${index + 1} secured</span><h3>${esc(authorityName(authority))}</h3><p>${esc(evidenceLabel(authority))}</p></article>`).join("")}</div><div class="actions"><button id="lose" class="primary">Simulate lost access</button></div>`);
+  screen.innerHTML = screenView(1, `${header("Step 2 of 5", "Mabel's identity is protected", "Each helper authority holds one encrypted share. Mabel's separate factor remains outside their control.")}<div class="success-callout"><span class="callout-icon">✓</span><div><strong>2-of-3 protection configured</strong><p>No single authority has enough information to restore the identity.</p></div></div><div class="authority-grid">${authorities().map((authority, index) => `<article class="card"><span class="status good">Share ${index + 1} secured</span><h3>${esc(authorityName(authority))}</h3><p>${esc(evidenceLabel(authority))}</p></article>`).join("")}</div>${generationSecrets()}<div class="actions"><button id="lose" class="primary">Simulate lost access</button></div>`);
   $("lose").onclick = async () => { await dispatch("identity/lost"); created.privateKey = null; showLoss(); };
 }
 
@@ -181,9 +187,17 @@ function success() {
   phase(4);
   renderKeys();
   $("chatBadge").textContent = "Verified identity";
-  screen.innerHTML = screenView(4, `${header("Step 5 of 5", "Mabel's identity is restored", "The recovered key can sign again, proving continuity with the original public identity.")}<div class="success-callout"><span class="callout-icon">✓</span><div><strong>Recovery complete</strong><p>Two approvals and Mabel's separately secured factor reproduced the original key.</p></div></div><dl><dt>Identity</dt><dd>${esc(created.identity.name)}</dd><dt>Public fingerprint</dt><dd class="code">${esc(created.identity.fingerprint)}</dd></dl><div class="actions"><button id="signed" class="primary">Send a signed demo message</button><button id="download">Download public identity card</button></div><p id="signatureResult" class="fine"></p>`);
+  screen.innerHTML = screenView(4, `${header("Step 5 of 5", "Mabel's identity is restored", "The recovered key can sign again, proving continuity with the original public identity.")}<div class="success-callout"><span class="callout-icon">✓</span><div><strong>Recovery complete</strong><p>Two approvals and Mabel's separately secured factor reproduced the original key.</p></div></div><dl><dt>Identity</dt><dd>${esc(created.identity.name)}</dd><dt>Public fingerprint</dt><dd class="code">${esc(created.identity.fingerprint)}</dd></dl><div class="actions"><button id="signed" class="primary">Send a signed demo message</button><button id="download">Download public identity card</button></div><p id="signatureResult" class="fine"></p><nav class="end-nav" aria-label="Demo navigation"><button id="reviewBack">Back</button><button id="restart">Restart</button></nav>`);
   $("signed").onclick = async () => { const message = `I recovered ${created.identity.name}`; const signature = await signIdentityMessage(recovered.privateKey, message); addMessage("You", message, `Verified identity · signature ${signature.slice(0, 18)}…`); $("signatureResult").textContent = "Signed with the restored private key. See Technical details for the authority message."; };
   $("download").onclick = () => { const blob = new Blob([JSON.stringify(identityCard(created.identity), null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "hestia-identity-card.json"; link.click(); URL.revokeObjectURL(link.href); };
+  $("reviewBack").onclick = reviewApprovals;
+  $("restart").onclick = () => window.location.reload();
+}
+
+function reviewApprovals() {
+  phase(3);
+  screen.innerHTML = screenView(3, `${header("Step 4 of 5", "Two helpers approved recovery", "This is a visual review. The completed cryptographic state is unchanged.")}<div class="authority-grid">${authorities().map((authority, index) => `<article class="card"><span class="status ${approvals.has(index) ? "good" : ""}">${approvals.has(index) ? "Approved" : "Not requested"}</span><h3>${esc(authorityName(authority))}</h3><p>${esc(evidenceLabel(authority))}</p></article>`).join("")}</div><div class="selection-row"><p><strong>${approvals.size} of 2</strong> approvals received</p><button id="reviewForward" class="primary">Return to restored identity</button></div>`);
+  $("reviewForward").onclick = success;
 }
 
 function addMessage(sender, message, proof = "Verified device") {

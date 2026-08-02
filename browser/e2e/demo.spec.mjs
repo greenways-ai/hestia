@@ -182,6 +182,14 @@ test("guided v3 flow explains, recovers, and uses an identity", async ({ page })
   await page.getByRole("button", { name: "Create demo identity" }).click();
   await expect(page.getByRole("heading", { name: "Mabel's identity is protected" })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("2-of-3 protection configured")).toBeVisible();
+  const secrets = page.locator(".secrets-accordion");
+  await expect(secrets).not.toHaveAttribute("open", "");
+  await secrets.getByText("Show secrets", { exact: true }).click();
+  await expect(secrets).toHaveAttribute("open", "");
+  await expect(secrets.getByText("Hide secrets", { exact: true })).toBeVisible();
+  await expect(secrets.locator(".share-grid .secret-card")).toHaveCount(3);
+  await secrets.getByText("Hide secrets", { exact: true }).click();
+  await expect(secrets).not.toHaveAttribute("open", "");
   await page.getByRole("button", { name: "Simulate lost access" }).click();
   await expect(page.getByRole("heading", { name: "Mabel has lost access" })).toBeVisible();
   await page.getByRole("button", { name: "Ask the helpers" }).click();
@@ -196,6 +204,12 @@ test("guided v3 flow explains, recovers, and uses an identity", async ({ page })
   await expect(page.getByText("Private identity key", { exact: true })).toBeVisible();
   await expect(page.locator(".raw-values strong").filter({ hasText: "Device-secured factor" })).toBeVisible();
   await expect(page.locator(".share-grid .secret-card")).toHaveCount(3);
+  await page.getByRole("button", { name: "Back" }).click();
+  await expect(page.getByRole("heading", { name: "Two helpers approved recovery" })).toBeVisible();
+  await page.getByRole("button", { name: "Return to restored identity" }).click();
+  await expect(page.getByRole("heading", { name: "Mabel's identity is restored" })).toBeVisible();
+  await page.getByRole("button", { name: "Restart" }).click();
+  await expect(page.getByRole("heading", { name: "Meet Mabel the wombat" })).toBeVisible({ timeout: 20_000 });
 });
 
 test("reusable peers sharing one URL recover and reconnect", async ({ browser }) => {
