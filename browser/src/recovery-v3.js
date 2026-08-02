@@ -64,6 +64,7 @@ export async function createIdentityPackage({ name, scenario, userFactor = gener
     userFactor,
     authoritySecret,
     privateKey: signingKey.privateKey,
+    privateJwk,
     identity: { identity_id: identityId, name, scenario, public_jwk: publicJwk, fingerprint },
     encryptedPackage: { version: 3, identity_id: identityId, iv: bytesToBase64Url(iv), ciphertext: bytesToBase64Url(ciphertext) }
   };

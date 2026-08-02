@@ -160,6 +160,10 @@ test("guided v3 flow explains, recovers, and uses an identity", async ({ page })
   await page.getByRole("button", { name: "Create identity" }).click();
   await expect(page.getByRole("heading", { name: /chosen guardians/ })).toBeVisible();
   await expect(page.getByText("Credential vault factor secured automatically")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "1. Identity key pair" })).toBeVisible();
+  await expect(page.getByText("Private JWK", { exact: true })).toBeVisible();
+  await expect(page.getByText("Managed user factor", { exact: true })).toBeVisible();
+  await expect(page.locator(".share-grid .secret-card")).toHaveCount(3);
   await page.getByRole("button", { name: "Simulate losing this device" }).click();
   await page.locator(".authority").nth(0).click();
   await page.locator(".authority").nth(1).click();
