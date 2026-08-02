@@ -25,6 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /opt/hoplite/nginx /opt/hoplite/nginx
 COPY hoplite/docker/nginx.conf /opt/hoplite/nginx/conf/nginx.conf
 COPY hoplite/examples/app.hal /etc/hestia/app.hal
+COPY browser/src /opt/hestia/browser/src
+COPY browser/demo /opt/hestia/browser/demo
 EXPOSE 8080
 ENTRYPOINT ["/opt/hoplite/nginx/sbin/nginx"]
 CMD ["-g", "daemon off;"]

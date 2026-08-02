@@ -25,3 +25,7 @@ jobs:
         working-directory: services/signaling
       - run: npm test
         working-directory: services/signaling
+      - run: npx playwright install --with-deps chromium firefox
+        working-directory: browser
+      - run: npm run test:e2e
+        working-directory: browser
