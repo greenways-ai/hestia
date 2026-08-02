@@ -1,4 +1,4 @@
-;; Guided 2-of-3 identity recovery workflow. Hara owns product state and emits
+;; Guided choose-3, recover-with-2 identity workflow. Hara owns product state and emits
 ;; capability commands; the browser is an IOC adapter only.
 (ns hestia.workflow-v3
   (:require [std.foundation :refer [assoc conj count get merge nth]]))
@@ -6,16 +6,22 @@
 (def PERSONAL
   {"id" "personal"
    "title" "Recover a personal identity"
-   "authorities" [{"id" "notary" "name" "Community Notary" "required" ["passport"]}
-                  {"id" "bank" "name" "Community Bank" "required" ["address"]}
-                  {"id" "contact" "name" "Trusted Contact" "required" ["liveness"]}]})
+   "authority_options" [{"id" "notary" "name" "Community Notary" "required" ["passport"]}
+                        {"id" "bank" "name" "Community Bank" "required" ["address"]}
+                        {"id" "contact" "name" "Trusted Contact" "required" ["liveness"]}
+                        {"id" "solicitor" "name" "Family Solicitor" "required" ["identity-record"]}
+                        {"id" "employer" "name" "Current Employer" "required" ["employment"]}
+                        {"id" "civic" "name" "Civic Registry" "required" ["civil-record"]}]})
 
 (def ORGANIZATION
   {"id" "organization"
    "title" "Recover an organization signer"
-   "authorities" [{"id" "legal" "name" "Legal Counsel" "required" ["board-resolution"]}
-                  {"id" "hr" "name" "People Operations" "required" ["employment"]}
-                  {"id" "finance" "name" "Finance Controller" "required" ["signing-authority"]}]})
+   "authority_options" [{"id" "legal" "name" "Legal Counsel" "required" ["board-resolution"]}
+                        {"id" "hr" "name" "People Operations" "required" ["employment"]}
+                        {"id" "finance" "name" "Finance Controller" "required" ["signing-authority"]}
+                        {"id" "secretary" "name" "Company Secretary" "required" ["company-register"]}
+                        {"id" "auditor" "name" "External Auditor" "required" ["audit-engagement"]}
+                        {"id" "banking" "name" "Banking Partner" "required" ["account-mandate"]}]})
 
 (defn scenario [id] (if (= id "organization") ORGANIZATION PERSONAL))
 (defn command [capability action args]
@@ -30,8 +36,8 @@
   [{"id" "identity" "name" "Identity signing key" "kind" "ECDSA P-256"
     "status" (if (get state "lost") "lost" (if (get state "identity") "active" "not-created"))
     "secret_visible" false}
-   {"id" "factor" "name" "Your recovery code" "kind" "256-bit user factor"
-    "status" (if (get state "factor_saved") "saved-by-user" "not-created")
+   {"id" "factor" "name" "Credential vault factor" "kind" "256-bit managed user factor"
+    "status" (if (get state "factor_saved") "secured-automatically" "not-created")
     "secret_visible" false}
    {"id" "shares" "name" "Authority recovery shares" "kind" "Shamir 2-of-3"
     "status" (if (get state "factor_saved") "distributed" "not-created")
@@ -39,6 +45,8 @@
 
 (defn view [state]
   {"phase" (get state "phase") "scenario" (get state "scenario")
+   "authority_options" (if (get state "scenario")
+                         (get (get state "scenario") "authority_options") [])
    "authorities" (get state "authorities") "approvals" (get state "approvals")
    "approval_count" (count (get state "approvals"))
    "threshold" 2 "chat" (get state "chat")
@@ -52,14 +60,19 @@
     (cond
       (= kind "scenario/select")
       (let [selected (scenario (get data "scenario"))]
-        (outcome (merge state {"phase" "explain-enrollment" "scenario" selected
-                               "authorities" (get selected "authorities")}) []))
+        (outcome (merge state {"phase" "select-authorities" "scenario" selected
+                               "authorities" []}) []))
+      (= kind "authorities/select")
+      (let [chosen (get data "authorities")]
+        (if (= 3 (count chosen))
+          (outcome (merge state {"phase" "explain-enrollment" "authorities" chosen}) [])
+          (throw (ex-info "select exactly three authorities" {"count" (count chosen)}))))
       (= kind "identity/create")
       (outcome (assoc state "phase" "creating-identity")
                [(command "crypto" "create-v3-identity" [])])
       (= kind "identity/created")
       (outcome (merge state {"phase" "save-recovery-code" "identity" data}) [])
-      (= kind "factor/confirmed")
+      (= kind "factor/secured")
       (outcome (merge state {"phase" "enrollment" "factor_saved" true})
                [(command "crypto" "split-authority-secret" [])])
       (= kind "identity/lost")

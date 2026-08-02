@@ -152,15 +152,18 @@ test("legacy v1 invite recovers to v2 ceremony creation", async ({ page }) => {
 test("guided v3 flow explains, recovers, and uses an identity", async ({ page }) => {
   await page.goto(origin + "/recovery/");
   await page.getByRole("button", { name: "Personal identity" }).click();
+  await expect(page.locator(".authority-option")).toHaveCount(6);
+  await page.locator(".authority-option").nth(0).click();
+  await page.locator(".authority-option").nth(2).click();
+  await page.locator(".authority-option").nth(4).click();
+  await page.getByRole("button", { name: "Continue with these authorities" }).click();
   await page.getByRole("button", { name: "Create identity" }).click();
-  const code = await page.locator(".code").textContent();
-  await page.getByRole("button", { name: "I have saved it" }).click();
-  await expect(page.getByRole("heading", { name: /Three independent guardians/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /chosen guardians/ })).toBeVisible();
+  await expect(page.getByText("Credential vault factor secured automatically")).toBeVisible();
   await page.getByRole("button", { name: "Simulate losing this device" }).click();
   await page.locator(".authority").nth(0).click();
   await page.locator(".authority").nth(1).click();
-  await page.locator("#codeInput").fill(code);
-  await page.getByRole("button", { name: "Recover identity" }).click();
+  await page.getByRole("button", { name: "Recover with credential vault" }).click();
   await expect(page.getByRole("heading", { name: "The key is useful again" })).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Send a signed chat message" }).click();
   await expect(page.locator("#chatBadge")).toHaveText("Verified identity");

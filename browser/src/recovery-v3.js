@@ -14,17 +14,23 @@ export function generateRecoveryCode() {
   return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("").match(/.{1,4}/g).join("-");
 }
 
+export function generateUserFactor() {
+  return webCrypto().getRandomValues(new Uint8Array(32));
+}
+
 export function parseRecoveryCode(value) {
   const normalized = String(value ?? "").trim().replaceAll("-", "").replaceAll(" ", "");
   if (!/^[0-9a-f]{64}$/i.test(normalized)) throw new Error("Recovery code is not valid");
   return Uint8Array.from(normalized.match(/../g), (pair) => Number.parseInt(pair, 16));
 }
 
-async function packageKey(authoritySecret, recoveryCode, identityId, usages) {
+async function packageKey(authoritySecret, userFactor, identityId, usages) {
   const material = await webCrypto().subtle.importKey(
     "raw", authoritySecret, "HKDF", false, ["deriveKey"]
   );
-  const salt = new Uint8Array(await webCrypto().subtle.digest("SHA-256", parseRecoveryCode(recoveryCode)));
+  const factor = userFactor instanceof Uint8Array ? userFactor : parseRecoveryCode(userFactor);
+  if (factor.length !== 32) throw new Error("Credential vault factor is not valid");
+  const salt = new Uint8Array(await webCrypto().subtle.digest("SHA-256", factor));
   return webCrypto().subtle.deriveKey({
     name: "HKDF",
     hash: "SHA-256",
@@ -33,7 +39,7 @@ async function packageKey(authoritySecret, recoveryCode, identityId, usages) {
   }, material, { name: "AES-GCM", length: 256 }, false, usages);
 }
 
-export async function createIdentityPackage({ name, scenario, recoveryCode = generateRecoveryCode() }) {
+export async function createIdentityPackage({ name, scenario, userFactor = generateUserFactor() }) {
   const cryptoApi = webCrypto();
   const identityId = bytesToBase64Url(cryptoApi.getRandomValues(new Uint8Array(16)));
   const authoritySecret = cryptoApi.getRandomValues(new Uint8Array(32));
@@ -50,12 +56,12 @@ export async function createIdentityPackage({ name, scenario, recoveryCode = gen
     version: 3, identity_id: identityId, name, scenario, public_jwk: publicJwk, private_jwk: privateJwk
   }));
   const iv = cryptoApi.getRandomValues(new Uint8Array(12));
-  const key = await packageKey(authoritySecret, recoveryCode, identityId, ["encrypt"]);
+  const key = await packageKey(authoritySecret, userFactor, identityId, ["encrypt"]);
   const ciphertext = new Uint8Array(await cryptoApi.subtle.encrypt({
     name: "AES-GCM", iv, additionalData: textEncoder.encode(identityId)
   }, key, plaintext));
   return {
-    recoveryCode,
+    userFactor,
     authoritySecret,
     privateKey: signingKey.privateKey,
     identity: { identity_id: identityId, name, scenario, public_jwk: publicJwk, fingerprint },
@@ -63,10 +69,10 @@ export async function createIdentityPackage({ name, scenario, recoveryCode = gen
   };
 }
 
-export async function restoreIdentityPackage({ encryptedPackage, authoritySecret, recoveryCode }) {
+export async function restoreIdentityPackage({ encryptedPackage, authoritySecret, userFactor, recoveryCode }) {
   if (encryptedPackage?.version !== 3) throw new Error("Unsupported identity package");
   try {
-    const key = await packageKey(authoritySecret, recoveryCode, encryptedPackage.identity_id, ["decrypt"]);
+    const key = await packageKey(authoritySecret, userFactor ?? recoveryCode, encryptedPackage.identity_id, ["decrypt"]);
     const plaintext = await webCrypto().subtle.decrypt({
       name: "AES-GCM",
       iv: base64UrlToBytes(encryptedPackage.iv),
@@ -79,7 +85,7 @@ export async function restoreIdentityPackage({ encryptedPackage, authoritySecret
     return { data, privateKey };
   } catch (error) {
     if (error?.message === "Recovery code is not valid") throw error;
-    throw new Error("Recovery failed: the code or authority shares are incorrect");
+    throw new Error("Recovery failed: the credential vault factor or authority shares are incorrect");
   }
 }
 
