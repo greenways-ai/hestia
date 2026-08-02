@@ -1,0 +1,7 @@
+---
+type Props = { label?: string; class?: string };
+const { label = "Hestia", class: className = "" } = Astro.props;
+---
+<div class:list={["mosaic-mark", className]} role="img" aria-label={label + " ember mosaic emblem"}>
+  {Array.from({ length: 49 }, (_, index) => <i style={"--i:" + index} />)}
+</div>

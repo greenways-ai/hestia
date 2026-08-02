@@ -8,3 +8,7 @@
 /browser/playwright-report/
 /.pages/
 /cloudflare/signaling/.wrangler/
+/site/node_modules/
+/site/dist/
+/site/.astro/
+/.netlify/
