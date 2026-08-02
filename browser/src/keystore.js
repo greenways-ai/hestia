@@ -37,7 +37,7 @@ export async function createRecoveryPackage({
   return {
     recoverySecret,
     encryptedPackage: {
-      version: 1,
+      version: 2,
       identity,
       key_version: keyVersion,
       policy_hash: policyHash,
@@ -48,6 +48,7 @@ export async function createRecoveryPackage({
 }
 
 export async function restoreRecoveryPackage(encryptedPackage, recoverySecret) {
+  if (encryptedPackage.version !== 2) throw new Error("unsupported recovery package version");
   const key = await crypto.subtle.importKey(
     "raw", recoverySecret, { name: "AES-GCM" }, false, ["decrypt"]
   );

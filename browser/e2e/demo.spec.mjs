@@ -33,6 +33,10 @@ test.beforeAll(async () => {
       file = resolve(browserRoot, "demo", url.pathname.slice("/recovery/".length));
     } else if (url.pathname.startsWith("/hestia-browser/")) {
       file = resolve(browserRoot, "src", url.pathname.slice("/hestia-browser/".length));
+    } else if (url.pathname.startsWith("/hara-runtime/")) {
+      file = resolve(browserRoot, "vendor/hara", url.pathname.slice("/hara-runtime/".length));
+    } else if (url.pathname.startsWith("/hara/")) {
+      file = resolve(browserRoot, "hara", url.pathname.slice("/hara/".length));
     }
     if (!file || !file.startsWith(browserRoot)) {
       response.writeHead(404).end();
@@ -77,10 +81,16 @@ async function pairAndRecover(browser, mode) {
   const pair = await contexts(browser);
   let first = await pair.firstContext.newPage();
   let second = await pair.secondContext.newPage();
+  for (const [name, page] of [["first", first], ["second", second]]) {
+    page.on("pageerror", (error) => console.error(`${name} page error:`, error));
+    page.on("console", (message) => {
+      if (message.type() === "error") console.error(`${name} console:`, message.text());
+    });
+  }
   await first.goto(origin + "/recovery/");
   await first.locator("#mode").selectOption(mode);
   await first.getByRole("button", { name: "Create private invite" }).click();
-  await expect(first).toHaveURL(/#v=1&ceremony=/);
+  await expect(first).toHaveURL(/#v=2&ceremony=/);
   const invite = first.url();
   await second.goto(invite);
 
@@ -93,6 +103,19 @@ async function pairAndRecover(browser, mode) {
   await expect(first.locator("#result")).toHaveText("Identity proof verified");
   return { ...pair, first, second, invite };
 }
+
+test("Hara/WASM owns threshold split and reconstruction", async ({ page }) => {
+  await page.goto(origin + "/recovery/");
+  const result = await page.evaluate(async () => {
+    const { splitSecret, combineShares, haraRuntimeInfo } = await import("/hestia-browser/shamir.js");
+    const secret = new Uint8Array([3, 1, 4, 1, 5, 9]);
+    const shares = await splitSecret(secret, { shares: 3, threshold: 2 });
+    const restored = await combineShares([shares[0], shares[2]]);
+    return { restored: [...restored], info: await haraRuntimeInfo() };
+  });
+  expect(result.restored).toEqual([3, 1, 4, 1, 5, 9]);
+  expect(result.info).toBeTruthy();
+});
 
 test("reusable peers sharing one URL recover and reconnect", async ({ browser }) => {
   const state = await pairAndRecover(browser, "reusable");

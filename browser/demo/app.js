@@ -174,7 +174,7 @@ async function handleMessage(type, payload) {
 
 async function policyHash() {
   const policy = {
-    version: 1,
+    version: 2,
     threshold: 2,
     shares: 2,
     mode: invite.mode,
@@ -198,7 +198,7 @@ async function provisionPackage() {
       signingKeyPair,
       policyHash: policy
     });
-    shares = splitSecret(created.recoverySecret, { shares: 2, threshold: 2 });
+    shares = await splitSecret(created.recoverySecret, { shares: 2, threshold: 2 });
     if (!record.wrapping_key) record.wrapping_key = await createWrappingKey();
     record.protected_share = await protectShare(shares[0], record.wrapping_key, invite.ceremony);
     record.encrypted_package = created.encryptedPackage;
@@ -334,7 +334,7 @@ async function receiveRecoveryShare(payload) {
     keeperSigningPublicKey: link.peerSigningKey
   });
   const localShare = await openProtectedShare(record.protected_share, record.wrapping_key, invite.ceremony);
-  const secret = combineShares([localShare, remoteShare]);
+  const secret = await combineShares([localShare, remoteShare]);
   const restored = await restoreRecoveryPackage(record.encrypted_package, secret);
   const challenge = crypto.getRandomValues(new Uint8Array(32));
   const signature = await crypto.subtle.sign(

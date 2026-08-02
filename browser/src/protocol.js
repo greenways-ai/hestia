@@ -42,7 +42,9 @@ export async function importCapabilityKey(capabilityBytes) {
 
 function unsignedEnvelope(fields) {
   return {
-    version: 1,
+    // The stateless signaling relay remains on its transport ABI v1. Hestia's
+    // ceremony data, invite, recovery envelope, and package are v2.
+    version: fields.protocol === "hestia-signal/1" ? 1 : 2,
     protocol: fields.protocol,
     type: fields.type,
     ceremony_id: fields.ceremony_id,

@@ -1,6 +1,6 @@
 import { base64UrlToBytes, bytesToBase64Url, concatBytes, textDecoder, textEncoder } from "./encoding.js";
 
-const shareInfo = textEncoder.encode("hestia-recovery-share/v1");
+const shareInfo = textEncoder.encode("hestia-recovery-share/v2");
 
 async function deriveShareKey(privateKey, publicKey, ceremonyId) {
   const bits = await crypto.subtle.deriveBits({ name: "ECDH", public: publicKey }, privateKey, 256);
@@ -34,7 +34,7 @@ export async function sealShareForCeremony({
   const key = await deriveShareKey(ephemeral.privateKey, browserPublicKey, ceremonyId);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const fields = {
-    version: 1,
+    version: 2,
     ceremony_id: ceremonyId,
     keeper: keeperId,
     share_index: share[0],
@@ -65,6 +65,7 @@ export async function openCeremonyShare({
   keeperSigningPublicKey,
   now = new Date()
 }) {
+  if (envelope.version !== 2) throw new Error("unsupported recovery envelope version");
   if (new Date(envelope.expires_at).getTime() <= now.getTime()) throw new Error("recovery envelope expired");
   const fields = {
     version: envelope.version,

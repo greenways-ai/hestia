@@ -9,7 +9,7 @@ export function createInvite(baseUrl, { mode = "reusable", random = crypto } = {
   const url = new URL("/recovery/", baseUrl);
   const ceremony = bytesToBase64Url(random.getRandomValues(new Uint8Array(16)));
   const capability = bytesToBase64Url(random.getRandomValues(new Uint8Array(32)));
-  url.hash = new URLSearchParams({ v: "1", ceremony, cap: capability, mode }).toString();
+  url.hash = new URLSearchParams({ v: "2", ceremony, cap: capability, mode }).toString();
   return { url, ceremony, capability, mode };
 }
 
@@ -20,7 +20,7 @@ export function parseInvite(location) {
   const ceremony = fields.get("ceremony") ?? "";
   const capability = fields.get("cap") ?? "";
   const mode = fields.get("mode") ?? "";
-  if (fields.get("v") !== "1" || !ceremonyPattern.test(ceremony)
+  if (fields.get("v") !== "2" || !ceremonyPattern.test(ceremony)
       || !capabilityPattern.test(capability) || !modes.has(mode)) {
     throw new Error("invalid recovery invite");
   }
