@@ -20,6 +20,11 @@ export function parseInvite(location) {
   const ceremony = fields.get("ceremony") ?? "";
   const capability = fields.get("cap") ?? "";
   const mode = fields.get("mode") ?? "";
+  if (fields.get("v") === "1") {
+    const error = new Error("This v1 recovery invite has expired. Create a new v2 ceremony.");
+    error.code = "HESTIA_INVITE_V1";
+    throw error;
+  }
   if (fields.get("v") !== "2" || !ceremonyPattern.test(ceremony)
       || !capabilityPattern.test(capability) || !modes.has(mode)) {
     throw new Error("invalid recovery invite");

@@ -454,7 +454,16 @@ elements.approveShare.addEventListener("click", () => dispatchCeremony("recovery
 elements.rejectShare.addEventListener("click", () => dispatchCeremony("recovery/reject").catch(showError));
 window.addEventListener("beforeunload", () => link?.close());
 
-if (location.hash) startCeremony().catch(showError);
+if (location.hash) startCeremony().catch(async (error) => {
+  if (error?.code === "HESTIA_INVITE_V1") {
+    history.replaceState(null, "", location.pathname + location.search);
+    kernel ??= await createCeremonyKernel();
+    await dispatchCeremony("invite/invalid");
+    render();
+    return;
+  }
+  showError(error);
+});
 else createCeremonyKernel().then(async (created) => {
   kernel = created;
   applyKernelView(await kernel.view());

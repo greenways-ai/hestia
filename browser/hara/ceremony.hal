@@ -32,6 +32,7 @@
   [phase]
   (cond
     (= phase "idle") ["Create a ceremony" "Choose a lifecycle and generate a private invite URL."]
+    (= phase "invalid-invite") ["Invite expired" "This v1 invite cannot be used. Create a new v2 ceremony below."]
     (= phase "pairing") ["Waiting for peer" "Open this exact URL in a second browser."]
     (= phase "connecting") ["Connecting" "Negotiating a direct WebRTC channel."]
     (= phase "connected") ["Connected" "Authenticated WebRTC DataChannel established."]
@@ -56,8 +57,10 @@
      "status_detail" (if (= "error" (get state "phase"))
                        (get state "error")
                        (nth copy 1))
-     "invite_visible" (= "idle" (get state "phase"))
-     "ceremony_visible" (not (= "idle" (get state "phase")))
+     "invite_visible" (or (= "idle" (get state "phase"))
+                          (= "invalid-invite" (get state "phase")))
+     "ceremony_visible" (and (not (= "idle" (get state "phase")))
+                             (not (= "invalid-invite" (get state "phase"))))
      "approval_visible" (= "approval" (get state "phase"))
      "request_enabled" (and (= "ready" (get state "phase"))
                             (get state "connected"))
@@ -104,6 +107,9 @@
       (outcome (merge state {"phase" "pairing" "mode" (get data "mode")})
                [(command "persistence" "append-and-save" ["ceremony/joined" data])
                 (command "transport" "connect" [])])
+
+      (= kind "invite/invalid")
+      (outcome (assoc state "phase" "invalid-invite") [])
 
       (= kind "transport/connecting")
       (outcome (assoc state "phase" "connecting") [])

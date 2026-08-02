@@ -136,6 +136,15 @@ test("Hara/WASM owns ceremony transitions, commands, and views", async ({ page }
   expect(result.connected.view.status_label).toBe("Connected");
 });
 
+test("legacy v1 invite recovers to v2 ceremony creation", async ({ page }) => {
+  await page.goto(origin + "/recovery/#v=1&ceremony=EkrNjvfMxQ1d47GsvePTDA&cap=3DGUDZ7eZdaCR8mS55Wt0nY71-3drcM6EZtyQVUhckg&mode=reusable");
+  await expect(page.locator("#statusLabel")).toHaveText("Invite expired");
+  await expect(page.locator("#invitePanel")).toBeVisible();
+  await expect(page).not.toHaveURL(/#v=1/);
+  await page.getByRole("button", { name: "Create private invite" }).click();
+  await expect(page).toHaveURL(/#v=2&ceremony=/);
+});
+
 test("reusable peers sharing one URL recover and reconnect", async ({ browser }) => {
   const state = await pairAndRecover(browser, "reusable");
   await state.first.close();

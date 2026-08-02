@@ -23,6 +23,14 @@ test("creates a capability only in the recovery URL fragment", () => {
   assert.throws(() => parseInvite(leaked), /fragment/);
 });
 
+test("rejects legacy v1 invites with a recoverable error", () => {
+  const legacy = "https://example.test/recovery/#v=1&ceremony=EkrNjvfMxQ1d47GsvePTDA&cap=3DGUDZ7eZdaCR8mS55Wt0nY71-3drcM6EZtyQVUhckg&mode=reusable";
+  assert.throws(() => parseInvite(legacy), (error) => {
+    assert.equal(error.code, "HESTIA_INVITE_V1");
+    return true;
+  });
+});
+
 test("authenticates and signs ceremony envelopes", async () => {
   const identity = await createPeerIdentity();
   const publicKey = await importSigningPublicKey(identity.publicKey);
