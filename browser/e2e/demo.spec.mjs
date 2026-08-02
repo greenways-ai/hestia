@@ -15,7 +15,8 @@ function contentType(path) {
   return {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
-    ".js": "text/javascript; charset=utf-8"
+    ".js": "text/javascript; charset=utf-8",
+    ".webp": "image/webp"
   }[extname(path)] ?? "application/octet-stream";
 }
 
@@ -140,7 +141,7 @@ test("Hara/WASM owns ceremony transitions, commands, and views", async ({ page }
   expect(result.connected.view.status_label).toBe("Connected");
 });
 
-test("guided demo presents the recovery mechanism without editorial framing", async ({ page }) => {
+test("guided demo presents the recovery mechanism as a wombat story", async ({ page }) => {
   await page.goto(origin + "/recovery/");
   await expect(page.getByText("Demo", { exact: true })).toBeVisible();
   await expect(page.locator(".story-step")).toHaveCount(5);
@@ -152,9 +153,12 @@ test("guided demo presents the recovery mechanism without editorial framing", as
   await page.locator(".story-step").first().locator("summary[aria-label='About identity creation']").click();
   await expect(explanation).toBeVisible();
   await expect(page.locator(".story-art").first()).toBeVisible();
+  await expect(page.locator(".story-art")).toHaveCount(5);
+  expect(await page.locator(".story-art").evaluateAll((images) => images.every((image) => image.complete && image.naturalWidth > 0))).toBe(true);
+  await expect(page.locator(".story-art").first()).toHaveAttribute("alt", /Mabel.*wombat/i);
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator(".story-art").first()).not.toBeVisible();
-  await expect(page.locator(".story-step").first()).toHaveCSS("background-image", /hestia-recovery-story/);
+  await expect(page.locator(".story-art").first()).toBeVisible();
+  await expect(page.locator(".story-art").first()).toHaveCSS("object-fit", "cover");
 });
 
 test("legacy v1 invite recovers to v2 ceremony creation", async ({ page }) => {
@@ -169,22 +173,22 @@ test("legacy v1 invite recovers to v2 ceremony creation", async ({ page }) => {
 test("guided v3 flow explains, recovers, and uses an identity", async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto(origin + "/recovery/");
-  await page.getByRole("button", { name: "Choose recovery authorities" }).click();
+  await page.getByRole("button", { name: "Choose recovery helpers" }).click();
   await expect(page.locator(".authority-option")).toHaveCount(6);
   await page.locator(".authority-option").nth(0).click();
   await page.locator(".authority-option").nth(2).click();
   await page.locator(".authority-option").nth(4).click();
   await page.getByRole("button", { name: "Review protection" }).click();
   await page.getByRole("button", { name: "Create demo identity" }).click();
-  await expect(page.getByRole("heading", { name: "Identity protection is active" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "Mabel's identity is protected" })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("2-of-3 protection configured")).toBeVisible();
-  await page.getByRole("button", { name: "Simulate a lost device" }).click();
-  await expect(page.getByRole("heading", { name: "This device no longer has access" })).toBeVisible();
-  await page.getByRole("button", { name: "Start recovery" }).click();
+  await page.getByRole("button", { name: "Simulate lost access" }).click();
+  await expect(page.getByRole("heading", { name: "Mabel has lost access" })).toBeVisible();
+  await page.getByRole("button", { name: "Ask the helpers" }).click();
   await page.locator(".authority").nth(0).click();
   await page.locator(".authority").nth(1).click();
   await page.getByRole("button", { name: "Restore identity" }).click();
-  await expect(page.getByRole("heading", { name: "Identity restored" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Mabel's identity is restored" })).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Send a signed demo message" }).click();
   await expect(page.locator("#chatBadge")).toHaveText("Verified identity");
   await page.locator("#technical > summary").click();

@@ -7,7 +7,15 @@ const $ = (id) => document.getElementById(id);
 const screen = $("screen");
 const approvals = new Set();
 let kernel, view, created, shares, recovered;
-let identityName = "Alex Morgan";
+let identityName = "Mabel Wombat";
+
+const storyScenes = [
+  { src: "./wombat-create.webp", alt: "Mabel and three wombat friends prepare a burrow around its carved wooden key" },
+  { src: "./wombat-protect.webp", alt: "Three wombat helpers safeguard separate recovery clues" },
+  { src: "./wombat-lost.webp", alt: "Mabel discovers that her original burrow key is missing" },
+  { src: "./wombat-approve.webp", alt: "Two wombat helpers return their independent recovery clues" },
+  { src: "./wombat-restore.webp", alt: "The wombats celebrate after restoring Mabel's burrow key" }
+];
 
 const authorityLabels = {
   notary: "Professional registration",
@@ -43,6 +51,11 @@ function header(label, title, description = "") {
   return `<header class="screen-head"><div><p class="eyebrow">${esc(label)}</p><h2>${esc(title)}</h2></div>${description ? `<p>${esc(description)}</p>` : ""}</header>`;
 }
 
+function screenView(stage, content) {
+  const scene = storyScenes[stage];
+  return `<div class="demo-scene"><figure><img src="${scene.src}" alt="${esc(scene.alt)}"></figure><div class="demo-screen-body">${content}</div></div>`;
+}
+
 function renderKeys() {
   $("technical").hidden = false;
   $("keys").hidden = false;
@@ -60,13 +73,13 @@ function setupChat() {
 function setup() {
   phase(0);
   approvals.clear();
-  screen.innerHTML = `${header("Step 1 of 5", "Set up a demo identity", "This reusable example follows a fictional professional. No personal or health information is collected.")}<div class="persona"><span class="persona-icon">AM</span><div><strong>Alex Morgan</strong><small>Health-sector professional · fictional profile</small></div></div><label class="field">Identity name<input id="identityName" value="${esc(identityName)}" maxlength="80"></label><div class="actions"><button id="begin" class="primary">Choose recovery authorities</button></div>`;
-  $("begin").onclick = () => { identityName = $("identityName").value.trim() || "Alex Morgan"; selectAuthorities(); };
+  screen.innerHTML = screenView(0, `${header("Step 1 of 5", "Meet Mabel the wombat", "Mabel is a fictional guide. No personal or health information is collected.")}<div class="persona"><span class="persona-icon" aria-hidden="true">M</span><div><strong>Mabel Wombat</strong><small>Burrow keeper · fictional profile</small></div></div><label class="field">Identity name<input id="identityName" value="${esc(identityName)}" maxlength="80"></label><div class="actions"><button id="begin" class="primary">Choose recovery helpers</button></div>`);
+  $("begin").onclick = () => { identityName = $("identityName").value.trim() || "Mabel Wombat"; selectAuthorities(); };
 }
 
 function selectAuthorities() {
   const chosen = new Set();
-  screen.innerHTML = `${header("Step 1 of 5", "Choose three independent authorities", "Select three organizations or people that can evaluate a future recovery request. Any two can approve.")}<div class="authority-grid">${view.authority_options.map((authority) => `<button class="card authority-option" data-id="${esc(authority.id)}"><span class="status">Available</span><h3>${esc(authorityName(authority))}</h3><p>${esc(evidenceLabel(authority))}</p></button>`).join("")}</div><div class="selection-row"><p id="selectionCount"><strong>0 of 3</strong> selected</p><div class="actions"><button id="back">Back</button><button id="continue" class="primary" disabled>Review protection</button></div></div>`;
+  screen.innerHTML = screenView(1, `${header("Step 1 of 5", "Choose three independent helpers", "Each helper represents an organization or person that can evaluate a future recovery request. Any two can approve.")}<div class="authority-grid">${view.authority_options.map((authority) => `<button class="card authority-option" data-id="${esc(authority.id)}"><span class="status">Available</span><h3>${esc(authorityName(authority))}</h3><p>${esc(evidenceLabel(authority))}</p></button>`).join("")}</div><div class="selection-row"><p id="selectionCount"><strong>0 of 3</strong> selected</p><div class="actions"><button id="back">Back</button><button id="continue" class="primary" disabled>Review protection</button></div></div>`);
   screen.querySelectorAll(".authority-option").forEach((button) => button.onclick = () => {
     const id = button.dataset.id;
     if (chosen.has(id)) chosen.delete(id); else if (chosen.size < 3) chosen.add(id);
@@ -84,7 +97,7 @@ function selectAuthorities() {
 }
 
 function reviewProtection() {
-  screen.innerHTML = `${header("Step 1 of 5", "Review the protection model", "The identity will require two authority shares and the separately held device factor.")}<div class="authority-grid">${authorities().map((authority) => `<article class="card"><span class="status good">Selected</span><h3>${esc(authorityName(authority))}</h3><p>${esc(evidenceLabel(authority))}</p></article>`).join("")}</div><div class="success-callout"><span class="callout-icon">2+1</span><div><strong>Neither side is sufficient alone</strong><p>Two authorities cannot restore the identity without the device-secured factor.</p></div></div><div class="actions"><button id="back">Change authorities</button><button id="create" class="primary">Create demo identity</button></div>`;
+  screen.innerHTML = screenView(1, `${header("Step 1 of 5", "Review Mabel's protection", "The identity will require two authority shares and Mabel's separately held factor.")}<div class="authority-grid">${authorities().map((authority) => `<article class="card"><span class="status good">Selected helper</span><h3>${esc(authorityName(authority))}</h3><p>${esc(evidenceLabel(authority))}</p></article>`).join("")}</div><div class="success-callout"><span class="callout-icon">2+1</span><div><strong>Everyone has a part to play</strong><p>Two authorities cannot restore the identity without Mabel's separately secured factor.</p></div></div><div class="actions"><button id="back">Change helpers</button><button id="create" class="primary">Create demo identity</button></div>`);
   $("back").onclick = selectAuthorities;
   $("create").onclick = async () => {
     $("create").disabled = true;
@@ -103,7 +116,8 @@ function enrollmentSteps() { return ["Generate the identity key", "Create an enc
 function recoverySteps() { return ["Receive two approved shares", "Reconstruct the authority secret", "Add the device-secured factor", "Decrypt the identity package", "Verify the restored signing key"]; }
 
 function renderProcess(label, title, steps, current) {
-  screen.innerHTML = `${header(label, title, "The real cryptographic operations run locally. Raw values remain in Technical details.")}<ol class="process-steps">${steps.map((step, index) => `<li class="${index < current ? "done" : index === current ? "active" : "pending"}"><span>${index < current ? "✓" : index === current ? "●" : "○"}</span><strong>${esc(step)}</strong></li>`).join("")}</ol>`;
+  const stage = /Restoring/.test(title) ? 4 : 1;
+  screen.innerHTML = screenView(stage, `${header(label, title, "The real cryptographic operations run locally. Raw values remain in Technical details.")}<ol class="process-steps">${steps.map((step, index) => `<li class="${index < current ? "done" : index === current ? "active" : "pending"}"><span>${index < current ? "✓" : index === current ? "●" : "○"}</span><strong>${esc(step)}</strong></li>`).join("")}</ol>`);
 }
 
 async function animateEnrollment() {
@@ -120,21 +134,21 @@ function protectedIdentity() {
   phase(1);
   renderKeys();
   setupChat();
-  screen.innerHTML = `${header("Step 2 of 5", "Identity protection is active", "Each authority holds one encrypted share. The separate factor remains outside their control.")}<div class="success-callout"><span class="callout-icon">✓</span><div><strong>2-of-3 protection configured</strong><p>No single authority has enough information to restore the identity.</p></div></div><div class="authority-grid">${authorities().map((authority, index) => `<article class="card"><span class="status good">Share ${index + 1} secured</span><h3>${esc(authorityName(authority))}</h3><p>${esc(evidenceLabel(authority))}</p></article>`).join("")}</div><div class="actions"><button id="lose" class="primary">Simulate a lost device</button></div>`;
+  screen.innerHTML = screenView(1, `${header("Step 2 of 5", "Mabel's identity is protected", "Each helper authority holds one encrypted share. Mabel's separate factor remains outside their control.")}<div class="success-callout"><span class="callout-icon">✓</span><div><strong>2-of-3 protection configured</strong><p>No single authority has enough information to restore the identity.</p></div></div><div class="authority-grid">${authorities().map((authority, index) => `<article class="card"><span class="status good">Share ${index + 1} secured</span><h3>${esc(authorityName(authority))}</h3><p>${esc(evidenceLabel(authority))}</p></article>`).join("")}</div><div class="actions"><button id="lose" class="primary">Simulate lost access</button></div>`);
   $("lose").onclick = async () => { await dispatch("identity/lost"); created.privateKey = null; showLoss(); };
 }
 
 function showLoss() {
   phase(2);
   renderKeys();
-  screen.innerHTML = `${header("Step 3 of 5", "This device no longer has access", "The active key is unavailable, but the encrypted package and distributed recovery shares remain protected.")}<div class="loss-callout"><span class="callout-icon">!</span><div><strong>Identity access unavailable</strong><p>No authority can restore access independently.</p></div></div><div class="actions"><button id="recoverStart" class="primary">Start recovery</button></div>`;
+  screen.innerHTML = screenView(2, `${header("Step 3 of 5", "Mabel has lost access", "The active key is unavailable, but the encrypted package and distributed recovery shares remain protected.")}<div class="loss-callout"><span class="callout-icon">!</span><div><strong>Identity access unavailable</strong><p>Mabel still has her own factor, and no helper can restore access independently.</p></div></div><div class="actions"><button id="recoverStart" class="primary">Ask the helpers</button></div>`);
   $("recoverStart").onclick = async () => { await dispatch("recovery/start"); recovery(); };
 }
 
 function recovery() {
   phase(3);
   renderKeys();
-  screen.innerHTML = `${header("Step 4 of 5", "Request two independent approvals", "Select two authorities to simulate separate evidence checks and share-release decisions.")}<div class="authority-grid">${authorities().map((authority, index) => `<button class="card authority" data-index="${index}" ${approvals.has(index) ? "disabled" : ""}><span class="status ${approvals.has(index) ? "good" : ""}">${approvals.has(index) ? "Approved" : "Review request"}</span><h3>${esc(authorityName(authority))}</h3><p>${esc(evidenceLabel(authority))}</p></button>`).join("")}</div><div class="selection-row"><p><strong>${approvals.size} of 2</strong> approvals received</p>${approvals.size >= 2 ? `<button id="restore" class="primary">Restore identity</button>` : ""}</div>`;
+  screen.innerHTML = screenView(3, `${header("Step 4 of 5", "Ask for two independent approvals", "Choose two helper authorities to simulate separate evidence checks and share-release decisions.")}<div class="authority-grid">${authorities().map((authority, index) => `<button class="card authority" data-index="${index}" ${approvals.has(index) ? "disabled" : ""}><span class="status ${approvals.has(index) ? "good" : ""}">${approvals.has(index) ? "Approved" : "Review request"}</span><h3>${esc(authorityName(authority))}</h3><p>${esc(evidenceLabel(authority))}</p></button>`).join("")}</div><div class="selection-row"><p><strong>${approvals.size} of 2</strong> approvals received</p>${approvals.size >= 2 ? `<button id="restore" class="primary">Restore identity</button>` : ""}</div>`);
   screen.querySelectorAll(".authority").forEach((button) => button.onclick = async () => { const index = Number(button.dataset.index); approvals.add(index); await dispatch("authority/approved", { authority: authorities()[index].id }); recovery(); });
   if ($("restore")) $("restore").onclick = restore;
 }
@@ -167,7 +181,7 @@ function success() {
   phase(4);
   renderKeys();
   $("chatBadge").textContent = "Verified identity";
-  screen.innerHTML = `${header("Step 5 of 5", "Identity restored", "The recovered key can sign again, proving continuity with the original public identity.")}<div class="success-callout"><span class="callout-icon">✓</span><div><strong>Recovery complete</strong><p>Two approvals and the device-secured factor reproduced the original key.</p></div></div><dl><dt>Identity</dt><dd>${esc(created.identity.name)}</dd><dt>Public fingerprint</dt><dd class="code">${esc(created.identity.fingerprint)}</dd></dl><div class="actions"><button id="signed" class="primary">Send a signed demo message</button><button id="download">Download public identity card</button></div><p id="signatureResult" class="fine"></p>`;
+  screen.innerHTML = screenView(4, `${header("Step 5 of 5", "Mabel's identity is restored", "The recovered key can sign again, proving continuity with the original public identity.")}<div class="success-callout"><span class="callout-icon">✓</span><div><strong>Recovery complete</strong><p>Two approvals and Mabel's separately secured factor reproduced the original key.</p></div></div><dl><dt>Identity</dt><dd>${esc(created.identity.name)}</dd><dt>Public fingerprint</dt><dd class="code">${esc(created.identity.fingerprint)}</dd></dl><div class="actions"><button id="signed" class="primary">Send a signed demo message</button><button id="download">Download public identity card</button></div><p id="signatureResult" class="fine"></p>`);
   $("signed").onclick = async () => { const message = `I recovered ${created.identity.name}`; const signature = await signIdentityMessage(recovered.privateKey, message); addMessage("You", message, `Verified identity · signature ${signature.slice(0, 18)}…`); $("signatureResult").textContent = "Signed with the restored private key. See Technical details for the authority message."; };
   $("download").onclick = () => { const blob = new Blob([JSON.stringify(identityCard(created.identity), null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "hestia-identity-card.json"; link.click(); URL.revokeObjectURL(link.href); };
 }
