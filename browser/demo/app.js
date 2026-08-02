@@ -131,7 +131,6 @@ function render() {
   elements.localPeer.textContent = shortened(record?.peer_fingerprint);
   elements.remotePeer.textContent = shortened(link?.peerFingerprint);
   elements.transcriptHead.textContent = shortened(record?.transcript_head);
-  elements.requestRecovery.disabled ||= record?.status !== "ready" || link?.channel?.readyState !== "open";
   elements.approveShare.disabled = !pendingApproval;
   elements.rejectShare.disabled = !pendingApproval;
 }
