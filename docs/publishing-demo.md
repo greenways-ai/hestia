@@ -70,12 +70,18 @@ custom domain to `hestia-demo.greenways.ai`. The equivalent API calls are:
 gh api --method POST repos/greenways-ai/hestia/pages -f build_type=workflow
 gh api --method PUT repos/greenways-ai/hestia/pages \
   -f cname=hestia-demo.greenways.ai \
-  -F https_enforced=true \
   -f build_type=workflow
 ```
 
 If Pages already exists, the first command returns a conflict and can be
-skipped. GitHub recommends verifying the `greenways.ai` domain for the
+skipped. Wait until GitHub reports the certificate as approved, then enforce
+HTTPS:
+
+```bash
+gh api --method PUT repos/greenways-ai/hestia/pages -F https_enforced=true
+```
+
+GitHub recommends verifying the `greenways.ai` domain for the
 `greenways-ai` organization to prevent domain takeover.
 
 After DNS and certificate status are healthy, run the workflow manually or
