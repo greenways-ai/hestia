@@ -81,6 +81,90 @@ main {
   padding: 110px 24px 150px;
 }
 
+.architecture-warning {
+  background: linear-gradient(100deg, #b7603e20, #101b1ae8 58%);
+  border: 1px solid #d7b96c80;
+  display: grid;
+  gap: clamp(1.5rem, 4vw, 4rem);
+  grid-template-columns: minmax(240px, .7fr) minmax(0, 1.3fr);
+  margin: 18px 0 0;
+  padding: clamp(1.25rem, 3vw, 2.2rem);
+  position: relative;
+}
+
+.architecture-warning::before {
+  background: var(--gold-bright);
+  content: "!";
+  color: var(--ink);
+  font: 700 .72rem var(--mono);
+  height: 24px;
+  left: -1px;
+  place-items: center;
+  position: absolute;
+  top: -1px;
+  width: 24px;
+  display: grid;
+}
+
+.architecture-warning .eyebrow { padding-left: 22px; }
+
+.architecture-warning h2 {
+  font-size: clamp(1.8rem, 3vw, 3.1rem);
+  margin-top: .55rem;
+}
+
+.architecture-warning > div:last-child {
+  color: var(--stone-dim);
+  display: grid;
+  gap: .8rem;
+}
+
+.architecture-warning {
+  display: block;
+  padding: 0;
+}
+
+.architecture-warning summary {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
+  gap: 1.2rem;
+  grid-template-columns: 190px 1fr auto;
+  list-style: none;
+  min-height: 78px;
+  padding: 14px 22px 14px 42px;
+}
+
+.architecture-warning summary::-webkit-details-marker { display: none; }
+
+.architecture-warning summary span,
+.architecture-warning summary b,
+.architecture-warning summary small {
+  display: block;
+}
+
+.architecture-warning summary b,
+.architecture-warning summary small,
+.architecture-warning summary i {
+  font-family: var(--mono);
+  font-style: normal;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.architecture-warning summary b { color: var(--gold-bright); font-size: .62rem; }
+.architecture-warning summary small { color: var(--stone-dim); font-size: .55rem; margin-top: .25rem; }
+.architecture-warning summary strong { color: var(--stone-bright); font: 1.35rem var(--display); }
+.architecture-warning summary i { color: var(--stone-dim); font-size: .55rem; text-align: right; }
+.architecture-warning summary i::after { color: var(--gold); content: " +"; }
+.architecture-warning[open] summary i::after { content: " −"; }
+
+.architecture-explanation {
+  border-top: 1px solid var(--line);
+  grid-template-columns: 1fr 1fr;
+  padding: 22px 42px;
+}
+
 .hero {
   border-bottom: 1px solid var(--line);
   max-width: none;
@@ -112,9 +196,9 @@ h2,
 }
 
 .hero h1 {
-  font-size: clamp(3.8rem, 8.5vw, 8.8rem);
-  line-height: .93;
-  max-width: 1050px;
+  font-size: clamp(2.8rem, 5vw, 5.2rem);
+  line-height: .96;
+  max-width: 760px;
 }
 
 .hero h1 i { color: var(--gold-bright); }
@@ -124,6 +208,74 @@ h2,
   font-size: clamp(1.05rem, 2vw, 1.35rem);
   margin-top: 2rem;
   max-width: 720px;
+}
+
+.hero-copy > p:last-child {
+  color: var(--stone-dim);
+  font-size: clamp(1rem, 1.5vw, 1.18rem);
+  margin-top: 1.4rem;
+  max-width: 640px;
+}
+
+.story {
+  border: 1px solid var(--line-strong);
+  margin: 56px 0 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.story::after {
+  background: linear-gradient(90deg, transparent, #d7b96c24, transparent);
+  content: "";
+  height: 1px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.story img {
+  aspect-ratio: 3 / 1;
+  object-fit: cover;
+  width: 100%;
+}
+
+.story figcaption {
+  background: #07100ef2;
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.story figcaption > div {
+  border-right: 1px solid var(--line);
+  min-height: 128px;
+  padding: 16px;
+}
+
+.story figcaption > div:last-child { border-right: 0; }
+
+.story figcaption b,
+.story figcaption strong,
+.story figcaption span {
+  display: block;
+}
+
+.story figcaption b {
+  color: var(--gold);
+  font: .6rem var(--mono);
+}
+
+.story figcaption strong {
+  color: var(--stone-bright);
+  font: 1.35rem var(--display);
+  margin: .4rem 0;
+}
+
+.story figcaption span {
+  color: var(--stone-dim);
+  font-size: .78rem;
+  line-height: 1.45;
 }
 
 .eyebrow,
@@ -270,9 +422,16 @@ footer a { color: var(--gold-bright); }
   footer { width: calc(100% - 28px); }
   .masthead { height: 72px; }
   main { padding: 72px 14px 100px; }
+  .architecture-warning { grid-template-columns: 1fr; }
+  .architecture-warning summary { gap: .7rem; grid-template-columns: 1fr; padding: 18px 20px 18px 40px; }
+  .architecture-warning summary i { text-align: left; }
+  .architecture-explanation { grid-template-columns: 1fr; padding: 20px; }
   .hero { padding: 60px 0 70px; }
   .hero::after { opacity: .35; }
-  .hero h1 { font-size: clamp(3.15rem, 14vw, 5.4rem); }
+  .hero h1 { font-size: clamp(2.7rem, 12vw, 4.2rem); }
+  .story { margin-top: 36px; overflow-x: auto; }
+  .story img { aspect-ratio: auto; height: 270px; max-width: none; object-fit: cover; width: 810px; }
+  .story figcaption { min-width: 810px; }
   .progress { overflow-x: auto; }
   .progress span { min-width: 110px; }
 }
