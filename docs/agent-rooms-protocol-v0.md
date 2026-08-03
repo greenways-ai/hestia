@@ -1,6 +1,6 @@
 # Hestia Agent Profiles and Private Rooms Protocol v0
 
-Status: implementation draft 0.1.0
+Status: implementation draft 0.2.0
 
 This document defines the first product slice for signed agent profiles, private
 Hestia rooms, formal negotiation, and HAL-programmed state. It is intentionally
@@ -23,11 +23,11 @@ The room transport is not authoritative. WebRTC, WebSocket, HTTP, TURN, and
 store-and-forward relays carry envelopes, but the HAL kernel and ledger receipt
 determine whether a transition was accepted.
 
-## 2. Canonical objects
+## 2. Canonical objects and browser envelopes
 
-The canonical objects are HCV1 cells in `gw_ledger`. JSON projections are for
-application queries and diagnostics and MUST NOT be the signed source of truth.
-Each accepted transition commits at least:
+The canonical durable objects are HCV1 cells in `gw_ledger`. JSON projections
+are for application queries and diagnostics and MUST NOT be the signed source of
+truth. Each accepted transition commits at least:
 
 - previous state root;
 - event root;
@@ -36,6 +36,13 @@ Each accepted transition commits at least:
 - resulting state root;
 - effect-plan root; and
 - admission receipt root.
+
+The browser preview currently uses domain-separated `hestia-agent/1` envelopes
+before ledger admission. Their signing bytes are deterministic canonical JSON
+framed by `HESTIA-AGENT-RECORD/1 NUL`; their provisional root is SHA-256 over a
+separate `HESTIA-AGENT-ROOT/1 NUL` domain. These envelopes provide real
+signature, invitation, encryption, and replay behaviour, but they do not replace
+the eventual HCV1 record mapping or a `gw_ledger` receipt.
 
 Large encrypted documents and message bodies MAY live in object storage. Their
 media type, byte length, encryption metadata, and digest remain committed by the
@@ -58,6 +65,11 @@ principal/root key
        -> document-specific key
 ```
 
+The browser implementation generates Ed25519 root and operational key pairs.
+Private keys are re-imported as non-extractable WebCrypto keys. The root key
+signs the profile version and a delegation binding the operational public key,
+purposes, scope, validity and revocation position.
+
 Private keys MUST NOT enter the ledger. The ledger records public keys,
 fingerprints, purposes, scope, validity, delegation, rotation, and revocation.
 A room-specific key SHOULD be used when participants do not need to learn an
@@ -76,11 +88,16 @@ contains or commits:
 - capability commitment; and
 - host profile and key fingerprints.
 
-An external agent joins by presenting a room-scoped public key, proving
-possession of that key and the invitation capability, and supplying any required
-delegation chain. Cryptographic verification is performed by host capabilities.
-The HAL kernel receives only explicit verified facts and refuses admission when
-proof or delegation verification is absent.
+The capability secret is carried in the URL fragment. The signed invitation
+contains only a domain-separated commitment. An external agent joins by
+presenting its signed profile and delegated operational key, proving possession
+of that key and the invitation capability, and supplying any required delegation
+chain.
+
+The browser host verifies the host profile, invitation signature, capability
+commitment, guest profile, delegation, guest signature and capability proof.
+The HAL kernel receives explicit verified facts and refuses admission when proof,
+delegation or invitation verification is absent.
 
 Admission consumes the invitation, adds the member, increments the membership
 epoch, emits a ledger proposal, and requests room-key rotation. A revoked member
@@ -98,6 +115,11 @@ Room communication has three retention classes:
 3. Formal actions such as invitations, delegations, offers, acceptances,
    approvals, document changes, and delivery are canonical ledger records.
 
+The browser preview creates a non-extractable AES-256-GCM key for each membership
+epoch. Message metadata is authenticated as additional data; the sender signs
+the ciphertext envelope with its Ed25519 operational key. HAL receives only the
+signed envelope root and ciphertext root.
+
 A message send intent records an envelope root and ciphertext root, never
 plaintext. The host commits the intent before attempting delivery and later
 records a delivery or failure receipt. This outbox order avoids pretending that
@@ -106,9 +128,11 @@ a ledger transaction and an internet side effect are atomic.
 ## 6. Documents
 
 A room attaches a document by document ID, document root, and document policy
-root. Editing, transformation, conflict receipts, approvals, and delivery follow
-`document-protocol-v1.md`. Room membership alone does not grant document
-permissions; the document delegation and policy are checked separately.
+root. The browser preview hashes the content, signs a version record, verifies
+that signature, and submits the version root to HAL. Editing, transformation,
+conflict receipts, approvals, and delivery follow `document-protocol-v1.md`.
+Room membership alone does not grant document permissions; the document
+delegation and policy are checked separately.
 
 ## 7. Formal negotiation
 
@@ -128,8 +152,10 @@ Initial permissions are expected to separate:
 
 The v0 kernel defaults to human-required acceptance. The host must supply both a
 verified agent authority result and a verified human approval result before the
-kernel accepts an offer. Later room policies MAY define bounded autonomous
-acceptance.
+kernel accepts an offer. The browser preview creates a separate human-approval
+root, signs an acceptance record, verifies both offer and acceptance signatures,
+and then submits the exact offer root to HAL. Later room policies MAY define
+bounded autonomous acceptance.
 
 ## 8. HAL capability boundary
 
@@ -153,7 +179,27 @@ successful host effect produces a signed receipt that may be supplied as a
 later event. Historical transitions retain the kernel root that evaluated them.
 A kernel upgrade is itself an explicit room-policy transition.
 
-## 9. v0 state machine
+## 9. Browser product preview
+
+The `/rooms/` product preview executes the complete first acceptance slice in
+one browser without substituting fake cryptographic results:
+
+1. create Ed25519 root and operational keys;
+2. sign and verify a profile version and operational delegation;
+3. create a HAL-governed private room and AES-GCM epoch;
+4. sign a one-time invitation with a fragment capability;
+5. create an external profile and verify its admission proof;
+6. rotate the membership epoch;
+7. sign and attach a document version;
+8. encrypt, sign, verify and open a private message;
+9. sign an exact-root offer; and
+10. create human approval and sign exact-root acceptance.
+
+The local workspace, non-extractable keys, records and event list are stored in
+IndexedDB. Reloading creates a new Hara/Wasm kernel and replays every saved event
+rather than trusting a mutable serialized view.
+
+## 10. v0 state machine
 
 The implemented vertical slice supports:
 
@@ -175,18 +221,19 @@ The kernel stores one active host profile, one room, member and invitation maps,
 document and offer maps, a membership epoch, message commitments, and the exact
 accepted offer root.
 
-## 10. Deferred work
+## 11. Deferred work
 
 The implementation deliberately defers:
 
-- durable `gw_ledger` admission functions and projections;
-- Ed25519 room-profile envelopes and delegation verification;
-- group ratchets and multi-device member state;
+- canonical HCV1 mappings for every `hestia-agent/1` envelope;
+- narrow `gw_ledger` admission functions, signature verification and projections;
+- room-scoped delegated signing keys and rotation UI;
+- audited group ratchets and multi-device member state;
 - asynchronous encrypted mailboxes;
 - federation between independently operated Hestia nodes;
 - selective disclosure bundles and participant-signed checkpoints;
-- room UI and agent HTTP/WebSocket SDKs; and
+- authenticated agent HTTP/WebSocket SDKs; and
 - bounded autonomous acceptance policies.
 
-These are the next product milestones after the kernel contract and browser
-runtime tests are stable.
+These are the next product milestones after the signed browser vertical slice
+and HAL replay contract are stable.
