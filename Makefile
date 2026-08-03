@@ -1,14 +1,15 @@
 HESTIA := scripts/hestia
 
-.PHONY: help doctor up down status client-env backup restore
+.PHONY: help doctor up bootstrap-agent down status client-env backup restore
 
 help:
 	@echo 'make doctor                         Check local prerequisites'
 	@echo 'make up                             Start Hestia'
+	@echo 'make bootstrap-agent                Register the local environment key and pinned policies'
 	@echo 'make down                           Stop Hestia without deleting data'
 	@echo 'make status                         Print public local endpoints'
 	@echo 'make client-env                     Print browser-safe connection values'
-	@echo 'make backup                         Back up Auth and ledger data'
+	@echo 'make backup                         Back up Auth, ledger data, and the environment signer'
 	@echo 'make restore DIR=... CONFIRM=restore Restore a backup'
 
 doctor:
@@ -16,6 +17,9 @@ doctor:
 
 up:
 	@$(HESTIA) up
+
+bootstrap-agent:
+	@$(HESTIA) bootstrap-agent
 
 down:
 	@$(HESTIA) down

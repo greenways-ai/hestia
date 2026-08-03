@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+repo_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
+cd "$repo_root"
+
+fixture="$(mktemp)"
+project="hestia-agent-gateway-ci"
+endpoint="http://127.0.0.1:58787/v1/records/admit"
+compose=(docker compose --project-name "$project" --env-file .hestia/env -f compose.yaml)
+
+cleanup() {
+  rm -f "$fixture"
+  if [[ -f .hestia/env ]]; then
+    "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
+
+scripts/hestia init >/dev/null
+# shellcheck disable=SC1091
+source .hestia/env
+
+"${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
+"${compose[@]}" up --detach --build postgres
+
+postgres_ready=false
+for _ in $(seq 1 120); do
+  if "${compose[@]}" exec -T postgres \
+       pg_isready -U postgres -d hestia >/dev/null 2>&1 \
+     && "${compose[@]}" exec -T postgres \
+       test -f /var/lib/postgresql/data/.hestia-migrations-complete \
+       >/dev/null 2>&1; then
+    postgres_ready=true
+    break
+  fi
+  sleep 1
+done
+if [[ "$postgres_ready" != true ]]; then
+  "${compose[@]}" logs postgres >&2
+  echo "Hestia PostgreSQL did not complete gateway initialization" >&2
+  exit 1
+fi
+
+"${compose[@]}" build agent-gateway
+"${compose[@]}" run --rm --no-deps \
+  -e "HESTIA_ADMIN_DATABASE_URL=postgres://postgres:${HESTIA_POSTGRES_PASSWORD}@postgres:5432/hestia?sslmode=disable" \
+  -e "HESTIA_ENVIRONMENT_ID=${HESTIA_ENVIRONMENT_ID:-hestia-local}" \
+  -e "HESTIA_ENVIRONMENT_SIGNING_KEY_FILE=/run/secrets/environment-signing.pem" \
+  agent-gateway node src/bootstrap.mjs >/dev/null
+"${compose[@]}" up --detach agent-gateway
+
+gateway_ready=false
+for _ in $(seq 1 60); do
+  if node -e "fetch('http://127.0.0.1:58787/health').then(async r=>{const j=await r.json();if(!r.ok||j.ok!==true)process.exit(1)}).catch(()=>process.exit(1))"; then
+    gateway_ready=true
+    break
+  fi
+  sleep 1
+done
+if [[ "$gateway_ready" != true ]]; then
+  "${compose[@]}" logs agent-gateway >&2
+  echo "Hestia agent gateway did not become ready" >&2
+  exit 1
+fi
+
+node browser/test-support/agent-room-membership-fixture.mjs create "$fixture"
+get_fixture() {
+  node browser/test-support/agent-room-membership-fixture.mjs get "$fixture" "$1"
+}
+
+admit() {
+  local prefix="$1"
+  local status="${2:-200}"
+  node services/agent-gateway/test-support/admit-fixture.mjs \
+    admit "$endpoint" "$fixture" "$prefix" "$status"
+}
+
+admit host_profile >/dev/null
+admit guest_profile >/dev/null
+admit room >/dev/null
+admit invitation >/dev/null
+admit invalid_proof 409 >/dev/null
+
+proof_first="$(admit proof)"
+proof_second="$(admit proof)"
+node - "$proof_first" "$proof_second" <<'NODE'
+const [first, second] = process.argv.slice(2).map(JSON.parse);
+if (first.admission.signed_receipt_root !== second.admission.signed_receipt_root) {
+  throw new Error("idempotent HTTP admission returned another signed receipt");
+}
+if (first.admission.next_membership_epoch !== "2") {
+  throw new Error("HTTP admission did not advance membership epoch to two");
+}
+NODE
+
+admit replay_proof 409 >/dev/null
+
+app_psql() {
+  "${compose[@]}" exec -T -e PGPASSWORD="$HESTIA_APP_PASSWORD" postgres \
+    psql --no-psqlrc --set=ON_ERROR_STOP=1 --host 127.0.0.1 \
+      --username hestia_app --dbname hestia "$@"
+}
+
+room_id="$(get_fixture room_id)"
+invite_id="$(get_fixture invite_id)"
+final_state="$(
+  app_psql --tuples-only --no-align --field-separator='|' \
+    --set=room_id="$room_id" \
+    --set=invite_id="$invite_id" <<'SQL'
+SELECT
+  room.membership_epoch,
+  room.status,
+  (SELECT count(*) FROM hestia.agent_room_member AS member
+    WHERE member.room_id = room.room_id),
+  invitation.status,
+  (SELECT count(*) FROM hestia.agent_room_state_version AS version
+    WHERE version.room_id = room.room_id),
+  (SELECT count(*) FROM hestia.agent_record_verification),
+  (SELECT count(*) FROM information_schema.columns
+    WHERE table_schema = 'hestia'
+      AND table_name = 'environment_signer'
+      AND column_name LIKE '%private%'),
+  (SELECT count(*) FROM information_schema.columns
+    WHERE table_schema = 'hestia'
+      AND table_name IN ('agent_room_invitation', 'agent_room_member_admission')
+      AND column_name = 'capability')
+FROM hestia.agent_room AS room
+JOIN hestia.agent_room_invitation AS invitation
+  ON invitation.room_id = room.room_id
+ AND invitation.invite_id = :'invite_id'
+WHERE room.room_id = :'room_id';
+SQL
+)"
+if [[ "$final_state" != "2|open|2|consumed|3|5|0|0" ]]; then
+  echo "unexpected HTTP-admitted room state: $final_state" >&2
+  "${compose[@]}" logs agent-gateway postgres >&2 || true
+  exit 1
+fi
+
+health="$(node -e "fetch('http://127.0.0.1:58787/v1/environment').then(r=>r.json()).then(j=>process.stdout.write(j.environment.environment_id+'|'+j.environment.key_root))")"
+if [[ ! "$health" =~ ^${HESTIA_ENVIRONMENT_ID:-hestia-local}\|sha256:[0-9a-f]{64}$ ]]; then
+  echo "gateway environment binding is invalid: $health" >&2
+  exit 1
+fi
+
+printf 'admitted %s through HTTP at epoch 2 with one consumed invitation\n' \
+  "$(get_fixture guest_profile_id)"
