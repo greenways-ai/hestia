@@ -62,23 +62,19 @@
         </section>
 
         <section class="stage wide" id="inviteStage" aria-labelledby="invite-title">
-          <header><span>03</span><div><p class="eyebrow">External admission</p><h2 id="invite-title">Invite another agent by key</h2></div></header>
+          <header><span>03</span><div><p class="eyebrow">External invitation</p><h2 id="invite-title">Issue a one-time capability</h2></div></header>
           <div class="split-copy">
-            <p>The host signs a one-time invitation containing only a capability commitment. The external agent returns a profile, delegated operational key and signed proof of capability possession.</p>
-            <div class="button-row"><button id="issueInvite" class="primary" type="button" disabled>Issue signed invite</button><button id="admitGuest" type="button" disabled>Admit demo external agent</button></div>
+            <p>The host signs an invitation containing only a capability commitment. The secret itself stays in the URL fragment and is never sent to a relay as a request parameter.</p>
+            <button id="issueInvite" class="primary" type="button" disabled>Issue signed invite</button>
           </div>
-          <label class="invite-field"><span>Private invitation fragment</span><textarea id="inviteValue" readonly rows="3" placeholder="An invitation appears here after it is issued."></textarea></          <article class="step" id="admissionStep">
-            <header><span>04</span><div><p>Admission</p><h3>Admit the external agent</h3></div></header>
-            <p>This preview creates a second agent locally to demonstrate the external flow. Hestia verifies its profile, delegation, invite capability and signed proof of possession before HAL admits it.</p>
-            <dl class="record-details" id="guestDetails"><div><dt>Status</dt><dd>Waiting for invite</dd></div></dl>
-            <button id="admitGuest" class="button primary" type="button" disabled>Verify and admit agent</button>
-          </article>
+          <label class="invite-field"><span>Private invitation fragment</span><textarea id="inviteValue" readonly rows="3" placeholder="An invitation appears here after it is issued."></textarea></label>
+        </section>
 
-          <article class="step" id="readyStep">
-            <header><span>05</span><div><p>Ready</p><h3>Use the signed room</h3></div></header>
-            <p>After admission, the room rotates to a new membership epoch. The document, message and negotiation tools become available.</p>
-            <div class="ready-signal" id="readySignal"><i></i><span>Waiting for two verified members</span></div>
-          </article>
+        <section class="stage" id="admissionStage" aria-labelledby="admission-title">
+          <header><span>04</span><div><p class="eyebrow">Admission</p><h2 id="admission-title">Verify the external agent</h2></div></header>
+          <p>This preview creates a second agent locally to demonstrate the external flow. Hestia verifies its profile, delegation, invite capability and signed proof of possession before HAL admits it.</p>
+          <div class="stage-result"><small>Guest status</small><code id="guestStatus">Waiting for invite</code></div>
+          <button id="admitGuest" class="primary" type="button" disabled>Verify and admit agent</button>
         </section>
 
         <aside class="evidence" aria-labelledby="evidence-title">
@@ -99,7 +95,9 @@
       <article id="documents" class="tool-card">
         <header><span>DOCUMENT</span><h2>Attach a signed version</h2></header>
         <p>Hestia signs a content root and version record. The room receives the root, not authority to rewrite the original bytes.</p>
-        <label class="field"><span>Document text</span><textarea id="documentText" rows="7">Services review brief\n\nReview the attached Hestia room protocol and return a signed recommendation.</textarea></label>
+        <label class="field"><span>Document text</span><textarea id="documentText" rows="7">Services review brief
+
+Review the attached Hestia room protocol and return a signed recommendation.</textarea></label>
         <button id="attachDocument" class="button primary" type="button" disabled>Sign and attach document</button>
         <div id="documentResult" class="result" hidden></div>
       </article>
@@ -120,9 +118,7 @@
             <label class="field"><span>Offer terms</span><textarea id="offerTerms" rows="6">Review the document and deliver a signed recommendation by Friday for AUD 300.</textarea></label>
             <button id="proposeOffer" class="button primary" type="button" disabled>Propose signed offer</button>
           </div>
-          <div class="offer-sheet" id="offerSheet">
-            <p class="empty">No offer has been proposed.</p>
-          </div>
+          <div class="offer-sheet" id="offerSheet"><p class="empty">No offer has been proposed.</p></div>
         </div>
         <button id="acceptOffer" class="button ember" type="button" disabled>Human approve and accept exact root</button>
         <div id="acceptanceResult" class="result" hidden></div>
