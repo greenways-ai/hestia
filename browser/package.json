@@ -14,6 +14,7 @@
     "./storage": "./src/storage.js",
     "./agent-room": "./src/agent-room-kernel.js",
     "./agent-protocol": "./src/agent-protocol.js",
+    "./agent-hcv1": "./src/agent-hcv1.js",
     "./agent-room-storage": "./src/agent-room-storage.js"
   },
   "scripts": {
