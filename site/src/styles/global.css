@@ -126,6 +126,7 @@ p { margin: 0; }
   text-decoration: none;
 }
 .wordmark .gw-mosaic-logo { width: 32px; flex: 0 0 auto; }
+.wordmark .site-sigil { width: 32px; height: 32px; flex: 0 0 auto; border-radius: 5px; }
 .wordmark > i { width: 1px; height: 18px; background: rgba(255,255,255,.28); }
 .wordmark b { color: var(--gold-bright); font: 400 .7rem var(--mono); letter-spacing: .16em; }
 .site-header nav {
@@ -311,6 +312,7 @@ p { margin: 0; }
   gap: 4px;
   transform: rotate(45deg);
 }
+.mosaic-sigil { display: block; aspect-ratio: 1; object-fit: contain; }
 .mosaic-mark i {
   display: block;
   border: 1px solid rgba(255,255,255,.12);
