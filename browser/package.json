@@ -2,7 +2,7 @@
   "name": "@greenways/hestia-browser",
   "version": "0.1.0",
   "type": "module",
-  "license": "EPL-2.0",
+  "license": "Apache-2.0",
   "exports": {
     ".": "./src/index.js",
     "./shamir": "./src/shamir.js",
