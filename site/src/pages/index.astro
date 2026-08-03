@@ -5,17 +5,18 @@ import ThemedArtwork from "@greenways-ai/visual-language/ThemedArtwork.astro";
 
 const title = "Hestia · Identity that remains in your hands";
 const description = "A personal, local-first security and open-communications server for identity, recovery, provenance and rights.";
+const base = import.meta.env.BASE_URL;
 ---
 <BaseLayout title={title} description={description}>
   <section class="hero" aria-labelledby="hero-title">
-    <ThemedArtwork class="hero-art" light="/assets/hestia-greyhound-day.webp" dark="/assets/hestia-greyhound-night.webp" lightMobile="/assets/hestia-greyhound-day-mobile.webp" darkMobile="/assets/hestia-greyhound-night-mobile.webp" lightAlt="A greyhound seated among three trusted keepers around a sunlit mosaic hearth" darkAlt="The same greyhound sleeping beside the hearth while three keepers rest nearby at night" position="center" />
+    <ThemedArtwork class="hero-art" light={`${base}assets/hestia-greyhound-day.webp`} dark={`${base}assets/hestia-greyhound-night.webp`} lightMobile={`${base}assets/hestia-greyhound-day.webp`} darkMobile={`${base}assets/hestia-greyhound-night.webp`} lightAlt="A greyhound among elegant keepers in a couture winter garden" darkAlt="The greyhound sleeping beside a sculptural hearth at night" position="center" />
     <div class="hero-veil"></div>
     <div class="hero-copy section-shell">
       <p class="technical-kicker"><i></i> Personal infrastructure · experimental local node</p>
       <h1 id="hero-title">Identity that remains<br />in your hands.</h1>
       <p>Hestia is a personal, local-first security and open-communications server. It keeps keys, recovery, provenance and rights close to the person they belong to.</p>
       <div class="hero-actions">
-        <a class="action action--ember" href="https://hestia-demo.greenways.ai/recovery/">Try recovery <span aria-hidden="true">↗</span></a>
+        <a class="action action--ember" href={`${base}recovery-demo/`}>Try recovery <span aria-hidden="true">↗</span></a>
         <a class="action" href="https://github.com/greenways-ai/hestia">View source ↗</a>
         <a class="action" href="#purpose">Understand Hestia <span aria-hidden="true">↓</span></a>
       </div>

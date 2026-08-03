@@ -12,14 +12,15 @@ test("the microsite has the canonical Hestia identity and primary journeys", asy
     source("src/layouts/BaseLayout.astro"),
     source("src/pages/index.astro")
   ]);
-  assert.match(config, /site: "https:\/\/hestia\.greenways\.ai"/);
+  assert.match(config, /site: "https:\/\/opensource\.greenways\.ai"/);
+  assert.match(config, /base: "\/hestia"/);
   assert.match(layout, /GREENWAYS/);
   assert.match(layout, /SoftwareSourceCode/);
   assert.match(home, /Identity that remains/);
   assert.match(home, /No single keeper/);
   assert.match(home, /Every boundary/);
   assert.match(home, /scripts\/hestia init/);
-  assert.match(home, /https:\/\/hestia-demo\.greenways\.ai\/recovery\//);
+  assert.match(home, /recovery-demo/);
   assert.match(home, /https:\/\/github\.com\/greenways-ai\/hestia/);
 });
 

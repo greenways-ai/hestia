@@ -1,7 +1,7 @@
-import { createWorkflowV3Kernel } from "/hestia-browser/workflow-v3-kernel.js";
-import { createIdentityPackage, identityCard, restoreIdentityPackage, signIdentityMessage } from "/hestia-browser/recovery-v3.js";
-import { combineShares, splitSecret } from "/hestia-browser/shamir.js";
-import { bytesToBase64Url } from "/hestia-browser/encoding.js";
+import { createWorkflowV3Kernel } from "../hestia-browser/workflow-v3-kernel.js";
+import { createIdentityPackage, identityCard, restoreIdentityPackage, signIdentityMessage } from "../hestia-browser/recovery-v3.js";
+import { combineShares, splitSecret } from "../hestia-browser/shamir.js";
+import { bytesToBase64Url } from "../hestia-browser/encoding.js";
 
 const $ = (id) => document.getElementById(id);
 const screen = $("screen");
