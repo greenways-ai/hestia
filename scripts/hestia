@@ -6,6 +6,7 @@ umask 077
 repo_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
 state_dir="$repo_root/.hestia"
 env_file="$state_dir/env"
+environment_key_file="$state_dir/environment-signing.pem"
 compose_file="$repo_root/compose.yaml"
 
 die() {
@@ -17,18 +18,40 @@ need() {
   command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
 }
 
+ensure_env_setting() {
+  local key="$1"
+  local value="$2"
+  if ! grep -q "^${key}=" "$env_file"; then
+    printf '%s=%s\n' "$key" "$value" >> "$env_file"
+  fi
+}
+
+ensure_environment_key() {
+  need openssl
+  install -d -m 700 "$state_dir"
+  if [[ ! -f "$environment_key_file" ]]; then
+    local temporary="$environment_key_file.tmp.$$"
+    openssl genpkey -algorithm Ed25519 -out "$temporary"
+    chmod 600 "$temporary"
+    mv "$temporary" "$environment_key_file"
+    echo "Created the local Hestia environment receipt key."
+  fi
+  chmod 600 "$environment_key_file"
+  openssl pkey -in "$environment_key_file" -check -noout >/dev/null
+}
+
 initialize() {
   need openssl
+  install -d -m 700 "$state_dir"
   if [[ -f "$env_file" ]]; then
-    if ! grep -q '^HESTIA_PGSODIUM_ROOT_KEY=' "$env_file"; then
-      echo "HESTIA_PGSODIUM_ROOT_KEY=$(openssl rand -hex 32)" >> "$env_file"
-      chmod 600 "$env_file"
-      echo "Added a private pgSodium root key to existing operator state."
-    fi
+    ensure_env_setting HESTIA_PGSODIUM_ROOT_KEY "$(openssl rand -hex 32)"
+    ensure_env_setting HESTIA_ENVIRONMENT_ID "hestia-local"
+    ensure_env_setting HESTIA_AGENT_DEBUG "false"
+    chmod 600 "$env_file"
+    ensure_environment_key
     echo "Hestia is already initialized."
     return
   fi
-  install -d -m 700 "$state_dir"
   {
     echo "HESTIA_POSTGRES_PASSWORD=$(openssl rand -hex 32)"
     echo "HESTIA_APP_PASSWORD=$(openssl rand -hex 32)"
@@ -39,11 +62,14 @@ initialize() {
     echo "HESTIA_TURN_URLS="
     echo "HESTIA_TURN_TTL_SECONDS=600"
     echo "HESTIA_SITE_URL=http://127.0.0.1:58080"
+    echo "HESTIA_ENVIRONMENT_ID=hestia-local"
+    echo "HESTIA_AGENT_DEBUG=false"
     echo "HESTIA_GITHUB_ENABLED=false"
     echo "HESTIA_GITHUB_CLIENT_ID="
     echo "HESTIA_GITHUB_SECRET="
   } > "$env_file"
   chmod 600 "$env_file"
+  ensure_environment_key
   echo "Initialized private operator state in $state_dir"
 }
 
@@ -59,7 +85,37 @@ compose_command() {
 
 compose() {
   [[ -f "$env_file" ]] || die "run scripts/hestia init first"
+  [[ -f "$environment_key_file" ]] || die "run scripts/hestia init to create the environment key"
   compose_command --project-name hestia --env-file "$env_file" --file "$compose_file" "$@"
+}
+
+wait_for_postgres() {
+  local ready=false
+  for _ in $(seq 1 120); do
+    if compose exec -T postgres pg_isready -U postgres -d hestia >/dev/null 2>&1 \
+       && compose exec -T postgres \
+         test -f /var/lib/postgresql/data/.hestia-migrations-complete \
+         >/dev/null 2>&1; then
+      ready=true
+      break
+    fi
+    sleep 1
+  done
+  if [[ "$ready" != true ]]; then
+    compose logs postgres >&2 || true
+    die "PostgreSQL did not complete Hestia migrations"
+  fi
+}
+
+bootstrap_agent_environment() {
+  # shellcheck disable=SC1090
+  source "$env_file"
+  compose build agent-gateway
+  compose run --rm --no-deps \
+    -e "HESTIA_ADMIN_DATABASE_URL=postgres://postgres:${HESTIA_POSTGRES_PASSWORD}@postgres:5432/hestia?sslmode=disable" \
+    -e "HESTIA_ENVIRONMENT_ID=${HESTIA_ENVIRONMENT_ID:-hestia-local}" \
+    -e "HESTIA_ENVIRONMENT_SIGNING_KEY_FILE=/run/secrets/environment-signing.pem" \
+    agent-gateway node src/bootstrap.mjs
 }
 
 command="${1:-help}"
@@ -78,23 +134,34 @@ case "$command" in
     compose_command version >/dev/null
     docker info >/dev/null
     [[ -f "$env_file" ]] || die "run scripts/hestia init"
+    ensure_environment_key
     compose config --quiet
-    echo "Hestia prerequisites and Compose configuration are ready."
+    echo "Hestia prerequisites, environment key, and Compose configuration are ready."
     ;;
   up)
     initialize
+    compose up --detach --build postgres
+    wait_for_postgres
+    bootstrap_agent_environment
     compose up --detach --build "$@"
+    ;;
+  bootstrap-agent)
+    initialize
+    compose up --detach --build postgres
+    wait_for_postgres
+    bootstrap_agent_environment
     ;;
   down)
     compose down
     ;;
   status)
     compose ps
-    echo "Hoplite:  http://127.0.0.1:58080"
-    echo "Recovery: http://127.0.0.1:58080/recovery/"
-    echo "Auth:     http://127.0.0.1:59999"
-    echo "Signal:   ws://127.0.0.1:58443"
-    echo "Postgres: 127.0.0.1:55432"
+    echo "Hoplite:   http://127.0.0.1:58080"
+    echo "Agent API: http://127.0.0.1:58080/agent/v1/health"
+    echo "Recovery:  http://127.0.0.1:58080/recovery/"
+    echo "Auth:      http://127.0.0.1:59999"
+    echo "Signal:    ws://127.0.0.1:58443"
+    echo "Postgres:  127.0.0.1:55432"
     ;;
   logs)
     compose logs --follow "$@"
@@ -107,7 +174,11 @@ case "$command" in
       --username postgres --dbname hestia --format custom \
       --no-owner --file /tmp/hestia.dump
     compose cp postgres:/tmp/hestia.dump "$destination/hestia.dump"
-    sha256sum "$destination/hestia.dump" > "$destination/SHA256SUMS"
+    install -m 600 "$environment_key_file" "$destination/environment-signing.pem"
+    (
+      cd "$destination"
+      sha256sum hestia.dump environment-signing.pem > SHA256SUMS
+    )
     echo "Backup: $destination"
     ;;
   restore)
@@ -118,15 +189,24 @@ case "$command" in
     [[ -f "$source_dir/hestia.dump" && -f "$source_dir/SHA256SUMS" ]] \
       || die "invalid backup directory: $source_dir"
     (cd "$source_dir" && sha256sum --check SHA256SUMS)
-    compose up --detach postgres
+    initialize
+    if [[ -f "$source_dir/environment-signing.pem" ]]; then
+      install -m 600 "$source_dir/environment-signing.pem" "$environment_key_file"
+      openssl pkey -in "$environment_key_file" -check -noout >/dev/null
+    else
+      echo "Warning: legacy backup has no environment signer; retaining the local key." >&2
+    fi
+    compose up --detach --build postgres
+    wait_for_postgres
     compose cp "$source_dir/hestia.dump" postgres:/tmp/hestia-restore.dump
     compose exec --no-TTY postgres pg_restore \
       --username postgres --dbname hestia --clean --if-exists \
       --no-owner /tmp/hestia-restore.dump
+    bootstrap_agent_environment
     echo "Restored: $source_dir"
     ;;
   help|-h|--help)
-    echo "usage: scripts/hestia {init|doctor|up|down|status|logs|backup [DIR]|restore DIR --confirm}"
+    echo "usage: scripts/hestia {init|doctor|up|bootstrap-agent|down|status|logs|backup [DIR]|restore DIR --confirm}"
     ;;
   *)
     die "unknown command: $command"
