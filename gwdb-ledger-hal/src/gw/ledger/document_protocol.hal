@@ -55,14 +55,18 @@
 
 (defn terminal-disposition?
   [status]
-  (or (= status :accepted)
-      (= status :resolved)
-      (= status :rejected)
-      (= status :abandoned)))
+  (if (or (= status :accepted)
+          (= status :resolved)
+          (= status :rejected)
+          (= status :abandoned))
+    true
+    false))
 
 (defn delivery-ready?
   [dispositions]
-  (reduce (fn [ready status]
-            (and ready (terminal-disposition? status)))
-          true
-          dispositions))
+  (if (reduce (fn [ready status]
+                (and ready (terminal-disposition? status)))
+              true
+              dispositions)
+    true
+    false))

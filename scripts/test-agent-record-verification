@@ -26,7 +26,11 @@ source .hestia/env
 
 ready=false
 for _ in $(seq 1 90); do
-  if "${compose[@]}" exec -T postgres pg_isready -U postgres -d hestia >/dev/null 2>&1; then
+  if "${compose[@]}" exec -T postgres \
+       pg_isready -U postgres -d hestia >/dev/null 2>&1 \
+     && "${compose[@]}" exec -T postgres \
+       test -f /var/lib/postgresql/data/.hestia-migrations-complete \
+       >/dev/null 2>&1; then
     ready=true
     break
   fi
@@ -34,7 +38,7 @@ for _ in $(seq 1 90); do
 done
 if [[ "$ready" != true ]]; then
   "${compose[@]}" logs postgres >&2
-  echo "Hestia PostgreSQL did not become ready" >&2
+  echo "Hestia PostgreSQL did not complete initialization" >&2
   exit 1
 fi
 
@@ -61,19 +65,43 @@ app_psql() {
       --username hestia_app --dbname hestia "$@"
 }
 
+# psql does not interpolate :'name' variables in a server --command string.
+# Feed SQL through stdin so psql performs variable expansion before dispatch.
 postgres_psql \
   --set=environment_id="$environment_id" \
   --set=public_key_hex="$environment_public_key_hex" \
-  --command="SELECT encode(hestia.environment_signer_register(:'environment_id', decode(:'public_key_hex', 'hex')), 'hex');" \
-  >/dev/null
+  >/dev/null <<'SQL'
+SELECT encode(
+  hestia.environment_signer_register(
+    :'environment_id',
+    decode(:'public_key_hex', 'hex')
+  ),
+  'hex'
+);
+SQL
 
-prepare_output="$(app_psql --tuples-only --no-align --field-separator='|' \
-  --set=environment_id="$environment_id" \
-  --set=pack_hex="$pack_hex" \
-  --set=cell_count="$cell_count" \
-  --set=record_root_hex="$signed_record_root_hex" \
-  --set=record_kind="$record_kind" \
-  --command="SELECT sequence, encode(body_root, 'hex'), encode(signer_key_root, 'hex'), encode(verification_receipt_root, 'hex'), encode(receipt_signing_payload, 'hex') FROM hestia.agent_record_verify_prepare(:'environment_id', decode(:'pack_hex', 'hex'), :'cell_count'::bigint, decode(:'record_root_hex', 'hex'), :'record_kind');")"
+prepare_output="$(
+  app_psql --tuples-only --no-align --field-separator='|' \
+    --set=environment_id="$environment_id" \
+    --set=pack_hex="$pack_hex" \
+    --set=cell_count="$cell_count" \
+    --set=record_root_hex="$signed_record_root_hex" \
+    --set=record_kind="$record_kind" <<'SQL'
+SELECT
+  sequence,
+  encode(body_root, 'hex'),
+  encode(signer_key_root, 'hex'),
+  encode(verification_receipt_root, 'hex'),
+  encode(receipt_signing_payload, 'hex')
+FROM hestia.agent_record_verify_prepare(
+  :'environment_id',
+  decode(:'pack_hex', 'hex'),
+  :'cell_count'::bigint,
+  decode(:'record_root_hex', 'hex'),
+  :'record_kind'
+);
+SQL
+)"
 
 IFS='|' read -r verification_sequence body_root_hex signer_key_root_hex receipt_root_hex receipt_payload_hex <<<"$prepare_output"
 for value in "$body_root_hex" "$signer_key_root_hex" "$receipt_root_hex"; do
@@ -95,31 +123,56 @@ if [[ ! "$receipt_signature_hex" =~ ^[0-9a-f]{128}$ ]]; then
   exit 1
 fi
 
-signed_receipt_root_hex="$(app_psql --tuples-only --no-align \
-  --set=environment_id="$environment_id" \
-  --set=record_root_hex="$signed_record_root_hex" \
-  --set=signature_hex="$receipt_signature_hex" \
-  --command="SELECT encode(hestia.agent_record_verify_commit(:'environment_id', decode(:'record_root_hex', 'hex'), decode(:'signature_hex', 'hex')), 'hex');")"
+signed_receipt_root_hex="$(
+  app_psql --tuples-only --no-align \
+    --set=environment_id="$environment_id" \
+    --set=record_root_hex="$signed_record_root_hex" \
+    --set=signature_hex="$receipt_signature_hex" <<'SQL'
+SELECT encode(
+  hestia.agent_record_verify_commit(
+    :'environment_id',
+    decode(:'record_root_hex', 'hex'),
+    decode(:'signature_hex', 'hex')
+  ),
+  'hex'
+);
+SQL
+)"
 if [[ ! "$signed_receipt_root_hex" =~ ^[0-9a-f]{64}$ ]]; then
   echo "PostgreSQL returned an invalid signed receipt root" >&2
   exit 1
 fi
 
-verified_status="$(app_psql --tuples-only --no-align \
-  --set=record_root_hex="$signed_record_root_hex" \
-  --command="SELECT status || '|' || encode(signed_receipt_root, 'hex') FROM hestia.agent_record_verification WHERE signed_record_root = decode(:'record_root_hex', 'hex');")"
+verified_status="$(
+  app_psql --tuples-only --no-align \
+    --set=record_root_hex="$signed_record_root_hex" <<'SQL'
+SELECT status || '|' || encode(signed_receipt_root, 'hex')
+FROM hestia.agent_record_verification
+WHERE signed_record_root = decode(:'record_root_hex', 'hex');
+SQL
+)"
 if [[ "$verified_status" != "verified|$signed_receipt_root_hex" ]]; then
   echo "verification projection does not match the signed receipt" >&2
   exit 1
 fi
 
-idempotent_receipt="$(app_psql --tuples-only --no-align \
-  --set=environment_id="$environment_id" \
-  --set=pack_hex="$pack_hex" \
-  --set=cell_count="$cell_count" \
-  --set=record_root_hex="$signed_record_root_hex" \
-  --set=record_kind="$record_kind" \
-  --command="SELECT encode(verification_receipt_root, 'hex') FROM hestia.agent_record_verify_prepare(:'environment_id', decode(:'pack_hex', 'hex'), :'cell_count'::bigint, decode(:'record_root_hex', 'hex'), :'record_kind');")"
+idempotent_receipt="$(
+  app_psql --tuples-only --no-align \
+    --set=environment_id="$environment_id" \
+    --set=pack_hex="$pack_hex" \
+    --set=cell_count="$cell_count" \
+    --set=record_root_hex="$signed_record_root_hex" \
+    --set=record_kind="$record_kind" <<'SQL'
+SELECT encode(verification_receipt_root, 'hex')
+FROM hestia.agent_record_verify_prepare(
+  :'environment_id',
+  decode(:'pack_hex', 'hex'),
+  :'cell_count'::bigint,
+  decode(:'record_root_hex', 'hex'),
+  :'record_kind'
+);
+SQL
+)"
 if [[ "$idempotent_receipt" != "$receipt_root_hex" ]]; then
   echo "idempotent verification returned another receipt" >&2
   exit 1
@@ -130,8 +183,17 @@ if app_psql \
   --set=pack_hex="$pack_hex" \
   --set=cell_count="$cell_count" \
   --set=record_root_hex="$signed_record_root_hex" \
-  --command="SELECT * FROM hestia.agent_record_verify_prepare(:'environment_id', decode(:'pack_hex', 'hex'), :'cell_count'::bigint, decode(:'record_root_hex', 'hex'), 'negotiation/offer');" \
-  >/dev/null 2>&1; then
+  >/dev/null 2>&1 <<'SQL'
+SELECT *
+FROM hestia.agent_record_verify_prepare(
+  :'environment_id',
+  decode(:'pack_hex', 'hex'),
+  :'cell_count'::bigint,
+  decode(:'record_root_hex', 'hex'),
+  'negotiation/offer'
+);
+SQL
+then
   echo "record kind substitution was accepted" >&2
   exit 1
 fi
