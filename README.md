@@ -25,14 +25,17 @@ not included.
 ```sh
 scripts/hestia init
 scripts/hestia doctor
-
-Signed, replayable rich-text collaboration and delivery provenance are defined
-by [Document Operations and Provenance Protocol v1](docs/document-protocol-v1.md).
 scripts/hestia up
 scripts/hestia status
 scripts/hestia backup
 scripts/hestia down
 ```
+
+Signed, replayable rich-text collaboration and delivery provenance are defined
+by [Document Operations and Provenance Protocol v1](docs/document-protocol-v1.md).
+The first product contract for signed agent profiles, private rooms, and
+exact-root negotiation is defined by
+[Hestia Agent Profiles and Private Rooms Protocol v0](docs/agent-rooms-protocol-v0.md).
 
 See [docs/local-node.md](docs/local-node.md),
 [docs/recovery-protocol.md](docs/recovery-protocol.md), and the runnable
