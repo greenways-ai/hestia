@@ -1,0 +1,68 @@
+(ns gw.ledger.document-protocol)
+
+(def protocol "greenways.document/1")
+(def rich-text-profile "greenways.rich-text/1")
+(def max-batch-operations 64)
+
+(defn signing-payload
+  "Builds domain-separated document protocol signing bytes."
+  [record-type body-root]
+  (str "GWDP1" \0 record-type \0 body-root))
+
+(defn batch-valid?
+  [operations]
+  (and (< 0 (count operations))
+       (<= (count operations) max-batch-operations)))
+
+(defn change-batch
+  "Builds a compact batch whose operation vector remains individually replayable."
+  [batch-id log-id sequence previous-entry-root base-revision base-ast-root
+   expected-result-root profile-root delegation-root operations]
+  {:protocol protocol
+   :type :change-batch
+   :id batch-id
+   :log-id log-id
+   :sequence sequence
+   :previous-entry-root previous-entry-root
+   :base-revision base-revision
+   :base-ast-root base-ast-root
+   :expected-result-root expected-result-root
+   :profile-root profile-root
+   :delegation-root delegation-root
+   :operations operations})
+
+(defn replay-batch
+  "Replays each operation and retains its intermediate result root.
+   apply-op and root-of are explicit host capabilities."
+  [apply-op root-of document operations]
+  (reduce
+   (fn [out operation]
+     (let [next-document (apply-op (get out :document) operation)
+           index (count (get out :states))]
+       {:document next-document
+        :states (conj (get out :states)
+                      {:index index
+                       :operation-root (root-of operation)
+                       :result-root (root-of next-document)})}))
+   {:document document :states []}
+   operations))
+
+(defn disclosure-entry
+  [sequence previous-entry-root body-root]
+  {:sequence sequence
+   :previous-entry-root previous-entry-root
+   :body-root body-root})
+
+(defn terminal-disposition?
+  [status]
+  (or (= status :accepted)
+      (= status :resolved)
+      (= status :rejected)
+      (= status :abandoned)))
+
+(defn delivery-ready?
+  [dispositions]
+  (reduce (fn [ready status]
+            (and ready (terminal-disposition? status)))
+          true
+          dispositions))

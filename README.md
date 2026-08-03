@@ -25,6 +25,9 @@ not included.
 ```sh
 scripts/hestia init
 scripts/hestia doctor
+
+Signed, replayable rich-text collaboration and delivery provenance are defined
+by [Document Operations and Provenance Protocol v1](docs/document-protocol-v1.md).
 scripts/hestia up
 scripts/hestia status
 scripts/hestia backup

@@ -1,0 +1,40 @@
+(ns gw.ledger.document-protocol-test
+  (:require [std.lib.test :as test]
+            [gw.ledger.document-protocol :as document]))
+
+(def results
+  (let [operations [{:kind :append :value "a"}
+                    {:kind :append :value "b"}]
+        replayed
+        (document/replay-batch
+         (fn [value operation] (str value (get operation :value)))
+         (fn [value] (str "root(" value ")"))
+         ""
+         operations)
+        batch
+        (document/change-batch
+         "batch" "log" 2 "previous" "revision" "base" "result"
+         "profile" "delegation" operations)]
+    [(test/check "frames domain-separated signing bytes"
+                 (document/signing-payload "change-batch" "root")
+                 (str "GWDP1" \0 "change-batch" \0 "root"))
+     (test/check "stores operations in one batch without hiding replay boundaries"
+                 [(get batch :operations)
+                  (get replayed :document)
+                  (get replayed :states)]
+                 [operations
+                  "ab"
+                  [{:index 0 :operation-root "root({:kind :append, :value a})"
+                    :result-root "root(a)"}
+                   {:index 1 :operation-root "root({:kind :append, :value b})"
+                    :result-root "root(ab)"}]])
+     (test/check "enforces the compact batch bound"
+                 [(document/batch-valid? [])
+                  (document/batch-valid? operations)]
+                 [false true])
+     (test/check "blocks delivery until every disclosed batch is terminal"
+                 [(document/delivery-ready? [:accepted :resolved :abandoned])
+                  (document/delivery-ready? [:accepted :conflict])]
+                 [true false])]))
+
+(test/print-results results)
