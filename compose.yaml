@@ -51,6 +51,38 @@ services:
       - "127.0.0.1:59999:9999"
     restart: unless-stopped
 
+  agent-gateway:
+    build:
+      context: .
+      dockerfile: services/agent-gateway/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HESTIA_DATABASE_URL: postgres://hestia_app:${HESTIA_APP_PASSWORD}@postgres:5432/hestia?sslmode=disable
+      HESTIA_ENVIRONMENT_ID: ${HESTIA_ENVIRONMENT_ID:-hestia-local}
+      HESTIA_ENVIRONMENT_SIGNING_KEY_FILE: /run/secrets/environment-signing.pem
+      HESTIA_AGENT_GATEWAY_HOST: 0.0.0.0
+      HESTIA_AGENT_GATEWAY_PORT: "8787"
+      HESTIA_AGENT_GATEWAY_MAX_BODY_BYTES: "1100000"
+      HESTIA_AGENT_ALLOWED_ORIGINS: ${HESTIA_SITE_URL:-http://127.0.0.1:58080}
+      HESTIA_AGENT_DEBUG: ${HESTIA_AGENT_DEBUG:-false}
+    secrets:
+      - source: hestia-environment-signing-key
+        target: environment-signing.pem
+    ports:
+      - "127.0.0.1:58787:8787"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:8787/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
   hoplite:
     build:
       context: .
@@ -60,6 +92,8 @@ services:
         condition: service_healthy
       signaling:
         condition: service_started
+      agent-gateway:
+        condition: service_healthy
     environment:
       HESTIA_DATABASE_URL: postgres://hestia_app:${HESTIA_APP_PASSWORD}@postgres:5432/hestia?sslmode=disable
       HESTIA_AUTH_URL: http://auth:9999
@@ -99,3 +133,7 @@ services:
 
 volumes:
   hestia-postgres:
+
+secrets:
+  hestia-environment-signing-key:
+    file: ./.hestia/environment-signing.pem
