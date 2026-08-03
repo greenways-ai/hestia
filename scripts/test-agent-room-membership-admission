@@ -1,0 +1,460 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+repo_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
+cd "$repo_root"
+
+fixture="$(mktemp)"
+project="hestia-room-membership-ci"
+compose=(docker compose --project-name "$project" --env-file .hestia/env -f compose.yaml)
+
+cleanup() {
+  rm -f "$fixture"
+  if [[ -f .hestia/env ]]; then
+    "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
+
+scripts/hestia init >/dev/null
+# shellcheck disable=SC1091
+source .hestia/env
+
+"${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
+"${compose[@]}" up --detach --build postgres
+
+ready=false
+for _ in $(seq 1 120); do
+  if "${compose[@]}" exec -T postgres \
+       pg_isready -U postgres -d hestia >/dev/null 2>&1 \
+     && "${compose[@]}" exec -T postgres \
+       test -f /var/lib/postgresql/data/.hestia-migrations-complete \
+       >/dev/null 2>&1; then
+    ready=true
+    break
+  fi
+  sleep 1
+done
+if [[ "$ready" != true ]]; then
+  "${compose[@]}" logs postgres >&2
+  echo "Hestia PostgreSQL did not complete room-admission initialization" >&2
+  exit 1
+fi
+
+node browser/test-support/agent-room-membership-fixture.mjs create "$fixture"
+get_fixture() {
+  node browser/test-support/agent-room-membership-fixture.mjs get "$fixture" "$1"
+}
+
+postgres_psql() {
+  "${compose[@]}" exec -T postgres \
+    psql --no-psqlrc --set=ON_ERROR_STOP=1 --username postgres --dbname hestia "$@"
+}
+
+app_psql() {
+  "${compose[@]}" exec -T -e PGPASSWORD="$HESTIA_APP_PASSWORD" postgres \
+    psql --no-psqlrc --set=ON_ERROR_STOP=1 --host 127.0.0.1 \
+      --username hestia_app --dbname hestia "$@"
+}
+
+sign_payload() {
+  node browser/test-support/agent-room-membership-fixture.mjs \
+    sign "$fixture" "$1"
+}
+
+assert_root() {
+  if [[ ! "$1" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "invalid HCV1 root: $1" >&2
+    exit 1
+  fi
+}
+
+assert_signature() {
+  if [[ ! "$1" =~ ^[0-9a-f]{128}$ ]]; then
+    echo "invalid Ed25519 signature" >&2
+    exit 1
+  fi
+}
+
+environment_id="$(get_fixture environment_id)"
+environment_public_key_hex="$(get_fixture environment_public_key_hex)"
+bootstrap_pack_hex="$(get_fixture bootstrap_pack_hex)"
+bootstrap_cell_count="$(get_fixture bootstrap_cell_count)"
+profile_policy_root_hex="$(get_fixture profile_policy_root_hex)"
+profile_kernel_root_hex="$(get_fixture profile_kernel_root_hex)"
+room_policy_root_hex="$(get_fixture room_policy_root_hex)"
+room_kernel_root_hex="$(get_fixture room_kernel_root_hex)"
+capability_hex="$(get_fixture capability_hex)"
+room_id="$(get_fixture room_id)"
+host_profile_id="$(get_fixture host_profile_id)"
+guest_profile_id="$(get_fixture guest_profile_id)"
+invite_id="$(get_fixture invite_id)"
+
+postgres_psql \
+  --set=environment_id="$environment_id" \
+  --set=public_key_hex="$environment_public_key_hex" \
+  --set=bootstrap_pack_hex="$bootstrap_pack_hex" \
+  --set=bootstrap_cell_count="$bootstrap_cell_count" \
+  --set=profile_policy_root_hex="$profile_policy_root_hex" \
+  --set=profile_kernel_root_hex="$profile_kernel_root_hex" \
+  --set=room_policy_root_hex="$room_policy_root_hex" \
+  --set=room_kernel_root_hex="$room_kernel_root_hex" \
+  >/dev/null <<'SQL'
+SELECT hestia.environment_signer_register(
+  :'environment_id',
+  decode(:'public_key_hex', 'hex')
+);
+SELECT gw_ledger.snapshot_pack_import(
+  decode(:'bootstrap_pack_hex', 'hex'),
+  :'bootstrap_cell_count'::bigint
+);
+SELECT * FROM hestia.environment_agent_policy_register(
+  :'environment_id',
+  decode(:'profile_policy_root_hex', 'hex'),
+  decode(:'profile_kernel_root_hex', 'hex')
+);
+SELECT * FROM hestia.environment_room_policy_register(
+  :'environment_id',
+  decode(:'room_policy_root_hex', 'hex'),
+  decode(:'room_kernel_root_hex', 'hex'),
+  ARRAY['document.comment','negotiation.propose','room.message']::text[]
+);
+SQL
+
+verify_record() {
+  local prefix="$1"
+  local root_hex kind cell_count pack_hex prepared sequence receipt_root payload_hex signature_hex signed_receipt
+  root_hex="$(get_fixture "${prefix}_record_root_hex")"
+  kind="$(get_fixture "${prefix}_record_kind")"
+  cell_count="$(get_fixture "${prefix}_cell_count")"
+  pack_hex="$(get_fixture "${prefix}_pack_hex")"
+  prepared="$(
+    app_psql --tuples-only --no-align --field-separator='|' \
+      --set=environment_id="$environment_id" \
+      --set=pack_hex="$pack_hex" \
+      --set=cell_count="$cell_count" \
+      --set=record_root_hex="$root_hex" \
+      --set=record_kind="$kind" <<'SQL'
+SELECT
+  sequence,
+  encode(verification_receipt_root, 'hex'),
+  encode(receipt_signing_payload, 'hex')
+FROM hestia.agent_record_verify_prepare(
+  :'environment_id',
+  decode(:'pack_hex', 'hex'),
+  :'cell_count'::bigint,
+  decode(:'record_root_hex', 'hex'),
+  :'record_kind'
+);
+SQL
+  )"
+  IFS='|' read -r sequence receipt_root payload_hex <<<"$prepared"
+  if [[ ! "$sequence" =~ ^[1-9][0-9]*$ ]]; then
+    echo "invalid verification sequence for $prefix" >&2
+    exit 1
+  fi
+  assert_root "$receipt_root"
+  signature_hex="$(sign_payload "$payload_hex")"
+  assert_signature "$signature_hex"
+  signed_receipt="$(
+    app_psql --tuples-only --no-align \
+      --set=environment_id="$environment_id" \
+      --set=record_root_hex="$root_hex" \
+      --set=signature_hex="$signature_hex" <<'SQL'
+SELECT encode(
+  hestia.agent_record_verify_commit(
+    :'environment_id',
+    decode(:'record_root_hex', 'hex'),
+    decode(:'signature_hex', 'hex')
+  ),
+  'hex'
+);
+SQL
+  )"
+  assert_root "$signed_receipt"
+  printf -v "${prefix}_root_hex" '%s' "$root_hex"
+  printf -v "${prefix}_verification_receipt_hex" '%s' "$signed_receipt"
+}
+
+admit_profile() {
+  local prefix="$1"
+  local root_variable root_hex prepared sequence profile_id profile_sequence state_root receipt_root payload_hex signature_hex signed_receipt
+  root_variable="${prefix}_root_hex"
+  root_hex="${!root_variable}"
+  prepared="$(
+    app_psql --tuples-only --no-align --field-separator='|' \
+      --set=environment_id="$environment_id" \
+      --set=record_root_hex="$root_hex" <<'SQL'
+SELECT
+  admission_sequence,
+  profile_id,
+  profile_sequence,
+  encode(result_state_root, 'hex'),
+  encode(admission_receipt_root, 'hex'),
+  encode(receipt_signing_payload, 'hex')
+FROM hestia.agent_profile_admit_prepare(
+  :'environment_id',
+  decode(:'record_root_hex', 'hex')
+);
+SQL
+  )"
+  IFS='|' read -r sequence profile_id profile_sequence state_root receipt_root payload_hex <<<"$prepared"
+  [[ "$sequence" =~ ^[1-9][0-9]*$ && "$profile_sequence" == "1" ]] || {
+    echo "invalid profile admission preparation for $prefix" >&2
+    exit 1
+  }
+  assert_root "$state_root"
+  assert_root "$receipt_root"
+  signature_hex="$(sign_payload "$payload_hex")"
+  assert_signature "$signature_hex"
+  signed_receipt="$(
+    app_psql --tuples-only --no-align \
+      --set=environment_id="$environment_id" \
+      --set=record_root_hex="$root_hex" \
+      --set=signature_hex="$signature_hex" <<'SQL'
+SELECT encode(
+  hestia.agent_profile_admit_commit(
+    :'environment_id',
+    decode(:'record_root_hex', 'hex'),
+    decode(:'signature_hex', 'hex')
+  ),
+  'hex'
+);
+SQL
+  )"
+  assert_root "$signed_receipt"
+}
+
+verify_record host_profile
+admit_profile host_profile
+verify_record guest_profile
+admit_profile guest_profile
+verify_record room
+
+room_prepared="$(
+  app_psql --tuples-only --no-align --field-separator='|' \
+    --set=environment_id="$environment_id" \
+    --set=record_root_hex="$room_root_hex" <<'SQL'
+SELECT
+  transition_sequence,
+  room_id,
+  encode(result_state_root, 'hex'),
+  encode(admission_receipt_root, 'hex'),
+  encode(receipt_signing_payload, 'hex')
+FROM hestia.agent_room_genesis_prepare(
+  :'environment_id',
+  decode(:'record_root_hex', 'hex')
+);
+SQL
+)"
+IFS='|' read -r room_transition prepared_room_id room_state_root room_receipt_root room_payload_hex <<<"$room_prepared"
+[[ "$room_transition" =~ ^[1-9][0-9]*$ && "$prepared_room_id" == "$room_id" ]] || {
+  echo "invalid room genesis preparation" >&2
+  exit 1
+}
+assert_root "$room_state_root"
+assert_root "$room_receipt_root"
+room_signature_hex="$(sign_payload "$room_payload_hex")"
+assert_signature "$room_signature_hex"
+room_signed_receipt="$(
+  app_psql --tuples-only --no-align \
+    --set=environment_id="$environment_id" \
+    --set=record_root_hex="$room_root_hex" \
+    --set=signature_hex="$room_signature_hex" <<'SQL'
+SELECT encode(
+  hestia.agent_room_genesis_commit(
+    :'environment_id',
+    decode(:'record_root_hex', 'hex'),
+    decode(:'signature_hex', 'hex')
+  ),
+  'hex'
+);
+SQL
+)"
+assert_root "$room_signed_receipt"
+
+verify_record invitation
+invitation_prepared="$(
+  app_psql --tuples-only --no-align --field-separator='|' \
+    --set=environment_id="$environment_id" \
+    --set=record_root_hex="$invitation_root_hex" <<'SQL'
+SELECT
+  transition_sequence,
+  invite_id,
+  encode(result_room_state_root, 'hex'),
+  encode(admission_receipt_root, 'hex'),
+  encode(receipt_signing_payload, 'hex')
+FROM hestia.agent_room_invitation_prepare(
+  :'environment_id',
+  decode(:'record_root_hex', 'hex')
+);
+SQL
+)"
+IFS='|' read -r invitation_transition prepared_invite_id invitation_room_state invitation_receipt invitation_payload_hex <<<"$invitation_prepared"
+[[ "$invitation_transition" =~ ^[1-9][0-9]*$ && "$prepared_invite_id" == "$invite_id" ]] || {
+  echo "invalid invitation preparation" >&2
+  exit 1
+}
+assert_root "$invitation_room_state"
+assert_root "$invitation_receipt"
+invitation_signature_hex="$(sign_payload "$invitation_payload_hex")"
+assert_signature "$invitation_signature_hex"
+invitation_signed_receipt="$(
+  app_psql --tuples-only --no-align \
+    --set=environment_id="$environment_id" \
+    --set=record_root_hex="$invitation_root_hex" \
+    --set=signature_hex="$invitation_signature_hex" <<'SQL'
+SELECT encode(
+  hestia.agent_room_invitation_commit(
+    :'environment_id',
+    decode(:'record_root_hex', 'hex'),
+    decode(:'signature_hex', 'hex')
+  ),
+  'hex'
+);
+SQL
+)"
+assert_root "$invitation_signed_receipt"
+
+verify_record invalid_proof
+if app_psql \
+  --set=environment_id="$environment_id" \
+  --set=record_root_hex="$invalid_proof_root_hex" \
+  --set=capability_hex="$capability_hex" \
+  >/dev/null 2>&1 <<'SQL'
+SELECT * FROM hestia.agent_room_member_prepare(
+  :'environment_id',
+  decode(:'record_root_hex', 'hex'),
+  decode(:'capability_hex', 'hex')
+);
+SQL
+then
+  echo "root-key-signed guest admission proof was accepted" >&2
+  exit 1
+fi
+
+verify_record proof
+member_prepared="$(
+  app_psql --tuples-only --no-align --field-separator='|' \
+    --set=environment_id="$environment_id" \
+    --set=record_root_hex="$proof_root_hex" \
+    --set=capability_hex="$capability_hex" <<'SQL'
+SELECT
+  transition_sequence,
+  room_id,
+  member_profile_id,
+  next_membership_epoch,
+  encode(result_room_state_root, 'hex'),
+  encode(admission_receipt_root, 'hex'),
+  encode(receipt_signing_payload, 'hex')
+FROM hestia.agent_room_member_prepare(
+  :'environment_id',
+  decode(:'record_root_hex', 'hex'),
+  decode(:'capability_hex', 'hex')
+);
+SQL
+)"
+IFS='|' read -r member_transition member_room_id member_profile_id member_epoch member_room_state member_receipt member_payload_hex <<<"$member_prepared"
+[[ "$member_transition" =~ ^[1-9][0-9]*$ \
+   && "$member_room_id" == "$room_id" \
+   && "$member_profile_id" == "$guest_profile_id" \
+   && "$member_epoch" == "2" ]] || {
+  echo "invalid member admission preparation" >&2
+  exit 1
+}
+assert_root "$member_room_state"
+assert_root "$member_receipt"
+member_signature_hex="$(sign_payload "$member_payload_hex")"
+assert_signature "$member_signature_hex"
+member_signed_receipt="$(
+  app_psql --tuples-only --no-align \
+    --set=environment_id="$environment_id" \
+    --set=record_root_hex="$proof_root_hex" \
+    --set=signature_hex="$member_signature_hex" <<'SQL'
+SELECT encode(
+  hestia.agent_room_member_commit(
+    :'environment_id',
+    decode(:'record_root_hex', 'hex'),
+    decode(:'signature_hex', 'hex')
+  ),
+  'hex'
+);
+SQL
+)"
+assert_root "$member_signed_receipt"
+
+idempotent_member_receipt="$(
+  app_psql --tuples-only --no-align \
+    --set=environment_id="$environment_id" \
+    --set=record_root_hex="$proof_root_hex" \
+    --set=capability_hex="$capability_hex" <<'SQL'
+SELECT encode(admission_receipt_root, 'hex')
+FROM hestia.agent_room_member_prepare(
+  :'environment_id',
+  decode(:'record_root_hex', 'hex'),
+  decode(:'capability_hex', 'hex')
+);
+SQL
+)"
+[[ "$idempotent_member_receipt" == "$member_receipt" ]] || {
+  echo "idempotent member admission returned another receipt" >&2
+  exit 1
+}
+
+verify_record replay_proof
+if app_psql \
+  --set=environment_id="$environment_id" \
+  --set=record_root_hex="$replay_proof_root_hex" \
+  --set=capability_hex="$capability_hex" \
+  >/dev/null 2>&1 <<'SQL'
+SELECT * FROM hestia.agent_room_member_prepare(
+  :'environment_id',
+  decode(:'record_root_hex', 'hex'),
+  decode(:'capability_hex', 'hex')
+);
+SQL
+then
+  echo "consumed room invitation admitted a second proof" >&2
+  exit 1
+fi
+
+final_state="$(
+  app_psql --tuples-only --no-align --field-separator='|' \
+    --set=room_id="$room_id" \
+    --set=invite_id="$invite_id" <<'SQL'
+SELECT
+  room.membership_epoch,
+  room.status,
+  (SELECT count(*) FROM hestia.agent_room_member AS member
+    WHERE member.room_id = room.room_id),
+  invitation.status,
+  (SELECT count(*) FROM hestia.agent_room_state_version AS version
+    WHERE version.room_id = room.room_id),
+  (SELECT count(*) FROM information_schema.columns
+    WHERE table_schema = 'hestia'
+      AND table_name IN (
+        'agent_room_invitation',
+        'agent_room_member_admission'
+      )
+      AND column_name = 'capability')
+FROM hestia.agent_room AS room
+JOIN hestia.agent_room_invitation AS invitation
+  ON invitation.room_id = room.room_id
+ AND invitation.invite_id = :'invite_id'
+WHERE room.room_id = :'room_id';
+SQL
+)"
+if [[ "$final_state" != "2|open|2|consumed|3|0" ]]; then
+  echo "unexpected final room state: $final_state" >&2
+  exit 1
+fi
+
+if app_psql --command="INSERT INTO hestia.agent_room_member DEFAULT VALUES;" \
+  >/dev/null 2>&1; then
+  echo "hestia_app received a forbidden direct room-member write" >&2
+  exit 1
+fi
+
+printf 'admitted %s to %s at epoch 2 with signed receipt %s\n' \
+  "$guest_profile_id" "$room_id" "$member_signed_receipt"
