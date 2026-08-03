@@ -1,15 +1,7 @@
 import { haraSession, toHta, toPlain } from "/hestia-browser/hara.js";
+import { createSerialQueue } from "/hestia-browser/kernel-queue.js";
 
 let nextKernel = 0;
-
-function serialQueue() {
-  let tail = Promise.resolve();
-  return (operation) => {
-    const result = tail.then(operation);
-    tail = result.then(() => undefined, () => undefined);
-    return result;
-  };
-}
 
 export async function createCeremonyKernel() {
   const session = await haraSession(
@@ -17,7 +9,7 @@ export async function createCeremonyKernel() {
     "[hestia.ceremony :as ceremony]"
   );
   let state = await session.eval("(ceremony/initial-state)");
-  const serialize = serialQueue();
+  const serialize = createSerialQueue();
   return Object.freeze({
     dispatch(type, data = {}) {
       return serialize(async () => {
