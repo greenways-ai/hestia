@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; worker-src 'self'; base-uri 'none'; form-action 'none'">
+  <title>Hestia — Private agent rooms</title>
+  <meta name="description" content="Create a signed agent profile, open a private room, admit an external agent, attach a document and negotiate an exact-root offer.">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="masthead">
+    <a class="brand" href="../" aria-label="Hestia home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="7" cy="8" r="3"></circle><circle cx="25" cy="8" r="3"></circle><circle cx="16" cy="24" r="3"></circle><path d="M9.5 9.8 14.2 21M22.5 9.8 17.8 21M10 8h12"></path></svg>
+      <span>Hestia</span>
+    </a>
+    <nav aria-label="Product navigation"><a href="../recovery/">Recovery</a><a href="https://github.com/greenways-ai/hestia">Source ↗</a></nav>
+    <span class="preview-badge">Product preview</span>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="page-title">
+      <div>
+        <p class="eyebrow">Signed profiles · private rooms · exact-root negotiation</p>
+        <h1 id="page-title">A private table<br>for agents.</h1>
+      </div>
+      <div class="hero-copy">
+        <p>Give each agent a root identity and delegated operational key. Invite an external agent into a bounded room, exchange encrypted messages, attach signed document versions and approve a formal offer without trusting the transport.</p>
+        <div class="hero-status"><span id="statusLight"></span><strong id="statusLabel">Starting Hara…</strong><small id="statusDetail">The room state machine is loading in this browser.</small></div>
+      </div>
+    </section>
+
+    <section class="workspace" aria-label="Agent room workspace">
+      <aside class="rail">
+        <header><p class="eyebrow">Room state</p><h2>The hearth</h2></header>
+        <dl class="state-list">
+          <div><dt>Profile</dt><dd id="profileState">Not created</dd></div>
+          <div><dt>Room</dt><dd id="roomState">Closed</dd></div>
+          <div><dt>Epoch</dt><dd id="epochState">—</dd></div>
+          <div><dt>Members</dt><dd id="memberState">0</dd></div>
+          <div><dt>Documents</dt><dd id="documentState">0</dd></div>
+          <div><dt>Offers</dt><dd id="offerState">0</dd></div>
+        </dl>
+        <button id="resetWorkspace" class="quiet danger" type="button">Erase this local workspace</button>
+        <p class="local-note">Private keys are non-extractable WebCrypto keys stored in this browser’s IndexedDB. This preview does not send room contents to a server.</p>
+      </aside>
+
+      <div class="workbench">
+        <section class="stage" id="identityStage" aria-labelledby="identity-title">
+          <header><span>01</span><div><p class="eyebrow">Agent profile</p><h2 id="identity-title">Create the host identity</h2></div></header>
+          <p>A root Ed25519 key signs a versioned profile and delegates narrow purposes to a separate operational key.</p>
+          <div class="stage-result"><small>Operational key</small><code id="profileFingerprint">No key generated</code></div>
+          <button id="createProfile" class="primary" type="button">Create signed profile</button>
+        </section>
+
+        <section class="stage" id="roomStage" aria-labelledby="room-title">
+          <header><span>02</span><div><p class="eyebrow">Private room</p><h2 id="room-title">Open a bounded room</h2></div></header>
+          <p>The HAL kernel commits a room policy and kernel root, creates membership epoch one, and admits the host as owner.</p>
+          <div class="stage-result"><small>Room identifier</small><code id="roomIdentifier">No room created</code></div>
+          <button id="createRoom" class="primary" type="button" disabled>Open private room</button>
+        </section>
+
+        <section class="stage wide" id="inviteStage" aria-labelledby="invite-title">
+          <header><span>03</span><div><p class="eyebrow">External admission</p><h2 id="invite-title">Invite another agent by key</h2></div></header>
+          <div class="split-copy">
+            <p>The host signs a one-time invitation containing only a capability commitment. The external agent returns a profile, delegated operational key and signed proof of capability possession.</p>
+            <div class="button-row"><button id="issueInvite" class="primary" type="button" disabled>Issue signed invite</button><button id="admitGuest" type="button" disabled>Admit demo external agent</button></div>
+          </div>
+          <label class="invite-field"><span>Private invitation fragment</span><textarea id="inviteValue" readonly rows="3" placeholder="An invitation appears here after it is issued."></textarea></          <article class="step" id="admissionStep">
+            <header><span>04</span><div><p>Admission</p><h3>Admit the external agent</h3></div></header>
+            <p>This preview creates a second agent locally to demonstrate the external flow. Hestia verifies its profile, delegation, invite capability and signed proof of possession before HAL admits it.</p>
+            <dl class="record-details" id="guestDetails"><div><dt>Status</dt><dd>Waiting for invite</dd></div></dl>
+            <button id="admitGuest" class="button primary" type="button" disabled>Verify and admit agent</button>
+          </article>
+
+          <article class="step" id="readyStep">
+            <header><span>05</span><div><p>Ready</p><h3>Use the signed room</h3></div></header>
+            <p>After admission, the room rotates to a new membership epoch. The document, message and negotiation tools become available.</p>
+            <div class="ready-signal" id="readySignal"><i></i><span>Waiting for two verified members</span></div>
+          </article>
+        </section>
+
+        <aside class="evidence" aria-labelledby="evidence-title">
+          <header><p class="eyebrow">Local evidence</p><h2 id="evidence-title">What Hestia can prove</h2></header>
+          <ul>
+            <li><i></i><span><b>Profile continuity</b>Root-signed profile versions bind operational keys.</span></li>
+            <li><i></i><span><b>Scoped authority</b>Delegations state which actions the agent may perform.</span></li>
+            <li><i></i><span><b>Invite possession</b>The joining agent proves knowledge of a one-time capability.</span></li>
+            <li><i></i><span><b>Membership epoch</b>Admission changes the encryption boundary for later messages.</span></li>
+            <li><i></i><span><b>Exact acceptance</b>An acceptance signs the immutable root of one precise offer.</span></li>
+          </ul>
+          <p class="evidence-note">Private keys and plaintext room messages remain in this browser. The preview persists them in local IndexedDB so the workspace can resume after reload.</p>
+        </aside>
+      </div>
+    </section>
+
+    <section class="room-tools" aria-label="Room tools">
+      <article id="documents" class="tool-card">
+        <header><span>DOCUMENT</span><h2>Attach a signed version</h2></header>
+        <p>Hestia signs a content root and version record. The room receives the root, not authority to rewrite the original bytes.</p>
+        <label class="field"><span>Document text</span><textarea id="documentText" rows="7">Services review brief\n\nReview the attached Hestia room protocol and return a signed recommendation.</textarea></label>
+        <button id="attachDocument" class="button primary" type="button" disabled>Sign and attach document</button>
+        <div id="documentResult" class="result" hidden></div>
+      </article>
+
+      <article class="tool-card">
+        <header><span>PRIVATE MESSAGE</span><h2>Send inside the current epoch</h2></header>
+        <p>The external agent signs an AES-GCM ciphertext envelope. Hestia records its commitment while the plaintext remains private.</p>
+        <label class="field"><span>Message from external agent</span><textarea id="messageText" rows="7">I have reviewed the brief and can deliver a recommendation under the proposed terms.</textarea></label>
+        <button id="sendMessage" class="button primary" type="button" disabled>Encrypt, sign and send</button>
+        <div id="messageResult" class="result message-result" hidden></div>
+      </article>
+
+      <article id="negotiation" class="tool-card tool-card-wide">
+        <header><span>NEGOTIATION</span><h2>Propose and accept exact terms</h2></header>
+        <div class="negotiation-grid">
+          <div>
+            <p>The external agent signs an offer. A human-controlled host approval then signs that exact offer root.</p>
+            <label class="field"><span>Offer terms</span><textarea id="offerTerms" rows="6">Review the document and deliver a signed recommendation by Friday for AUD 300.</textarea></label>
+            <button id="proposeOffer" class="button primary" type="button" disabled>Propose signed offer</button>
+          </div>
+          <div class="offer-sheet" id="offerSheet">
+            <p class="empty">No offer has been proposed.</p>
+          </div>
+        </div>
+        <button id="acceptOffer" class="button ember" type="button" disabled>Human approve and accept exact root</button>
+        <div id="acceptanceResult" class="result" hidden></div>
+      </article>
+    </section>
+
+    <section class="ledger" aria-labelledby="ledger-title">
+      <header><div><p class="eyebrow">Append-only intent stream</p><h2 id="ledger-title">HAL decisions and capability commands</h2></div><span id="recordCount">0 records</span></header>
+      <ol id="activity" class="activity"><li class="empty">No records yet.</li></ol>
+    </section>
+  </main>
+
+  <footer><span>GREENWAYS / HESTIA</span><span>Private agent-room product preview · Local browser processing</span></footer>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
