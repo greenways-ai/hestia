@@ -104,7 +104,8 @@ test("encrypts a signed room message for one membership epoch", async () => {
   assert.equal(plaintext, "The private terms are ready for review.");
 
   const tampered = structuredClone(message);
-  tampered.body.ciphertext = tampered.body.ciphertext.slice(0, -1) + "A";
+  const replacement = tampered.body.ciphertext.startsWith("A") ? "B" : "A";
+  tampered.body.ciphertext = replacement + tampered.body.ciphertext.slice(1);
   await assert.rejects(() => openRoomMessage({
     messageRecord: tampered,
     epochKey,
