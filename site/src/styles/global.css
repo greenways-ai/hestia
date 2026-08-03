@@ -460,7 +460,7 @@ p { margin: 0; }
   .site-header { height: 72px; }
   .wordmark { gap: .52rem; font-size: .75rem; }
   .wordmark svg { width: 28px; height: 28px; }
-  .wordmark i, .wordmark b { display: none; }
+  .wordmark > i, .wordmark > b { display: none; }
   .site-header .nav-cta { padding: .53rem .6rem; font-size: .56rem; }
   .hero { min-height: 850px; align-items: flex-end; }
   .hero-art img { object-position: 68% center; }
