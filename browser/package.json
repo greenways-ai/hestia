@@ -12,7 +12,9 @@
     "./peer": "./src/peer.js",
     "./protocol": "./src/protocol.js",
     "./storage": "./src/storage.js",
-    "./agent-room": "./src/agent-room-kernel.js"
+    "./agent-room": "./src/agent-room-kernel.js",
+    "./agent-protocol": "./src/agent-protocol.js",
+    "./agent-room-storage": "./src/agent-room-storage.js"
   },
   "scripts": {
     "build:pages": "node scripts/build-pages.mjs",
