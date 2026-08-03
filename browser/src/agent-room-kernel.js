@@ -1,4 +1,5 @@
 import { haraSession, toHta, toPlain } from "/hestia-browser/hara.js";
+import { createSerialQueue } from "/hestia-browser/kernel-queue.js";
 
 let nextKernel = 0;
 
@@ -8,19 +9,24 @@ export async function createAgentRoomKernel() {
     "[hestia.agent-room :as room]"
   );
   let state = await session.eval("(room/initial-state)");
+  const serialize = createSerialQueue();
 
   return Object.freeze({
-    async dispatch(type, data = {}) {
-      const result = await session.evalBound(
-        "(room/advance __hta_arg_0 __hta_arg_1)",
-        [state, toHta({ type, data })]
-      );
-      state = result.get("state");
-      return toPlain(result);
+    dispatch(type, data = {}) {
+      return serialize(async () => {
+        const result = await session.evalBound(
+          "(room/advance __hta_arg_0 __hta_arg_1)",
+          [state, toHta({ type, data })]
+        );
+        state = result.get("state");
+        return toPlain(result);
+      });
     },
 
-    async view() {
-      return toPlain(await session.evalBound("(room/view __hta_arg_0)", [state]));
+    view() {
+      return serialize(async () => toPlain(
+        await session.evalBound("(room/view __hta_arg_0)", [state])
+      ));
     }
   });
 }
