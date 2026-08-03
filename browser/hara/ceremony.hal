@@ -1,0 +1,186 @@
+;; Hestia application kernel. Browser code delivers events and executes the
+;; returned capability commands; ceremony policy and UI state live here.
+(ns hestia.ceremony
+  (:require [std.foundation :refer [assoc conj get merge nth]]))
+
+(defn initial-state
+  []
+  {"phase" "idle"
+   "mode" nil
+   "connected" false
+   "peer_ready" false
+   "pending_approval" nil
+   "pending_request" nil
+   "result" nil
+   "error" nil
+   "activity" []})
+
+(defn command
+  [capability action args]
+  {"capability" capability "action" action "args" args})
+
+(defn require-phase
+  [state expected event]
+  (if (= expected (get state "phase"))
+    true
+    (throw (ex-info "invalid ceremony transition"
+                    {"event" event
+                     "expected" expected
+                     "actual" (get state "phase")}))))
+
+(defn status-copy
+  [phase]
+  (cond
+    (= phase "idle") ["Create a ceremony" "Choose a lifecycle and generate a private invite URL."]
+    (= phase "invalid-invite") ["Invite expired" "This v1 invite cannot be used. Create a new v2 ceremony below."]
+    (= phase "pairing") ["Waiting for peer" "Open this exact URL in a second browser."]
+    (= phase "connecting") ["Connecting" "Negotiating a direct WebRTC channel."]
+    (= phase "connected") ["Connected" "Authenticated WebRTC DataChannel established."]
+    (= phase "peer-consumed") ["Peer consumed" "The other browser has completed this single-use ceremony."]
+    (= phase "provisioning") ["Provisioning" "Creating and splitting the encrypted identity recovery package."]
+    (= phase "ready") ["Ready" "Either browser can request an explicitly approved recovery."]
+    (= phase "requesting") ["Approval requested" "The other browser must approve release of its share."]
+    (= phase "approval") ["Approval needed" "Review the requester fingerprint before releasing your share."]
+    (= phase "releasing") ["Share released" "The share was sealed to the requester and sent over WebRTC."]
+    (= phase "rejected") ["Rejected" "No share was released."]
+    (= phase "complete") ["Recovery complete" "The restored identity signed and verified a fresh challenge."]
+    (= phase "consumed") ["Consumed" "This browser erased its single-use share after recovery."]
+    (= phase "disconnected") ["Disconnected" "Keep this page open while the other browser reconnects."]
+    (= phase "error") ["Error" "The ceremony stopped before changing protected state."]
+    true ["Hestia" phase]))
+
+(defn view
+  [state]
+  (let [copy (status-copy (get state "phase"))]
+    {"phase" (get state "phase")
+     "status_label" (nth copy 0)
+     "status_detail" (if (= "error" (get state "phase"))
+                       (get state "error")
+                       (nth copy 1))
+     "invite_visible" (or (= "idle" (get state "phase"))
+                          (= "invalid-invite" (get state "phase")))
+     "ceremony_visible" (and (not (= "idle" (get state "phase")))
+                             (not (= "invalid-invite" (get state "phase"))))
+     "approval_visible" (= "approval" (get state "phase"))
+     "request_enabled" (and (= "ready" (get state "phase"))
+                            (get state "connected"))
+     "result" (get state "result")}))
+
+(defn outcome
+  [state commands]
+  {"state" state
+   "view" (view state)
+   "commands" commands})
+
+(defn peer-state-outcome
+  [state data]
+  (let [local-ready (get data "local_ready")
+        remote-ready (get data "remote_ready")
+        commands (if (get data "response_required")
+                   [(command "transport" "send-peer-state" [true])]
+                   [])]
+    (cond
+      (get data "consumed")
+      (outcome (assoc state "phase" "peer-consumed") commands)
+
+      (and local-ready remote-ready)
+      (outcome (merge state {"peer_ready" true "phase" "ready"}) commands)
+
+      (not (= local-ready remote-ready))
+      (throw (ex-info
+              "one browser is missing its persisted share; this pairing cannot be reprovisioned"
+              {}))
+
+      (and (not remote-ready) (get data "leader"))
+      (outcome (assoc state "phase" "provisioning")
+               (conj commands (command "crypto" "provision" [])))
+
+      true
+      (outcome state commands))))
+
+(defn advance
+  [state event]
+  (let [kind (get event "type")
+        data (or (get event "data") {})]
+    (cond
+      (= kind "ceremony/join")
+      (outcome (merge state {"phase" "pairing" "mode" (get data "mode")})
+               [(command "persistence" "append-and-save" ["ceremony/joined" data])
+                (command "transport" "connect" [])])
+
+      (= kind "invite/invalid")
+      (outcome (assoc state "phase" "invalid-invite") [])
+
+      (= kind "transport/connecting")
+      (outcome (assoc state "phase" "connecting") [])
+
+      (= kind "transport/connected")
+      (outcome (merge state {"connected" true "phase" "connected"})
+               [(command "persistence" "save" [])
+                (command "transport" "send-peer-state" [false])])
+
+      (= kind "peer/ready")
+      (outcome (merge state {"peer_ready" true "phase" "ready"}) [])
+
+      (= kind "peer/state")
+      (peer-state-outcome state data)
+
+      (= kind "setup/provision")
+      (outcome (assoc state "phase" "provisioning")
+               [(command "crypto" "provision" [])])
+
+      (= kind "setup/ready")
+      (outcome (assoc state "phase" "ready") [])
+
+      (= kind "recovery/request")
+      (do (require-phase state "ready" kind)
+          (outcome (assoc state "phase" "requesting")
+                   [(command "crypto" "create-request" [])]))
+
+      (= kind "recovery/request-created")
+      (outcome (assoc state "pending_request" data)
+               [(command "persistence" "append-and-save" ["recovery/requested" data])
+                (command "transport" "send-recovery-request" [data])])
+
+      (= kind "recovery/approval-needed")
+      (do (require-phase state "ready" kind)
+          (outcome (merge state {"phase" "approval" "pending_approval" data})
+                   [(command "persistence" "append-and-save"
+                             ["recovery/approval-needed" data])]))
+
+      (= kind "recovery/approve")
+      (do (require-phase state "approval" kind)
+          (outcome (assoc state "phase" "releasing")
+                   [(command "crypto" "release-share"
+                             [(get state "pending_approval")])]))
+
+      (= kind "recovery/reject")
+      (do (require-phase state "approval" kind)
+          (outcome (merge state {"phase" "rejected" "pending_approval" nil})
+                   [(command "transport" "send-rejection"
+                             [(get state "pending_approval")])]))
+
+      (= kind "recovery/share-received")
+      (do (require-phase state "requesting" kind)
+          (outcome state
+                   [(command "crypto" "restore-and-prove"
+                             [(get state "pending_request") data])]))
+
+      (= kind "recovery/complete")
+      (outcome (merge state {"phase" "complete"
+                             "result" "Identity proof verified"
+                             "pending_request" nil})
+               [])
+
+      (= kind "ceremony/consume")
+      (outcome (merge state {"phase" "consumed" "result" nil})
+               [(command "persistence" "consume" [data])])
+
+      (= kind "transport/disconnected")
+      (outcome (merge state {"connected" false "phase" "disconnected"}) [])
+
+      (= kind "error")
+      (outcome (merge state {"phase" "error" "error" (get data "message")}) [])
+
+      true
+      (throw (ex-info "unknown ceremony event" {"type" kind})))))

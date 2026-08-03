@@ -35,6 +35,9 @@ initialize() {
     echo "HESTIA_PGSODIUM_ROOT_KEY=$(openssl rand -hex 32)"
     echo "HESTIA_JWT_SECRET=$(openssl rand -hex 48)"
     echo "HESTIA_TURN_SECRET=$(openssl rand -hex 32)"
+    echo "HESTIA_STUN_URLS="
+    echo "HESTIA_TURN_URLS="
+    echo "HESTIA_TURN_TTL_SECONDS=600"
     echo "HESTIA_SITE_URL=http://127.0.0.1:58080"
     echo "HESTIA_GITHUB_ENABLED=false"
     echo "HESTIA_GITHUB_CLIENT_ID="
@@ -88,6 +91,7 @@ case "$command" in
   status)
     compose ps
     echo "Hoplite:  http://127.0.0.1:58080"
+    echo "Recovery: http://127.0.0.1:58080/recovery/"
     echo "Auth:     http://127.0.0.1:59999"
     echo "Signal:   ws://127.0.0.1:58443"
     echo "Postgres: 127.0.0.1:55432"

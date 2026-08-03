@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://hestia.greenways.ai/sitemap-index.xml

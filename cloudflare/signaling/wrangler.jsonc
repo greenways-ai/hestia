@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "hestia-demo-signaling",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    {
+      "pattern": "signal.hestia-demo.greenways.ai",
+      "custom_domain": true
+    }
+  ],
+  "vars": {
+    "ALLOWED_ORIGINS": "https://hestia-demo.greenways.ai,http://localhost:8787,http://127.0.0.1:8787",
+    "STUN_URLS": "stun:stun.cloudflare.com:3478",
+    "MAX_MESSAGE_BYTES": "65536"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CEREMONY_ROOMS",
+        "class_name": "CeremonyRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["CeremonyRoom"]
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

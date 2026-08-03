@@ -1,0 +1,5 @@
+---
+type Props = { label?: string; class?: string };
+const { label = "Hestia", class: className = "" } = Astro.props;
+---
+<img class:list={["mosaic-sigil", className]} src={`${import.meta.env.BASE_URL.replace(/\/+$/, "")}/sigil.svg`} alt={label + " fire mosaic sigil"} />

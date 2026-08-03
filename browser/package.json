@@ -2,17 +2,26 @@
   "name": "@greenways/hestia-browser",
   "version": "0.1.0",
   "type": "module",
-  "license": "EPL-2.0",
+  "license": "Apache-2.0",
   "exports": {
     ".": "./src/index.js",
     "./shamir": "./src/shamir.js",
     "./recovery": "./src/recovery.js",
-    "./keystore": "./src/keystore.js"
+    "./keystore": "./src/keystore.js",
+    "./invite": "./src/invite.js",
+    "./peer": "./src/peer.js",
+    "./protocol": "./src/protocol.js",
+    "./storage": "./src/storage.js"
   },
   "scripts": {
-    "test": "node --test test/*.test.mjs"
+    "build:pages": "node scripts/build-pages.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:e2e": "playwright test --config playwright.config.mjs"
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1"
   }
 }

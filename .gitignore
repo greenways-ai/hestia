@@ -4,3 +4,12 @@
 .env
 .env.*
 !.env.example
+/browser/test-results/
+/browser/playwright-report/
+/.pages/
+/cloudflare/signaling/.wrangler/
+/site/node_modules/
+/site/dist/
+/site/.astro/
+/site/.netlify/
+/.netlify/

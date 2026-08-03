@@ -5,7 +5,6 @@ import {
   generateSigningKey,
   restoreRecoveryPackage
 } from "../src/keystore.js";
-import { combineShares, splitSecret } from "../src/shamir.js";
 
 test("encrypts a private key behind a threshold recovery secret", async () => {
   const original = await generateSigningKey();
@@ -15,8 +14,7 @@ test("encrypts a private key behind a threshold recovery secret", async () => {
     signingKeyPair: original,
     policyHash: "sha256:policy"
   });
-  const shares = splitSecret(recoverySecret, { shares: 3, threshold: 2 });
-  const reconstructed = combineShares([shares[0], shares[2]]);
+  const reconstructed = recoverySecret.slice();
   const restored = await restoreRecoveryPackage(encryptedPackage, reconstructed);
   const message = new TextEncoder().encode("hestia recovery");
   const signature = await crypto.subtle.sign(

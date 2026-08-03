@@ -10,12 +10,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Enforce gw.* HAL namespaces
+        run: "! rg --glob '*.hal' 'greenways\\.' ."
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: |
             browser/package-lock.json
+            cloudflare/signaling/package-lock.json
             services/signaling/package-lock.json
       - run: npm ci
         working-directory: browser
@@ -25,3 +28,15 @@ jobs:
         working-directory: services/signaling
       - run: npm test
         working-directory: services/signaling
+      - run: npm ci
+        working-directory: cloudflare/signaling
+      - run: npm test
+        working-directory: cloudflare/signaling
+      - run: npm run check
+        working-directory: cloudflare/signaling
+      - run: npm run build:pages
+        working-directory: browser
+      - run: npx playwright install --with-deps chromium firefox
+        working-directory: browser
+      - run: npm run test:e2e
+        working-directory: browser

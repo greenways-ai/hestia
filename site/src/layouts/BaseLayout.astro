@@ -1,0 +1,75 @@
+---
+import "@fontsource/marcellus/400.css";
+import "@fontsource/manrope/400.css";
+import "@fontsource/manrope/600.css";
+import "@fontsource/manrope/700.css";
+import "@fontsource/ibm-plex-mono/400.css";
+import "@greenways-ai/visual-language/theme.css";
+import SharedHeader from "@greenways-ai/visual-language/SharedHeader.astro";
+import "../styles/global.css";
+
+type Props = {
+  title: string;
+  description: string;
+};
+
+const { title, description } = Astro.props;
+const base = `${import.meta.env.BASE_URL.replace(/\/+$/, "")}/`;
+const canonical = new URL("/", Astro.site ?? "https://hestia.greenways.ai");
+const image = new URL(`${base}assets/og-hestia.jpg`, canonical);
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  name: "Hestia",
+  description,
+  url: canonical.href,
+  codeRepository: "https://github.com/greenways-ai/hestia",
+  license: "https://www.eclipse.org/legal/epl-2.0/",
+  publisher: { "@type": "Organization", name: "Greenways", url: "https://greenways.ai" }
+};
+---
+<!doctype html>
+<html lang="en" data-theme="light" data-theme-preference="auto" data-project="hestia">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#f2ebdd" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b1513" media="(prefers-color-scheme: dark)" />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href={`${base}sigil.svg`} type="image/svg+xml" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={image} />
+    <meta property="og:image:secure_url" content={image} />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="An ember mosaic hearth inside Hestia's circular sanctuary" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={image} />
+    <meta name="twitter:image:alt" content="An ember mosaic hearth inside Hestia's circular sanctuary" />
+    <title>{title}</title>
+    <script is:inline type="application/ld+json" set:html={JSON.stringify(structuredData)} />
+    <script>import "@greenways-ai/visual-language/theme.js";</script>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Skip to content</a>
+    <SharedHeader project="hestia" title="Hestia" homeHref={base} searchBase={base.replace(/\/$/, "")} nav={[{label:"Purpose",href:"#purpose"},{label:"Trust",href:"#trust"},{label:"Architecture",href:"#architecture"}]} githubHref="https://github.com/greenways-ai/hestia" cta={{label:"Recovery demo ↗",href:"https://hestia-demo.greenways.ai/recovery/"}} />
+    <main id="content"><slot /></main>
+    <footer class="site-footer">
+      <div><span class="wordmark-text">GREENWAYS / HESTIA</span><p>A sovereign hearth for digital identity.</p></div>
+      <nav aria-label="Footer navigation">
+        <a href="https://greenways.ai/opensource/hestia/">Greenways project</a>
+        <a href="https://hestia-demo.greenways.ai/recovery/">Recovery demo ↗</a>
+        <a href="https://github.com/greenways-ai/hestia">GitHub ↗</a>
+        <a href="mailto:hello@greenways.ai">hello@greenways.ai</a>
+      </nav>
+      <small>© 2026 Greenways Pty Ltd. Code under Apache-2.0. Greenways marks and artwork reserved.</small>
+    </footer>
+  </body>
+</html>

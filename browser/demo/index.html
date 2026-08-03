@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+  <title>Hestia — Identity recovery demo</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="masthead">
+    <a class="brand" href="./" aria-label="Hestia demo home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="7" cy="8" r="3"></circle><circle cx="25" cy="8" r="3"></circle><circle cx="16" cy="24" r="3"></circle><path d="M9.5 9.8 14.2 21M22.5 9.8 17.8 21M10 8h12"></path></svg>
+      <span>Hestia</span>
+    </a>
+    <span class="demo-badge">Demo</span>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="mechanism-title">
+      <header class="hero-copy">
+        <p class="eyebrow">A recovery story</p>
+        <h1 id="mechanism-title">Two of three,<br>plus you.</h1>
+        <p>Follow Mabel the wombat as two independent helpers and her own safely held token restore access.</p>
+      </header>
+
+      <div class="story" role="list" aria-label="Five stages of identity recovery">
+        <article class="story-step" role="listitem"><img class="story-art" src="./wombat-create.webp" alt="Mabel and three wombat friends prepare a burrow while Mabel holds its carved wooden key"><div class="story-content"><b>01</b><strong>Create identity</strong><details class="help-popover"><summary aria-label="About identity creation">?</summary><p>Mabel's wooden burrow key represents the identity key the browser creates and encrypts locally.</p></details></div></article>
+        <article class="story-step" role="listitem"><img class="story-art" src="./wombat-protect.webp" alt="Three wombat helpers carry separate wooden recovery clues to their own burrows"><div class="story-content"><b>02</b><strong>Protect with 2-of-3</strong><details class="help-popover"><summary aria-label="About threshold protection">?</summary><p>Each helper represents an independent recovery authority. Any two shares can reconstruct their part of the secret.</p></details></div></article>
+        <article class="story-step" role="listitem"><img class="story-art" src="./wombat-lost.webp" alt="Mabel finds her burrow key missing but still holds her personal paw-mark token"><div class="story-content"><b>03</b><strong>Lose access</strong><details class="help-popover"><summary aria-label="About lost access">?</summary><p>The original device can disappear without giving any authority enough information to restore the identity alone.</p></details></div></article>
+        <article class="story-step" role="listitem"><img class="story-art" src="./wombat-approve.webp" alt="Two wombat helpers bring their separate recovery clues to Mabel"><div class="story-content"><b>04</b><strong>Approve recovery</strong><details class="help-popover"><summary aria-label="About recovery approval">?</summary><p>Two selected authorities independently verify the request and release their shares.</p></details></div></article>
+        <article class="story-step" role="listitem"><img class="story-art" src="./wombat-restore.webp" alt="The four wombats celebrate after recovering the wooden key and reopening Mabel's burrow"><div class="story-content"><b>05</b><strong>Restore identity</strong><details class="help-popover"><summary aria-label="About identity restoration">?</summary><p>The two shares combine with Mabel's separately held factor to decrypt and restore the identity key.</p></details></div></article>
+      </div>
+    </section>
+
+    <section class="demo-workspace" aria-labelledby="demo-title">
+      <header class="workspace-head">
+        <div><p class="eyebrow">Guided demo</p><h2 id="demo-title">Help Mabel recover</h2></div>
+        <p>The wombat story is fictional. The real cryptography still runs locally in this browser.</p>
+      </header>
+      <nav class="progress" aria-label="Recovery progress">
+        <span class="active">1 <b>Set up</b></span><span>2 <b>Protect</b></span><span>3 <b>Lose access</b></span><span>4 <b>Approve</b></span><span>5 <b>Restore</b></span>
+      </nav>
+      <section id="screen" class="panel" aria-live="polite"><div class="loading"><span></span>Starting the secure demo…</div></section>
+    </section>
+
+    <details id="technical" class="technical-panel" hidden>
+      <summary><span><b>Technical details</b><small>Keys, shares, policy engines and demo messages</small></span><i aria-hidden="true">+</i></summary>
+      <div class="technical-body">
+        <aside class="architecture-note"><strong>Independent policy engines</strong><p>Each authority makes its own evidence and share-release decision. This browser places the engines together only to make the mechanism observable.</p></aside>
+        <section id="keys" hidden><div class="section-head"><div><p class="eyebrow">Recovery material</p><h2>Keys and shares</h2></div><span class="badge">Demo transparency</span></div><div id="keyList" class="key-grid"></div></section>
+        <section id="chat" hidden><div class="section-head"><div><p class="eyebrow">Optional communication</p><h2>Authority messages</h2></div><span id="chatBadge" class="badge">Verified device</span></div><div id="messages" class="messages"><p class="empty">Messages remain in this browser session.</p></div><form id="chatForm" class="chat-form"><select id="chatAuthority" aria-label="Authority"></select><input id="chatInput" maxlength="2000" required placeholder="Ask an authority a question…"><button>Send</button></form></section>
+      </div>
+    </details>
+  </main>
+
+  <footer><span>Hestia recovery demo</span><span>Fictional people and records · Local browser processing</span></footer>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

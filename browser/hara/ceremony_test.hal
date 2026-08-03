@@ -1,0 +1,16 @@
+(ns hestia.ceremony-test
+  (:require [std.foundation :refer [get nth]]
+            [hestia.ceremony :as ceremony]))
+
+(defn transition-test
+  []
+  (let [joined (ceremony/advance
+                (ceremony/initial-state)
+                {"type" "ceremony/join" "data" {"mode" "single"}})
+        connected (ceremony/advance
+                   (get joined "state")
+                   {"type" "transport/connected"})]
+    [(= "pairing" (get (get joined "state") "phase"))
+     (= "Waiting for peer" (get (get joined "view") "status_label"))
+     (= "transport" (get (nth (get joined "commands") 1) "capability"))
+     (= true (get (get connected "state") "connected"))]))
