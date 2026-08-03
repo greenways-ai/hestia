@@ -19,6 +19,10 @@
      "subject-public-key" "purposes" "scope" "valid-from" "valid-until"
      "revocation"]
 
+    (= kind "profile/state")
+    ["profile-id" "sequence" "profile-version" "root-key" "operational-key"
+     "delegation" "status"]
+
     (= kind "room/version")
     ["room-id" "sequence" "previous-room" "host-profile" "policy" "kernel"
      "acceptance-mode"]
@@ -34,6 +38,17 @@
     (= kind "room/membership")
     ["room" "member-profile" "role" "purposes" "status" "joined-epoch"
      "revoked-epoch" "delegation"]
+
+    (= kind "room/member-state")
+    ["room" "member-profile" "role" "purposes" "status" "joined-epoch"
+     "revoked-epoch" "delegation"]
+
+    (= kind "room/invitation-state")
+    ["invitation" "room-state" "status" "consumed-by" "consumed-record"]
+
+    (= kind "room/state")
+    ["room-id" "room-version" "host-profile" "membership-epoch" "members"
+     "invitations" "policy" "kernel" "acceptance-mode" "status"]
 
     (= kind "room/message")
     ["message-id" "room" "membership-epoch" "sender-profile" "sent-at" "iv"
