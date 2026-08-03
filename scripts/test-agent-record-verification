@@ -26,7 +26,11 @@ source .hestia/env
 
 ready=false
 for _ in $(seq 1 90); do
-  if "${compose[@]}" exec -T postgres pg_isready -U postgres -d hestia >/dev/null 2>&1; then
+  if "${compose[@]}" exec -T postgres \
+       pg_isready -U postgres -d hestia >/dev/null 2>&1 \
+     && "${compose[@]}" exec -T postgres \
+       test -f /var/lib/postgresql/data/.hestia-migrations-complete \
+       >/dev/null 2>&1; then
     ready=true
     break
   fi
@@ -34,7 +38,7 @@ for _ in $(seq 1 90); do
 done
 if [[ "$ready" != true ]]; then
   "${compose[@]}" logs postgres >&2
-  echo "Hestia PostgreSQL did not become ready" >&2
+  echo "Hestia PostgreSQL did not complete initialization" >&2
   exit 1
 fi
 
