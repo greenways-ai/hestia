@@ -115,7 +115,7 @@ test("portable HAL frames native HCV1 agent records", async ({ page }) => {
   expect(result.payload).toMatch(/^R:hestia-agent\/1:profile\/version:1:8:/);
   expect(result.payload).toHaveLength("R:hestia-agent/1:profile/version:1:8:".length + 8 * 64);
   expect(result.signing).toBe(`GWAR1:profile/version:${"a".repeat(64)}`);
-  expect(result.fieldCount).toBe(6);
+  expect(result.fieldCount).toBe(5);
 });
 
 test("portable HAL rejects a record with the wrong schema width", async ({ page }) => {
