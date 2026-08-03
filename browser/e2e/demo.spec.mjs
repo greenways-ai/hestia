@@ -83,6 +83,7 @@ async function contexts(browser) {
 }
 
 async function pairAndRecover(browser, mode) {
+  test.setTimeout(75_000);
   const pair = await contexts(browser);
   let first = await pair.firstContext.newPage();
   let second = await pair.secondContext.newPage();
@@ -101,9 +102,13 @@ async function pairAndRecover(browser, mode) {
 
   await expect(first.locator("#statusLabel")).toHaveText("Ready", { timeout: 20_000 });
   await expect(second.locator("#statusLabel")).toHaveText("Ready", { timeout: 20_000 });
-  await first.getByRole("button", { name: "Request recovery" }).click();
-  await expect(second.locator("#approvalPanel")).toBeVisible();
-  await second.getByRole("button", { name: "Approve" }).click();
+  const requestRecovery = first.getByRole("button", { name: "Request recovery" });
+  await expect(requestRecovery).toBeEnabled({ timeout: 20_000 });
+  await requestRecovery.click();
+  await expect(second.locator("#approvalPanel")).toBeVisible({ timeout: 20_000 });
+  const approve = second.getByRole("button", { name: "Approve" });
+  await expect(approve).toBeEnabled({ timeout: 20_000 });
+  await approve.click();
   // Firefox CI cold-starts the pinned WASM worker after approval.
   await expect(first.locator("#statusLabel")).toHaveText("Recovery complete", { timeout: 30_000 });
   await expect(first.locator("#result")).toHaveText("Identity proof verified");
