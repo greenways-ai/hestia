@@ -53,7 +53,7 @@ export function parseHcp1Pack(value) {
     throw new AgentGatewayInputError("record HCP1 pack must be text");
   }
   const byteLength = Buffer.byteLength(value, "utf8");
-  if (byteLength < 8 || byteLength > MAX_PACK_BYTES) {
+  if (byteLength > MAX_PACK_BYTES) {
     throw new AgentGatewayInputError("record HCP1 pack is outside the admission bound");
   }
   const match = /^HCP1:(0|[1-9][0-9]*):/.exec(value);
