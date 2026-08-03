@@ -23,6 +23,7 @@ jobs:
           cache-dependency-path: |
             browser/package-lock.json
             cloudflare/signaling/package-lock.json
+            services/agent-gateway/package-lock.json
             services/signaling/package-lock.json
             site/package-lock.json
       - run: npm ci
@@ -33,6 +34,10 @@ jobs:
         working-directory: services/signaling
       - run: npm test
         working-directory: services/signaling
+      - run: npm ci
+        working-directory: services/agent-gateway
+      - run: npm test
+        working-directory: services/agent-gateway
       - run: npm ci
         working-directory: cloudflare/signaling
       - run: npm test
