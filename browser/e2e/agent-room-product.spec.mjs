@@ -24,6 +24,9 @@ function resolveRequest(pathname) {
   if (pathname.startsWith("/rooms/")) {
     return resolve(browserRoot, "rooms", pathname.slice("/rooms/".length));
   }
+  if (pathname.startsWith("/recovery/")) {
+    return resolve(browserRoot, "demo", pathname.slice("/recovery/".length));
+  }
   if (pathname.startsWith("/hestia-browser/")) {
     return resolve(browserRoot, "src", pathname.slice("/hestia-browser/".length));
   }
