@@ -11,7 +11,6 @@ let origin;
 
 function contentType(path) {
   return {
-    ".html": "text/html; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
     ".hal": "text/plain; charset=utf-8",
     ".wasm": "application/wasm"
@@ -19,9 +18,6 @@ function contentType(path) {
 }
 
 function resolveRequest(pathname) {
-  if (pathname === "/runtime" || pathname === "/runtime/") {
-    return resolve(browserRoot, "demo/index.html");
-  }
   if (pathname.startsWith("/hara-runtime/")) {
     return resolve(browserRoot, "vendor/hara", pathname.slice("/hara-runtime/".length));
   }
@@ -38,6 +34,15 @@ function resolveRequest(pathname) {
 test.beforeAll(async () => {
   staticServer = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
+    if (url.pathname === "/runtime" || url.pathname === "/runtime/") {
+      response.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        "referrer-policy": "no-referrer"
+      });
+      response.end("<!doctype html><meta charset=utf-8><title>Hestia ledger HAL test</title>");
+      return;
+    }
     const file = resolveRequest(url.pathname);
     if (!file || !file.startsWith(repositoryRoot)) {
       response.writeHead(404).end();
@@ -65,12 +70,11 @@ test.afterAll(async () => {
   ));
 });
 
-test("portable HAL frames native HCV1 agent records", async ({ page }) => {
-  await page.goto(`${origin}/runtime/`);
-  const result = await page.evaluate(async () => {
+async function ledgerSession(page, name) {
+  return page.evaluate(async ({ sessionName }) => {
     const { HtaContext } = await import("/hara-runtime/index.js");
     const context = new HtaContext({
-      worker: new Worker("/hara-runtime/worker.js", { type: "module", name: "ledger-agent-records" }),
+      worker: new Worker("/hara-runtime/worker.js", { type: "module", name: sessionName }),
       moduleUrl: "/hara-runtime/hara_wasm_raw.wasm"
     });
     const resources = await Promise.all([
@@ -82,10 +86,20 @@ test("portable HAL frames native HCV1 agent records", async ({ page }) => {
       return [namespace, await response.text()];
     }));
     await context.call("register-resources", [resources]);
-    const session = await context.createSession("LEDGER-AGENT-ROOM");
+    const session = await context.createSession(sessionName);
     await session.eval("(require [gw.ledger.agent-room :as room])");
-    const roots = "[" + "abcdef12".repeat(8).split(/(?<=.{64})/).slice(0, 8)
-      .map((root) => `\"${root}\"`).join(" ") + "]";
+    globalThis.__ledgerAgentSession = session;
+    return true;
+  }, { sessionName: name });
+}
+
+test("portable HAL frames native HCV1 agent records", async ({ page }) => {
+  await page.goto(`${origin}/runtime/`);
+  await ledgerSession(page, "LEDGER-AGENT-ROOM");
+  const result = await page.evaluate(async () => {
+    const session = globalThis.__ledgerAgentSession;
+    const rootsArray = Array.from({ length: 8 }, (_, index) => String(index + 1).repeat(64));
+    const roots = `[${rootsArray.map((root) => JSON.stringify(root)).join(" ")}]`;
     const payload = await session.eval(`(room/record-payload \"profile/version\" ${roots})`);
     const signing = await session.eval(`(room/signing-payload \"profile/version\" \"${"a".repeat(64)}\")`);
     const fields = await session.eval("(room/field-names \"negotiation/acceptance\")");
@@ -106,22 +120,9 @@ test("portable HAL frames native HCV1 agent records", async ({ page }) => {
 
 test("portable HAL rejects a record with the wrong schema width", async ({ page }) => {
   await page.goto(`${origin}/runtime/`);
+  await ledgerSession(page, "LEDGER-AGENT-REJECTION");
   const error = await page.evaluate(async () => {
-    const { HtaContext } = await import("/hara-runtime/index.js");
-    const context = new HtaContext({
-      worker: new Worker("/hara-runtime/worker.js", { type: "module", name: "ledger-agent-rejection" }),
-      moduleUrl: "/hara-runtime/hara_wasm_raw.wasm"
-    });
-    const resources = await Promise.all([
-      ["gw.ledger.codec", "/ledger-hara/codec.hal"],
-      ["gw.ledger.agent-room", "/ledger-hara/agent_room.hal"]
-    ].map(async ([namespace, url]) => {
-      const response = await fetch(url, { cache: "no-store" });
-      return [namespace, await response.text()];
-    }));
-    await context.call("register-resources", [resources]);
-    const session = await context.createSession("LEDGER-AGENT-REJECTION");
-    await session.eval("(require [gw.ledger.agent-room :as room])");
+    const session = globalThis.__ledgerAgentSession;
     try {
       await session.eval(`(room/record-payload \"profile/version\" [\"${"a".repeat(64)}\"])`);
       return null;
