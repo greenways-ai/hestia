@@ -1,7 +1,6 @@
 import {
   base64UrlToBytes,
   bytesToBase64Url,
-  concatBytes,
   textEncoder
 } from "./encoding.js";
 
@@ -134,7 +133,7 @@ export const AGENT_RECORD_SCHEMAS = Object.freeze({
   ],
   "ledger/signed-record": [
     ["body", "body_root", "reference"],
-    ["signer-key", "signer_key"],
+    ["signer-key", "signer_key_root", "reference"],
     ["signature", "signature_root", "reference"]
   ],
   "ledger/admission-receipt": [
@@ -212,6 +211,20 @@ function rootHex(value) {
 
 function referencedCells(value) {
   return value?.hcv1_cells ?? value?.hcv1?.cells ?? [];
+}
+
+async function rawEd25519PublicKey(publicKeyOrJwk) {
+  if (publicKeyOrJwk instanceof Uint8Array) return new Uint8Array(publicKeyOrJwk);
+  const publicKey = publicKeyOrJwk?.type === "public"
+    ? publicKeyOrJwk
+    : await crypto.subtle.importKey(
+      "jwk",
+      publicKeyOrJwk,
+      { name: "Ed25519" },
+      true,
+      ["verify"]
+    );
+  return new Uint8Array(await crypto.subtle.exportKey("raw", publicKey));
 }
 
 async function encodeReference(value) {
@@ -356,14 +369,17 @@ export function hcp1Pack(cells) {
 }
 
 export async function signHcv1AgentRecord(kind, body, key) {
-  if (!key?.id || !key?.privateKey) throw new Error("an agent signing key is required");
+  if (!key?.id || !key?.privateKey || (!key.publicKey && !key.publicJwk)) {
+    throw new Error("an agent signing key is required");
+  }
   const bodyPlan = await encodeAgentRecordBody(kind, body);
   const signatureBytes = new Uint8Array(await crypto.subtle.sign(
     { name: "Ed25519" },
     key.privateKey,
     agentSigningBytes(kind, bodyPlan.root)
   ));
-  const signerKey = await encodeHcv1Value(key.id);
+  const signerPublicBytes = await rawEd25519PublicKey(key.publicKey ?? key.publicJwk);
+  const signerKey = await encodeHcv1Value(signerPublicBytes);
   const signature = await encodeHcv1Value(signatureBytes);
   const signed = await createRecordCell("ledger/signed-record", [
     { root: bodyPlan.root, cells: bodyPlan.cells },
@@ -376,6 +392,7 @@ export async function signHcv1AgentRecord(kind, body, key) {
     version: 1,
     type: kind,
     signer_key: key.id,
+    signer_key_root: `sha256:${signerKey.root}`,
     body,
     body_root: `sha256:${bodyPlan.root}`,
     root: `sha256:${signed.root}`,
@@ -395,6 +412,9 @@ export async function verifyHcv1AgentRecord(record, publicKeyOrJwk) {
   const publicKey = publicKeyOrJwk?.type === "public"
     ? publicKeyOrJwk
     : await crypto.subtle.importKey("jwk", publicKeyOrJwk, { name: "Ed25519" }, true, ["verify"]);
+  const publicBytes = await rawEd25519PublicKey(publicKey);
+  const expectedKeyId = await hcv1KeyFingerprint(publicBytes);
+  if (record.signer_key !== expectedKeyId) throw new Error("HCV1 signer key identifier mismatch");
   const valid = await crypto.subtle.verify(
     { name: "Ed25519" },
     publicKey,
@@ -402,7 +422,10 @@ export async function verifyHcv1AgentRecord(record, publicKeyOrJwk) {
     agentSigningBytes(record.type, bodyPlan.root)
   );
   if (!valid) throw new Error("invalid HCV1 agent signature");
-  const signerKey = await encodeHcv1Value(record.signer_key);
+  const signerKey = await encodeHcv1Value(publicBytes);
+  if (record.signer_key_root && record.signer_key_root !== `sha256:${signerKey.root}`) {
+    throw new Error("HCV1 signer key root mismatch");
+  }
   const signature = await encodeHcv1Value(signatureBytes);
   const signed = await createRecordCell("ledger/signed-record", [
     { root: bodyPlan.root, cells: bodyPlan.cells },
@@ -426,8 +449,9 @@ export async function hcv1ValueRoot(value) {
   };
 }
 
-export async function hcv1KeyFingerprint(publicJwk) {
-  const encoded = await encodeHcv1Value(publicJwk);
+export async function hcv1KeyFingerprint(publicKeyOrJwk) {
+  const publicBytes = await rawEd25519PublicKey(publicKeyOrJwk);
+  const encoded = await encodeHcv1Value(publicBytes);
   return `ed25519:${encoded.root}`;
 }
 
