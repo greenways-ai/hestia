@@ -11,7 +11,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Enforce gw.* HAL namespaces
-        run: "! rg --glob '*.hal' 'greenways\\.' ."
+        run: |
+          if grep -R --include='*.hal' -n 'greenways\.' .; then
+            echo 'HAL namespaces must use gw.*' >&2
+            exit 1
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -20,6 +24,7 @@ jobs:
             browser/package-lock.json
             cloudflare/signaling/package-lock.json
             services/signaling/package-lock.json
+            site/package-lock.json
       - run: npm ci
         working-directory: browser
       - run: npm test
@@ -36,6 +41,10 @@ jobs:
         working-directory: cloudflare/signaling
       - run: npm run build:pages
         working-directory: browser
+      - run: npm ci
+        working-directory: site
+      - run: npm run build
+        working-directory: site
       - run: npx playwright install --with-deps chromium firefox
         working-directory: browser
       - run: npm run test:e2e
