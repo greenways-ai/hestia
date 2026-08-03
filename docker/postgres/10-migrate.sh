@@ -12,3 +12,5 @@ for migration in /hestia-migrations/*.sql; do
   psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
     --set=ON_ERROR_STOP=1 --file "$migration"
 done
+
+touch "${PGDATA:-/var/lib/postgresql/data}/.hestia-migrations-complete"
