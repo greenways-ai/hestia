@@ -15,8 +15,10 @@ One operator command manages a deliberately small internal stack:
 
 - PostgreSQL with the canonical Greenways ledger and append-only Hestia events;
 - Hoplite as the private application origin;
+- a local signed-agent admission gateway whose Ed25519 environment key stays
+  outside PostgreSQL;
 - Supabase Auth (GoTrue only) for GitHub OAuth and sessions;
-- a blind WebRTC signalling relay;
+- a blind WebRTC signalling relay; and
 - an optional TURN service selected by an operator.
 
 Supabase Studio, PostgREST, Realtime, Storage, Edge Runtime and its gateway are
@@ -27,9 +29,16 @@ scripts/hestia init
 scripts/hestia doctor
 scripts/hestia up
 scripts/hestia status
+scripts/hestia client-env
 scripts/hestia backup
 scripts/hestia down
 ```
+
+`init` creates the local environment receipt key at
+`.hestia/environment-signing.pem`. `up` waits for ledger migrations, imports the
+pinned agent policies, registers only the environment public key, and starts the
+agent gateway before exposing the Hestia origin. The signer is included in
+protected backups because it is part of the local node identity.
 
 ## Product protocols
 
@@ -45,7 +54,22 @@ proofs, AES-GCM room messages, signed document versions and human-approved offer
 acceptance. Its local workspace persists in IndexedDB and replays through HAL on
 reload.
 
-Published builds expose:
+Canonical profiles, room genesis, invitations and external-member proofs can be
+submitted to the local [`hestia-agent-http/1` admission gateway](docs/agent-gateway.md).
+The gateway imports the bounded HCP1 pack, verifies exact `GWAR1` signatures in
+PostgreSQL through pgsodium, applies the current policy transition, and returns
+signed verification and admission receipts. Agent private keys never enter the
+gateway; the invitation capability is accepted only as transient input to guest
+admission.
+
+After `scripts/hestia up`, the local endpoints include:
+
+- `http://127.0.0.1:58080/agent/v1/health` — signed-agent gateway health;
+- `http://127.0.0.1:58080/rooms/` — private agent-room product preview;
+- `http://127.0.0.1:58080/recovery/` — local recovery application; and
+- `http://127.0.0.1:58080/recovery/lab/` — low-level two-browser recovery lab.
+
+Published static builds expose:
 
 - `/rooms/` — private agent-room product preview;
 - `/recovery-demo/` — guided recovery product demo; and
