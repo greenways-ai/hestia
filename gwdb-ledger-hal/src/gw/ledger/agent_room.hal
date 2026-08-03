@@ -15,28 +15,37 @@
      "root-key" "operational-key" "delegation"]
 
     (= kind "profile/key-delegation")
-    ["delegation-id" "issuer-profile" "issuer-key" "subject-key" "purposes"
-     "scope" "valid-from" "valid-until" "revocation"]
+    ["delegation-id" "issuer-profile" "issuer-key" "subject-key"
+     "subject-public-key" "purposes" "scope" "valid-from" "valid-until"
+     "revocation"]
 
     (= kind "room/version")
     ["room-id" "sequence" "previous-room" "host-profile" "policy" "kernel"
      "acceptance-mode"]
 
     (= kind "room/invitation")
-    ["invite-id" "room" "host-profile" "role" "purposes" "expires-at"
-     "capability-commitment" "one-time"]
+    ["invite-id" "room" "host-profile-id" "host-profile" "role" "purposes"
+     "expires-at" "capability-commitment" "one-time"]
 
     (= kind "room/admission-proof")
-    ["proof-id" "invitation" "room" "guest-profile" "guest-key"
-     "capability-proof" "delegation"]
+    ["proof-id" "invitation" "invite-id" "room" "guest-profile-id"
+     "guest-profile" "guest-key" "capability-proof"]
 
     (= kind "room/membership")
     ["room" "member-profile" "role" "purposes" "status" "joined-epoch"
      "revoked-epoch" "delegation"]
 
+    (= kind "room/message")
+    ["message-id" "room" "membership-epoch" "sender-profile" "sent-at" "iv"
+     "ciphertext" "ciphertext-root"]
+
     (= kind "room/message-intent")
     ["room" "membership-epoch" "sender-profile" "envelope" "ciphertext"
      "delivery-policy"]
+
+    (= kind "document/version")
+    ["document-id" "version" "previous-version" "content" "media-type"
+     "author-profile" "created-at"]
 
     (= kind "room/document-attachment")
     ["room" "document" "document-policy" "attached-by"]
@@ -46,8 +55,10 @@
      "authority"]
 
     (= kind "negotiation/acceptance")
-    ["offer" "accepted-by" "human-approval" "accepted-at" "authority"
-     "policy"]
+    ["offer" "accepted-by" "human-approval" "accepted-at" "authority"]
+
+    (= kind "ledger/signed-record")
+    ["body" "signer-key" "signature"]
 
     (= kind "ledger/admission-receipt")
     ["previous-state" "event" "policy" "kernel" "result-state" "effect-plan"
@@ -139,6 +150,12 @@
    :signer-key-root signer-key-root
    :signature-root signature-root
    :signing-payload (signing-payload kind body-root)})
+
+(defn signed-record-cell
+  [utf8-byte-count utf8-hex sha256 body-root signer-key-root signature-root]
+  (record-cell
+   utf8-byte-count utf8-hex sha256 "ledger/signed-record"
+   [body-root signer-key-root signature-root]))
 
 (defn admission-receipt-cell
   "Commits the complete deterministic transition boundary for an accepted or
