@@ -5,7 +5,7 @@ import ThemedArtwork from "@greenways-ai/visual-language/ThemedArtwork.astro";
 
 const title = "Hestia · Identity that remains in your hands";
 const description = "A personal, local-first security and open-communications server for identity, recovery, provenance and rights.";
-const base = import.meta.env.BASE_URL;
+const base = `${import.meta.env.BASE_URL.replace(/\/+$/, "")}/`;
 ---
 <BaseLayout title={title} description={description}>
   <section class="hero" aria-labelledby="hero-title">
@@ -41,8 +41,8 @@ const base = import.meta.env.BASE_URL;
   <section id="trust" class="trust-section" aria-labelledby="trust-title">
     <div class="trust-art">
       <picture>
-        <source srcset="/assets/hestia-recovery-keepers.webp" type="image/webp" />
-        <img src="/assets/hestia-recovery-keepers.jpg" width="1536" height="1024" loading="lazy" alt="Three independent mosaic sanctuary chambers joined around a central circle" />
+        <source srcset={`${base}assets/hestia-recovery-keepers.webp`} type="image/webp" />
+        <img src={`${base}assets/hestia-recovery-keepers.jpg`} width="1536" height="1024" loading="lazy" alt="Three independent mosaic sanctuary chambers joined around a central circle" />
       </picture>
       <MosaicMark class="trust-mark" label="Hestia recovery" />
     </div>
@@ -95,8 +95,8 @@ const base = import.meta.env.BASE_URL;
 
   <section id="operate" class="operate-section" aria-labelledby="operate-title">
     <picture class="operate-art">
-      <source srcset="/assets/hestia-local-ledger.webp" type="image/webp" />
-      <img src="/assets/hestia-local-ledger.jpg" width="1536" height="1024" loading="lazy" alt="An ember-lit mosaic hearth connected to concentric ledger nodes" />
+      <source srcset={`${base}assets/hestia-local-ledger.webp`} type="image/webp" />
+      <img src={`${base}assets/hestia-local-ledger.jpg`} width="1536" height="1024" loading="lazy" alt="An ember-lit mosaic hearth connected to concentric ledger nodes" />
     </picture>
     <div class="operate-veil"></div>
     <div class="operate-copy section-shell">

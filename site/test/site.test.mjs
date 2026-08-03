@@ -56,7 +56,7 @@ test("generated editorial artwork and social card are optimized and present", as
 
 test("metadata declares the 1200 by 630 Hestia social image", async () => {
   const layout = await source("src/layouts/BaseLayout.astro");
-  assert.match(layout, /\/assets\/og-hestia\.jpg/);
+  assert.match(layout, /\$\{base\}assets\/og-hestia\.jpg/);
   assert.match(layout, /og:image:secure_url/);
   assert.match(layout, /og:image:width" content="1200"/);
   assert.match(layout, /og:image:height" content="630"/);

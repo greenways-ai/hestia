@@ -15,8 +15,9 @@ type Props = {
 };
 
 const { title, description } = Astro.props;
+const base = `${import.meta.env.BASE_URL.replace(/\/+$/, "")}/`;
 const canonical = new URL("/", Astro.site ?? "https://hestia.greenways.ai");
-const image = new URL("/assets/og-hestia.jpg", canonical);
+const image = new URL(`${base}assets/og-hestia.jpg`, canonical);
 const structuredData = {
   "@context": "https://schema.org",
   "@type": "SoftwareSourceCode",
@@ -37,7 +38,7 @@ const structuredData = {
     <meta name="theme-color" content="#f2ebdd" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0b1513" media="(prefers-color-scheme: dark)" />
     <link rel="canonical" href={canonical} />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />

@@ -66,8 +66,7 @@ body::before {
   pointer-events: none;
   opacity: .46;
   background:
-    radial-gradient(circle at 15% 10%, rgba(47,146,127,.12), transparent 27rem),
-    radial-gradient(circle at 85% 72%, rgba(199,104,67,.09), transparent 30rem),
+    conic-gradient(from 90deg, rgba(47,146,127,.09) 25%, transparent 0 50%, rgba(199,104,67,.055) 0 75%, transparent 0) 0 0 / 18px 18px,
     repeating-linear-gradient(90deg, transparent 0 79px, rgba(255,255,255,.018) 80px);
 }
 a { color: inherit; }
@@ -420,7 +419,7 @@ p { margin: 0; }
   border-top: 1px solid var(--line);
 }
 
-:root[data-theme="light"] body::before { opacity: .58; background: radial-gradient(circle at 15% 10%, rgba(47,146,127,.1), transparent 27rem), radial-gradient(circle at 85% 72%, rgba(201,110,67,.08), transparent 30rem), repeating-linear-gradient(90deg, transparent 0 79px, rgba(23,35,31,.025) 80px); }
+:root[data-theme="light"] body::before { opacity: .58; background: conic-gradient(from 90deg, rgba(47,146,127,.075) 25%, transparent 0 50%, rgba(201,110,67,.045) 0 75%, transparent 0) 0 0 / 18px 18px, repeating-linear-gradient(90deg, transparent 0 79px, rgba(23,35,31,.025) 80px); }
 :root[data-theme="light"] .purpose-grid article,
 :root[data-theme="light"] .capability-grid article,
 :root[data-theme="light"] .architecture-flow span { background: rgba(255,249,233,.72); }
