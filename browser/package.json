@@ -11,7 +11,8 @@
     "./invite": "./src/invite.js",
     "./peer": "./src/peer.js",
     "./protocol": "./src/protocol.js",
-    "./storage": "./src/storage.js"
+    "./storage": "./src/storage.js",
+    "./agent-room": "./src/agent-room-kernel.js"
   },
   "scripts": {
     "build:pages": "node scripts/build-pages.mjs",
