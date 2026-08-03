@@ -76,3 +76,14 @@ jobs:
           node-version: 24
       - name: Admit a signed external agent and rotate the room epoch
         run: bash scripts/test-agent-room-membership-admission
+
+  postgres-agent-gateway:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Admit a signed room through the local HTTP gateway
+        run: bash scripts/test-agent-gateway
