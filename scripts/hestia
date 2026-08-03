@@ -118,6 +118,19 @@ bootstrap_agent_environment() {
     agent-gateway node src/bootstrap.mjs
 }
 
+print_client_environment() {
+  [[ -f "$env_file" ]] || die "run scripts/hestia init first"
+  # shellcheck disable=SC1090
+  source "$env_file"
+  local origin="${HESTIA_SITE_URL:-http://127.0.0.1:58080}"
+  printf 'HESTIA_ORIGIN=%s\n' "$origin"
+  printf 'HESTIA_AGENT_API=%s/agent/v1\n' "${origin%/}"
+  printf 'HESTIA_RECOVERY_URL=%s/recovery/\n' "${origin%/}"
+  printf 'HESTIA_AUTH_URL=%s\n' "http://127.0.0.1:59999"
+  printf 'HESTIA_SIGNAL_URL=%s\n' "ws://127.0.0.1:58443/signal"
+  printf 'HESTIA_ENVIRONMENT_ID=%s\n' "${HESTIA_ENVIRONMENT_ID:-hestia-local}"
+}
+
 command="${1:-help}"
 shift || true
 
@@ -163,6 +176,9 @@ case "$command" in
     echo "Signal:    ws://127.0.0.1:58443"
     echo "Postgres:  127.0.0.1:55432"
     ;;
+  client-env)
+    print_client_environment
+    ;;
   logs)
     compose logs --follow "$@"
     ;;
@@ -206,7 +222,7 @@ case "$command" in
     echo "Restored: $source_dir"
     ;;
   help|-h|--help)
-    echo "usage: scripts/hestia {init|doctor|up|bootstrap-agent|down|status|logs|backup [DIR]|restore DIR --confirm}"
+    echo "usage: scripts/hestia {init|doctor|up|bootstrap-agent|down|status|client-env|logs|backup [DIR]|restore DIR --confirm}"
     ;;
   *)
     die "unknown command: $command"
