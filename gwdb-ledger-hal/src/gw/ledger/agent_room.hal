@@ -60,6 +60,9 @@
     (= kind "ledger/signed-record")
     ["body" "signer-key" "signature"]
 
+    (= kind "ledger/verification-receipt")
+    ["record" "body" "signer-key" "environment-key" "outcome" "sequence"]
+
     (= kind "ledger/admission-receipt")
     ["previous-state" "event" "policy" "kernel" "result-state" "effect-plan"
      "record" "outcome" "sequence"]
@@ -156,6 +159,16 @@
   (record-cell
    utf8-byte-count utf8-hex sha256 "ledger/signed-record"
    [body-root signer-key-root signature-root]))
+
+(defn verification-receipt-cell
+  "Commits successful cryptographic verification before application policy
+   admission. The environment signs this body as another ledger/signed-record."
+  [utf8-byte-count utf8-hex sha256 record-root body-root signer-key-root
+   environment-key-root outcome-root sequence-root]
+  (record-cell
+   utf8-byte-count utf8-hex sha256 "ledger/verification-receipt"
+   [record-root body-root signer-key-root environment-key-root outcome-root
+    sequence-root]))
 
 (defn admission-receipt-cell
   "Commits the complete deterministic transition boundary for an accepted or
