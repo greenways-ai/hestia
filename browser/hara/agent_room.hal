@@ -1,0 +1,419 @@
+;; Hestia agent profile, private-room, and negotiation kernel.
+;; Host adapters verify cryptography and execute the returned capability commands.
+(ns hestia.agent-room
+  (:require [std.foundation :refer [assoc conj count get merge]]))
+
+(defn command
+  [capability action args]
+  {"capability" capability
+   "action" action
+   "args" args})
+
+(defn ledger-command
+  [record-type data]
+  (command "ledger" "propose-record" [record-type data]))
+
+(defn require-phase
+  [state expected event]
+  (if (= expected (get state "phase"))
+    true
+    (throw (ex-info "invalid agent-room transition"
+                    {"event" event
+                     "expected" expected
+                     "actual" (get state "phase")}))))
+
+(defn require-open
+  [state event]
+  (require-phase state "open" event))
+
+(defn require-true
+  [value field]
+  (if (= true value)
+    true
+    (throw (ex-info "verified fact required" {"field" field}))))
+
+(defn require-present
+  [value field]
+  (if value
+    value
+    (throw (ex-info "required agent-room field is missing" {"field" field}))))
+
+(defn initial-state
+  []
+  {"phase" "uninitialized"
+   "profile" nil
+   "room" nil
+   "members" {}
+   "invites" {}
+   "documents" {}
+   "offers" {}
+   "membership_epoch" 0
+   "transcript" []
+   "accepted_offer" nil})
+
+(defn view
+  [state]
+  (let [room (get state "room")]
+    {"phase" (get state "phase")
+     "profile" (get state "profile")
+     "room_id" (if room (get room "room_id") nil)
+     "room_status" (if room (get room "status") nil)
+     "membership_epoch" (get state "membership_epoch")
+     "member_count" (count (get state "members"))
+     "invite_count" (count (get state "invites"))
+     "document_count" (count (get state "documents"))
+     "offer_count" (count (get state "offers"))
+     "message_count" (count (get state "transcript"))
+     "accepted_offer" (get state "accepted_offer")}))
+
+(defn outcome
+  [state commands]
+  {"state" state
+   "view" (view state)
+   "commands" commands})
+
+(defn register-profile
+  [state data]
+  (do
+    (require-phase state "uninitialized" "profile/register")
+    (require-present (get data "profile_id") "profile_id")
+    (require-present (get data "profile_root") "profile_root")
+    (require-present (get data "root_key") "root_key")
+    (require-present (get data "operational_key") "operational_key")
+    (require-present (get data "delegation_root") "delegation_root")
+    (let [profile (merge data {"status" "active"})]
+      (outcome
+       (merge state {"phase" "profile-ready" "profile" profile})
+       [(ledger-command "profile/registered" profile)]))))
+
+(defn rotate-profile-key
+  [state data]
+  (let [phase (get state "phase")]
+    (if (or (= phase "profile-ready") (= phase "open"))
+      true
+      (throw (ex-info "profile key rotation is not allowed in this phase"
+                      {"phase" phase})))
+    (require-true (get data "authority_verified") "authority_verified")
+    (require-present (get data "operational_key") "operational_key")
+    (require-present (get data "delegation_root") "delegation_root")
+    (let [profile (get state "profile")
+          profile-id (get profile "profile_id")
+          updated-profile (merge profile
+                                 {"operational_key" (get data "operational_key")
+                                  "delegation_root" (get data "delegation_root")})
+          open-room (= phase "open")
+          epoch (if open-room
+                  (+ 1 (get state "membership_epoch"))
+                  (get state "membership_epoch"))
+          members (get state "members")
+          host-member (get members profile-id)
+          updated-members (if open-room
+                            (assoc members
+                                   profile-id
+                                   (merge host-member
+                                          {"operational_key" (get data "operational_key")
+                                           "delegation_root" (get data "delegation_root")}))
+                            members)
+          updated-state (merge state
+                               {"profile" updated-profile
+                                "members" updated-members
+                                "membership_epoch" epoch})
+          record (merge data
+                        {"profile_id" profile-id
+                         "membership_epoch" epoch})]
+      (if open-room
+        (outcome
+         updated-state
+         [(ledger-command "profile/key-rotated" record)
+          (command "crypto" "rotate-room-epoch"
+                   [(get (get state "room") "room_id") epoch])])
+        (outcome
+         updated-state
+         [(ledger-command "profile/key-rotated" record)])))))
+
+(defn create-room
+  [state data]
+  (do
+    (require-phase state "profile-ready" "room/create")
+    (require-present (get data "room_id") "room_id")
+    (require-present (get data "policy_root") "policy_root")
+    (require-present (get data "kernel_root") "kernel_root")
+    (let [profile (get state "profile")
+          profile-id (get profile "profile_id")
+          epoch 1
+          room (merge data
+                      {"status" "open"
+                       "acceptance_mode" (or (get data "acceptance_mode")
+                                             "human-required")})
+          host-member {"member_id" profile-id
+                       "profile_root" (get profile "profile_root")
+                       "operational_key" (get profile "operational_key")
+                       "delegation_root" (get profile "delegation_root")
+                       "role" "owner"
+                       "purposes" ["room.admin"
+                                   "room.message"
+                                   "document.attach"
+                                   "negotiation.propose"
+                                   "negotiation.accept"]
+                       "status" "active"
+                       "joined_epoch" epoch}
+          record (merge room
+                        {"host_profile_id" profile-id
+                         "membership_epoch" epoch})]
+      (outcome
+       (merge state
+              {"phase" "open"
+               "room" room
+               "members" (assoc {} profile-id host-member)
+               "membership_epoch" epoch})
+       [(ledger-command "room/created" record)
+        (command "crypto" "create-room-epoch"
+                 [(get room "room_id") epoch])]))))
+
+(defn issue-invite
+  [state data]
+  (do
+    (require-open state "room/invite")
+    (require-present (get data "invite_id") "invite_id")
+    (require-present (get data "capability_commitment") "capability_commitment")
+    (require-present (get data "role") "role")
+    (require-present (get data "expires_at") "expires_at")
+    (let [invite-id (get data "invite_id")
+          invite (merge data
+                        {"status" "pending"
+                         "issued_epoch" (get state "membership_epoch")})
+          invites (assoc (get state "invites") invite-id invite)]
+      (outcome
+       (assoc state "invites" invites)
+       [(ledger-command "room/invite-issued" invite)
+        (command "transport" "publish-invite" [invite])]))))
+
+(defn admit-member
+  [state data]
+  (do
+    (require-open state "room/admit")
+    (require-true (get data "proof_verified") "proof_verified")
+    (require-true (get data "delegation_verified") "delegation_verified")
+    (require-true (get data "invite_valid_verified") "invite_valid_verified")
+    (require-present (get data "member_id") "member_id")
+    (require-present (get data "profile_root") "profile_root")
+    (require-present (get data "operational_key") "operational_key")
+    (let [invite-id (require-present (get data "invite_id") "invite_id")
+          invite (get (get state "invites") invite-id)]
+      (require-present invite "invite")
+      (if (= "pending" (get invite "status"))
+        true
+        (throw (ex-info "invitation is not pending"
+                        {"invite_id" invite-id
+                         "status" (get invite "status")})))
+      (let [member-id (get data "member_id")
+            epoch (+ 1 (get state "membership_epoch"))
+            member {"member_id" member-id
+                    "profile_root" (get data "profile_root")
+                    "operational_key" (get data "operational_key")
+                    "delegation_root" (get data "delegation_root")
+                    "role" (get invite "role")
+                    "purposes" (or (get invite "purposes") [])
+                    "status" "active"
+                    "joined_epoch" epoch}
+            members (assoc (get state "members") member-id member)
+            invites (assoc (get state "invites")
+                           invite-id
+                           (assoc invite "status" "consumed"))
+            record (merge member
+                          {"invite_id" invite-id
+                           "membership_epoch" epoch})]
+        (outcome
+         (merge state
+                {"members" members
+                 "invites" invites
+                 "membership_epoch" epoch})
+         [(ledger-command "room/member-admitted" record)
+          (command "crypto" "rotate-room-epoch"
+                   [(get (get state "room") "room_id") epoch])
+          (command "transport" "publish-membership" [record])])))))
+
+(defn revoke-member
+  [state data]
+  (do
+    (require-open state "room/revoke")
+    (require-true (get data "authority_verified") "authority_verified")
+    (let [member-id (require-present (get data "member_id") "member_id")
+          profile-id (get (get state "profile") "profile_id")
+          member (get (get state "members") member-id)]
+      (require-present member "member")
+      (if (= member-id profile-id)
+        (throw (ex-info "the host profile cannot be revoked from its own room"
+                        {"member_id" member-id}))
+        true)
+      (if (= "active" (get member "status"))
+        true
+        (throw (ex-info "member is not active"
+                        {"member_id" member-id
+                         "status" (get member "status")})))
+      (let [epoch (+ 1 (get state "membership_epoch"))
+            revoked (merge member
+                           {"status" "revoked"
+                            "revoked_epoch" epoch
+                            "revocation_root" (get data "revocation_root")})
+            members (assoc (get state "members") member-id revoked)
+            record {"member_id" member-id
+                    "revocation_root" (get data "revocation_root")
+                    "membership_epoch" epoch}]
+        (outcome
+         (merge state
+                {"members" members
+                 "membership_epoch" epoch})
+         [(ledger-command "room/member-revoked" record)
+          (command "crypto" "rotate-room-epoch"
+                   [(get (get state "room") "room_id") epoch])
+          (command "transport" "publish-membership" [record])])))))
+
+(defn attach-document
+  [state data]
+  (do
+    (require-open state "document/attach")
+    (require-true (get data "authority_verified") "authority_verified")
+    (let [document-id (require-present (get data "document_id") "document_id")]
+      (require-present (get data "document_root") "document_root")
+      (require-present (get data "policy_root") "policy_root")
+      (let [document (merge data {"status" "attached"})
+            documents (assoc (get state "documents") document-id document)]
+        (outcome
+         (assoc state "documents" documents)
+         [(ledger-command "room/document-attached" document)])))))
+
+(defn send-message
+  [state data]
+  (do
+    (require-open state "message/send")
+    (require-true (get data "member_authorized") "member_authorized")
+    (require-present (get data "envelope_root") "envelope_root")
+    (require-present (get data "ciphertext_root") "ciphertext_root")
+    (let [sequence (+ 1 (count (get state "transcript")))
+          commitment (merge data
+                            {"sequence" sequence
+                             "membership_epoch" (get state "membership_epoch")})
+          transcript (conj (get state "transcript") commitment)]
+      (outcome
+       (assoc state "transcript" transcript)
+       [(ledger-command "room/message-send-intent" commitment)
+        (command "transport" "deliver-envelope" [commitment])]))))
+
+(defn propose-offer
+  [state data]
+  (do
+    (require-open state "negotiation/propose")
+    (require-true (get data "member_authorized") "member_authorized")
+    (let [offer-id (require-present (get data "offer_id") "offer_id")]
+      (require-present (get data "offer_root") "offer_root")
+      (require-present (get data "terms_root") "terms_root")
+      (let [offer (merge data {"status" "proposed"})
+            offers (assoc (get state "offers") offer-id offer)]
+        (outcome
+         (assoc state "offers" offers)
+         [(ledger-command "negotiation/offer-proposed" offer)
+          (command "transport" "deliver-envelope" [offer])])))))
+
+(defn counter-offer
+  [state data]
+  (do
+    (require-open state "negotiation/counter")
+    (require-true (get data "member_authorized") "member_authorized")
+    (let [previous-id (require-present (get data "supersedes") "supersedes")
+          previous (get (get state "offers") previous-id)
+          offer-id (require-present (get data "offer_id") "offer_id")]
+      (require-present previous "superseded_offer")
+      (require-present (get data "offer_root") "offer_root")
+      (require-present (get data "terms_root") "terms_root")
+      (if (= "proposed" (get previous "status"))
+        true
+        (throw (ex-info "only a proposed offer may be countered"
+                        {"offer_id" previous-id
+                         "status" (get previous "status")})))
+      (let [offers-with-previous
+            (assoc (get state "offers")
+                   previous-id
+                   (assoc previous "status" "countered"))
+            offer (merge data {"status" "proposed"})
+            offers (assoc offers-with-previous offer-id offer)]
+        (outcome
+         (assoc state "offers" offers)
+         [(ledger-command "negotiation/offer-countered" offer)
+          (command "transport" "deliver-envelope" [offer])])))))
+
+(defn accept-offer
+  [state data]
+  (do
+    (require-open state "negotiation/accept")
+    (require-true (get data "authority_verified") "authority_verified")
+    (let [offer-id (require-present (get data "offer_id") "offer_id")
+          offer (get (get state "offers") offer-id)
+          room (get state "room")]
+      (require-present offer "offer")
+      (if (= "proposed" (get offer "status"))
+        true
+        (throw (ex-info "only a proposed offer may be accepted"
+                        {"offer_id" offer-id
+                         "status" (get offer "status")})))
+      (if (= (get offer "offer_root") (get data "offer_root"))
+        true
+        (throw (ex-info "acceptance must bind the exact offer root"
+                        {"offer_id" offer-id})))
+      (if (= "human-required" (get room "acceptance_mode"))
+        (require-true (get data "human_approval_verified")
+                      "human_approval_verified")
+        true)
+      (let [accepted (merge offer
+                            {"status" "accepted"
+                             "accepted_by" (get data "accepted_by")
+                             "acceptance_root" (get data "acceptance_root")})
+            offers (assoc (get state "offers") offer-id accepted)
+            accepted-root (get offer "offer_root")
+            record (merge data
+                          {"terms_root" (get offer "terms_root")
+                           "accepted_offer_root" accepted-root})]
+        (outcome
+         (merge state
+                {"offers" offers
+                 "accepted_offer" accepted-root})
+         [(ledger-command "negotiation/offer-accepted" record)
+          (command "transport" "deliver-envelope" [record])])))))
+
+(defn close-room
+  [state data]
+  (do
+    (require-open state "room/close")
+    (require-true (get data "authority_verified") "authority_verified")
+    (let [room (merge (get state "room")
+                      {"status" "closed"
+                       "closure_root" (get data "closure_root")})
+          record {"room_id" (get room "room_id")
+                  "closure_root" (get data "closure_root")
+                  "membership_epoch" (get state "membership_epoch")}]
+      (outcome
+       (merge state {"phase" "closed" "room" room})
+       [(ledger-command "room/closed" record)
+        (command "crypto" "destroy-room-epoch"
+                 [(get room "room_id") (get state "membership_epoch")])
+        (command "transport" "publish-closure" [record])]))))
+
+(defn advance
+  [state event]
+  (let [kind (get event "type")
+        data (or (get event "data") {})]
+    (cond
+      (= kind "profile/register") (register-profile state data)
+      (= kind "profile/rotate-key") (rotate-profile-key state data)
+      (= kind "room/create") (create-room state data)
+      (= kind "room/invite") (issue-invite state data)
+      (= kind "room/admit") (admit-member state data)
+      (= kind "room/revoke") (revoke-member state data)
+      (= kind "document/attach") (attach-document state data)
+      (= kind "message/send") (send-message state data)
+      (= kind "negotiation/propose") (propose-offer state data)
+      (= kind "negotiation/counter") (counter-offer state data)
+      (= kind "negotiation/accept") (accept-offer state data)
+      (= kind "room/close") (close-room state data)
+      true
+      (throw (ex-info "unknown agent-room event" {"type" kind})))))

@@ -194,6 +194,7 @@ async function startCeremony() {
   });
   link.addEventListener("error", ({ detail }) => showError(detail.error));
   await dispatchCeremony("ceremony/join", { mode: invite.mode });
+  globalThis.__HESTIA_LAB_CEREMONY_STARTED__ = true;
 }
 
 async function sendPeerState(response) {
@@ -433,10 +434,15 @@ async function consumeCeremony(requestId) {
 }
 
 function showError(error) {
-  console.error(error);
-  if (kernel) dispatchCeremony("error", { message: error?.message ?? String(error) }).catch(console.error);
-  else setStatus("Error", error?.message ?? String(error));
-  log("Error: " + (error?.message ?? String(error)));
+  const message = error?.message ?? String(error);
+  const detail = error?.stack ?? message;
+  console.error(`[hestia-recovery] ${detail}`);
+  globalThis.__HESTIA_LAB_ERROR__ = message;
+  if (kernel) dispatchCeremony("error", { message }).catch((failure) => {
+    console.error(`[hestia-recovery] unable to enter error state: ${failure?.stack ?? failure}`);
+  });
+  else setStatus("Error", message);
+  log("Error: " + message);
 }
 
 elements.createInvite.addEventListener("click", () => {
@@ -452,6 +458,7 @@ elements.requestRecovery.addEventListener("click", () => dispatchCeremony("recov
 elements.approveShare.addEventListener("click", () => dispatchCeremony("recovery/approve").catch(showError));
 elements.rejectShare.addEventListener("click", () => dispatchCeremony("recovery/reject").catch(showError));
 window.addEventListener("beforeunload", () => link?.close());
+globalThis.__HESTIA_LAB_MODULE_READY__ = true;
 
 if (location.hash) startCeremony().catch(async (error) => {
   if (error?.code === "HESTIA_INVITE_V1") {
@@ -467,4 +474,5 @@ else createCeremonyKernel().then(async (created) => {
   kernel = created;
   applyKernelView(await kernel.view());
   render();
+  globalThis.__HESTIA_LAB_IDLE_READY__ = true;
 }).catch(showError);

@@ -15,7 +15,14 @@ jobs:
       - run: npm ci && npm run build
         working-directory: site
       - run: node browser/scripts/build-pages.mjs
-      - run: cp -R .pages/recovery site/dist/recovery-demo && cp -R .pages/hestia-browser site/dist/hestia-browser && cp -R .pages/hara-runtime site/dist/hara-runtime && cp -R .pages/hara site/dist/hara
+      - name: Add browser products to the site artifact
+        run: |
+          cp -R .pages/recovery site/dist/recovery
+          cp -R .pages/recovery site/dist/recovery-demo
+          cp -R .pages/rooms site/dist/rooms
+          cp -R .pages/hestia-browser site/dist/hestia-browser
+          cp -R .pages/hara-runtime site/dist/hara-runtime
+          cp -R .pages/hara site/dist/hara
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with: { path: site/dist }

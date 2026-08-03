@@ -5,3 +5,7 @@ export * from "./invite.js";
 export * from "./peer.js";
 export * from "./protocol.js";
 export * from "./storage.js";
+export * from "./agent-room-kernel.js";
+export * from "./agent-protocol.js";
+export * from "./agent-hcv1.js";
+export * from "./agent-room-storage.js";

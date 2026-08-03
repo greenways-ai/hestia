@@ -14,6 +14,7 @@ await mkdir(output, { recursive: true });
 await cp(resolve(repository, "browser/site"), output, { recursive: true });
 await cp(resolve(repository, "browser/demo"), resolve(output, "recovery"), { recursive: true });
 await cp(resolve(repository, "browser/lab"), resolve(output, "recovery/lab"), { recursive: true });
+await cp(resolve(repository, "browser/rooms"), resolve(output, "rooms"), { recursive: true });
 await cp(resolve(repository, "browser/src"), resolve(output, "hestia-browser"), { recursive: true });
 await cp(resolve(repository, "browser/vendor/hara"), resolve(output, "hara-runtime"), { recursive: true });
 await cp(resolve(repository, "browser/hara"), resolve(output, "hara"), { recursive: true });

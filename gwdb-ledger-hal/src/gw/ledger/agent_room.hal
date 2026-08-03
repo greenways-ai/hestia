@@ -1,0 +1,182 @@
+(ns gw.ledger.agent-room
+  (:require [gw.ledger.codec :as codec]))
+
+(def protocol "hestia-agent/1")
+(def record-version 1)
+(def record-type-tag 14)
+
+(defn field-names
+  "Returns the normative field order for one Hestia agent-room record. Every
+   field value is an HCV1 root; optional values use the canonical nil root."
+  [kind]
+  (cond
+    (= kind "profile/version")
+    ["profile-id" "sequence" "previous-profile" "name" "profile-kind"
+     "root-key" "operational-key" "delegation"]
+
+    (= kind "profile/key-delegation")
+    ["delegation-id" "issuer-profile" "issuer-key" "subject-key"
+     "subject-public-key" "purposes" "scope" "valid-from" "valid-until"
+     "revocation"]
+
+    (= kind "room/version")
+    ["room-id" "sequence" "previous-room" "host-profile" "policy" "kernel"
+     "acceptance-mode"]
+
+    (= kind "room/invitation")
+    ["invite-id" "room" "host-profile-id" "host-profile" "role" "purposes"
+     "expires-at" "capability-commitment" "one-time"]
+
+    (= kind "room/admission-proof")
+    ["proof-id" "invitation" "invite-id" "room" "guest-profile-id"
+     "guest-profile" "guest-key" "capability-proof"]
+
+    (= kind "room/membership")
+    ["room" "member-profile" "role" "purposes" "status" "joined-epoch"
+     "revoked-epoch" "delegation"]
+
+    (= kind "room/message")
+    ["message-id" "room" "membership-epoch" "sender-profile" "sent-at" "iv"
+     "ciphertext" "ciphertext-root"]
+
+    (= kind "room/message-intent")
+    ["room" "membership-epoch" "sender-profile" "envelope" "ciphertext"
+     "delivery-policy"]
+
+    (= kind "document/version")
+    ["document-id" "version" "previous-version" "content" "media-type"
+     "author-profile" "created-at"]
+
+    (= kind "room/document-attachment")
+    ["room" "document" "document-policy" "attached-by"]
+
+    (= kind "negotiation/offer")
+    ["offer-id" "room" "terms" "offered-by" "supersedes" "valid-until"
+     "authority"]
+
+    (= kind "negotiation/acceptance")
+    ["offer" "accepted-by" "human-approval" "accepted-at" "authority"]
+
+    (= kind "ledger/signed-record")
+    ["body" "signer-key" "signature"]
+
+    (= kind "ledger/verification-receipt")
+    ["record" "body" "signer-key" "environment-key" "outcome" "sequence"]
+
+    (= kind "ledger/admission-receipt")
+    ["previous-state" "event" "policy" "kernel" "result-state" "effect-plan"
+     "record" "outcome" "sequence"]
+
+    true
+    (throw (ex-info "unknown Hestia agent-room record kind" {"kind" kind}))))
+
+(defn roots-valid
+  [roots position]
+  (cond
+    (>= position (count roots)) true
+    (= 64 (count (nth roots position))) (roots-valid roots (+ position 1))
+    true false))
+
+(defn require-schema
+  [kind names roots]
+  (cond
+    (not (= (count names) (count roots)))
+    (throw (ex-info "Hestia agent-room record field count mismatch"
+                    {"kind" kind
+                     "expected" (count names)
+                     "actual" (count roots)}))
+
+    (not (roots-valid roots 0))
+    (throw (ex-info "Hestia agent-room fields must be 64-character HCV1 root transport values"
+                    {"kind" kind}))
+
+    true true))
+
+(defn roots-payload
+  [roots]
+  (reduce (fn [out root] (str out root)) "" roots))
+
+(defn record-payload
+  "Frames one native HCV1 record payload. Schema order makes every position
+   meaningful, and fixed-width roots make the payload unambiguous."
+  [kind roots]
+  (let [names (field-names kind)]
+    (do
+      (require-schema kind names roots)
+      (str "R:" protocol ":" kind ":" record-version ":"
+           (count roots) ":" (roots-payload roots)))))
+
+(defn record-refs-tail
+  [names roots position refs]
+  (if (>= position (count names))
+    refs
+    (record-refs-tail
+     names roots (+ position 1)
+     (conj refs
+           {:position position
+            :role (nth names position)
+            :child-root (nth roots position)}))))
+
+(defn record-refs
+  [kind roots]
+  (let [names (field-names kind)]
+    (do
+      (require-schema kind names roots)
+      (record-refs-tail names roots 0 []))))
+
+(defn record-cell
+  "Constructs one native HCV1 record through explicit UTF-8 and SHA-256 host
+   capabilities. The returned references are suitable for HCP1 transport."
+  [utf8-byte-count utf8-hex sha256 kind roots]
+  (codec/canonical-text-cell
+   utf8-byte-count utf8-hex sha256 record-type-tag
+   (record-payload kind roots)
+   (record-refs kind roots)))
+
+(defn signing-payload
+  "Returns the domain-separated UTF-8 bytes signed for an agent-room body root."
+  [kind body-root]
+  (do
+    (if (= 64 (count body-root))
+      true
+      (throw (ex-info "agent-room signing body must be one HCV1 root"
+                      {"kind" kind})))
+    (str "GWAR1:" kind ":" body-root)))
+
+(defn signed-envelope
+  "Portable diagnostic envelope. The body and signature remain canonical HCV1
+   cells; this map is transport metadata and is not itself signed."
+  [kind body-root signer-key-root signature-root]
+  {:protocol protocol
+   :kind kind
+   :body-root body-root
+   :signer-key-root signer-key-root
+   :signature-root signature-root
+   :signing-payload (signing-payload kind body-root)})
+
+(defn signed-record-cell
+  [utf8-byte-count utf8-hex sha256 body-root signer-key-root signature-root]
+  (record-cell
+   utf8-byte-count utf8-hex sha256 "ledger/signed-record"
+   [body-root signer-key-root signature-root]))
+
+(defn verification-receipt-cell
+  "Commits successful cryptographic verification before application policy
+   admission. The environment signs this body as another ledger/signed-record."
+  [utf8-byte-count utf8-hex sha256 record-root body-root signer-key-root
+   environment-key-root outcome-root sequence-root]
+  (record-cell
+   utf8-byte-count utf8-hex sha256 "ledger/verification-receipt"
+   [record-root body-root signer-key-root environment-key-root outcome-root
+    sequence-root]))
+
+(defn admission-receipt-cell
+  "Commits the complete deterministic transition boundary for an accepted or
+   rejected room event."
+  [utf8-byte-count utf8-hex sha256
+   previous-state-root event-root policy-root kernel-root result-state-root
+   effect-plan-root record-root outcome-root sequence-root]
+  (record-cell
+   utf8-byte-count utf8-hex sha256 "ledger/admission-receipt"
+   [previous-state-root event-root policy-root kernel-root result-state-root
+    effect-plan-root record-root outcome-root sequence-root]))

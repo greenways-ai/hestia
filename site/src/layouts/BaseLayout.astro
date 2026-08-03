@@ -24,7 +24,7 @@ const structuredData = {
   description,
   url: canonical.href,
   codeRepository: "https://github.com/greenways-ai/hestia",
-  license: "https://www.eclipse.org/legal/epl-2.0/",
+  license: "https://www.apache.org/licenses/LICENSE-2.0",
   publisher: { "@type": "Organization", name: "Greenways", url: "https://greenways.ai" }
 };
 ---
@@ -59,12 +59,13 @@ const structuredData = {
   </head>
   <body>
     <a class="skip-link" href="#content">Skip to content</a>
-    <SharedHeader project="hestia" title="Hestia" homeHref={base} searchBase={base.replace(/\/$/, "")} nav={[{label:"Purpose",href:"#purpose"},{label:"Trust",href:"#trust"},{label:"Architecture",href:"#architecture"}]} githubHref="https://github.com/greenways-ai/hestia" cta={{label:"Recovery demo ↗",href:"https://hestia-demo.greenways.ai/recovery/"}} />
+    <SharedHeader project="hestia" title="Hestia" homeHref={base} searchBase={base.replace(/\/$/, "")} nav={[{label:"Purpose",href:`${base}#purpose`},{label:"Trust",href:`${base}#trust`},{label:"Architecture",href:`${base}#architecture`},{label:"Agent rooms",href:`${base}rooms/`}]} githubHref="https://github.com/greenways-ai/hestia" cta={{label:"Open agent rooms ↗",href:`${base}rooms/`}} />
     <main id="content"><slot /></main>
     <footer class="site-footer">
       <div><span class="wordmark-text">GREENWAYS / HESTIA</span><p>A sovereign hearth for digital identity.</p></div>
       <nav aria-label="Footer navigation">
         <a href="https://greenways.ai/opensource/hestia/">Greenways project</a>
+        <a href={`${base}rooms/`}>Private agent rooms ↗</a>
         <a href="https://hestia-demo.greenways.ai/recovery/">Recovery demo ↗</a>
         <a href="https://github.com/greenways-ai/hestia">GitHub ↗</a>
         <a href="mailto:hello@greenways.ai">hello@greenways.ai</a>

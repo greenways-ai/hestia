@@ -6,16 +6,20 @@ import { expect, test } from "@playwright/test";
 import { createSignalingServer } from "../../services/signaling/src/server.mjs";
 
 const browserRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const activeContexts = new Set();
 let signal;
 let staticServer;
 let origin;
 let signalEndpoint;
+
+test.describe.configure({ mode: "serial" });
 
 function contentType(path) {
   return {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
+    ".wasm": "application/wasm",
     ".webp": "image/webp"
   }[extname(path)] ?? "application/octet-stream";
 }
@@ -63,6 +67,12 @@ test.beforeAll(async () => {
   origin = "http://127.0.0.1:" + staticServer.address().port;
 });
 
+test.afterEach(async () => {
+  const contexts = [...activeContexts];
+  activeContexts.clear();
+  await Promise.all(contexts.map((context) => context.close().catch(() => undefined)));
+});
+
 test.afterAll(async () => {
   await signal.close();
   await new Promise((resolveClose, reject) => staticServer.close(
@@ -73,6 +83,8 @@ test.afterAll(async () => {
 async function contexts(browser) {
   const firstContext = await browser.newContext();
   const secondContext = await browser.newContext();
+  activeContexts.add(firstContext);
+  activeContexts.add(secondContext);
   await firstContext.addInitScript((endpoint) => {
     globalThis.HESTIA_SIGNAL_URL = endpoint;
   }, signalEndpoint);
@@ -82,30 +94,77 @@ async function contexts(browser) {
   return { firstContext, secondContext };
 }
 
-async function pairAndRecover(browser, mode) {
-  const pair = await contexts(browser);
-  let first = await pair.firstContext.newPage();
-  let second = await pair.secondContext.newPage();
-  for (const [name, page] of [["first", first], ["second", second]]) {
-    page.on("pageerror", (error) => console.error(`${name} page error:`, error));
-    page.on("console", (message) => {
-      if (message.type() === "error") console.error(`${name} console:`, message.text());
-    });
-  }
-  await first.goto(origin + "/recovery/lab/");
-  await first.locator("#mode").selectOption(mode);
-  await first.getByRole("button", { name: "Create private invite" }).click();
-  await expect(first).toHaveURL(/#v=2&ceremony=/);
-  const invite = first.url();
-  await second.goto(invite);
+async function waitForLabMarker(page, marker, label, timeout = 30_000) {
+  await page.waitForFunction(
+    ({ markerName }) => Boolean(globalThis[markerName] || globalThis.__HESTIA_LAB_ERROR__),
+    { markerName: marker },
+    { timeout }
+  );
+  const state = await page.evaluate(() => ({
+    error: globalThis.__HESTIA_LAB_ERROR__ ?? null,
+    status: document.getElementById("statusLabel")?.textContent ?? null,
+    detail: document.getElementById("statusDetail")?.textContent ?? null
+  }));
+  if (state.error) throw new Error(`${label}: ${state.error} (${state.detail ?? "no detail"})`);
+  return state;
+}
 
-  await expect(first.locator("#statusLabel")).toHaveText("Ready", { timeout: 20_000 });
-  await expect(second.locator("#statusLabel")).toHaveText("Ready", { timeout: 20_000 });
-  await first.getByRole("button", { name: "Request recovery" }).click();
-  await expect(second.locator("#approvalPanel")).toBeVisible();
-  await second.getByRole("button", { name: "Approve" }).click();
-  // Firefox CI cold-starts the pinned WASM worker after approval.
-  await expect(first.locator("#statusLabel")).toHaveText("Recovery complete", { timeout: 30_000 });
+async function waitForLabStatus(page, expected, label, timeout = 30_000) {
+  await page.waitForFunction(
+    ({ expectedStatus }) => document.getElementById("statusLabel")?.textContent === expectedStatus
+      || Boolean(globalThis.__HESTIA_LAB_ERROR__),
+    { expectedStatus: expected },
+    { timeout }
+  );
+  const state = await page.evaluate(() => ({
+    error: globalThis.__HESTIA_LAB_ERROR__ ?? null,
+    status: document.getElementById("statusLabel")?.textContent ?? null,
+    detail: document.getElementById("statusDetail")?.textContent ?? null
+  }));
+  if (state.error) throw new Error(`${label}: ${state.error} (${state.detail ?? "no detail"})`);
+  expect(state.status, `${label} status detail: ${state.detail}`).toBe(expected);
+}
+
+function attachDiagnostics(name, page) {
+  page.on("pageerror", (error) => console.error(`${name} page error: ${error?.stack ?? error}`));
+  page.on("console", (message) => {
+    if (message.type() === "error") console.error(`${name} console: ${message.text()}`);
+  });
+}
+
+async function pairAndRecover(browser, mode) {
+  test.setTimeout(90_000);
+  const pair = await contexts(browser);
+  const first = await pair.firstContext.newPage();
+  const second = await pair.secondContext.newPage();
+  attachDiagnostics("first", first);
+  attachDiagnostics("second", second);
+
+  await first.goto(origin + "/recovery/lab/");
+  await waitForLabMarker(first, "__HESTIA_LAB_IDLE_READY__", "first browser idle startup");
+  await first.locator("#mode").selectOption(mode);
+  const createInvite = first.getByRole("button", { name: "Create private invite" });
+  await expect(createInvite).toBeEnabled();
+  await createInvite.click();
+  await expect(first).toHaveURL(/#v=2&ceremony=/, { timeout: 20_000 });
+  await waitForLabMarker(first, "__HESTIA_LAB_CEREMONY_STARTED__", "first browser ceremony startup");
+  const invite = first.url();
+
+  await second.goto(invite);
+  await waitForLabMarker(second, "__HESTIA_LAB_CEREMONY_STARTED__", "second browser ceremony startup");
+  await Promise.all([
+    waitForLabStatus(first, "Ready", "first browser pairing", 35_000),
+    waitForLabStatus(second, "Ready", "second browser pairing", 35_000)
+  ]);
+
+  const requestRecovery = first.getByRole("button", { name: "Request recovery" });
+  await expect(requestRecovery).toBeEnabled({ timeout: 20_000 });
+  await requestRecovery.click();
+  await expect(second.locator("#approvalPanel")).toBeVisible({ timeout: 20_000 });
+  const approve = second.getByRole("button", { name: "Approve" });
+  await expect(approve).toBeEnabled({ timeout: 20_000 });
+  await approve.click();
+  await waitForLabStatus(first, "Recovery complete", "requesting browser recovery", 40_000);
   await expect(first.locator("#result")).toHaveText("Identity proof verified");
   return { ...pair, first, second, invite };
 }
@@ -219,11 +278,13 @@ test("reusable peers sharing one URL recover and reconnect", async ({ browser })
   await new Promise((resolveWait) => setTimeout(resolveWait, 100));
   const first = await state.firstContext.newPage();
   const second = await state.secondContext.newPage();
+  attachDiagnostics("reconnected first", first);
+  attachDiagnostics("reconnected second", second);
   await Promise.all([first.goto(state.invite), second.goto(state.invite)]);
-  await expect(first.locator("#statusLabel")).toHaveText("Ready", { timeout: 20_000 });
-  await expect(second.locator("#statusLabel")).toHaveText("Ready", { timeout: 20_000 });
-  await state.firstContext.close();
-  await state.secondContext.close();
+  await Promise.all([
+    waitForLabStatus(first, "Ready", "reconnected first browser", 35_000),
+    waitForLabStatus(second, "Ready", "reconnected second browser", 35_000)
+  ]);
 });
 
 test("single-use peers erase both shares after recovery", async ({ browser }) => {
@@ -233,9 +294,13 @@ test("single-use peers erase both shares after recovery", async ({ browser }) =>
   await new Promise((resolveWait) => setTimeout(resolveWait, 100));
   const first = await state.firstContext.newPage();
   const second = await state.secondContext.newPage();
+  attachDiagnostics("consumed first", first);
+  attachDiagnostics("consumed second", second);
   await Promise.all([first.goto(state.invite), second.goto(state.invite)]);
+  await Promise.all([
+    waitForLabMarker(first, "__HESTIA_LAB_CEREMONY_STARTED__", "consumed first browser"),
+    waitForLabMarker(second, "__HESTIA_LAB_CEREMONY_STARTED__", "consumed second browser")
+  ]);
   await expect(first.getByRole("button", { name: "Request recovery" })).toBeDisabled();
   await expect(second.getByRole("button", { name: "Request recovery" })).toBeDisabled();
-  await state.firstContext.close();
-  await state.secondContext.close();
 });
