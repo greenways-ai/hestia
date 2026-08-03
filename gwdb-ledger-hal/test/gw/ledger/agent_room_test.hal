@@ -1,0 +1,54 @@
+(ns gw.ledger.agent-room-test
+  (:require [std.lib.test :as test]
+            [gw.ledger.agent-room :as agent-room]))
+
+(def A "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+(def B "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+(def C "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+(def D "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
+(def E "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+(def F "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+(def G "1111111111111111111111111111111111111111111111111111111111111111")
+(def H "2222222222222222222222222222222222222222222222222222222222222222")
+(def I "3333333333333333333333333333333333333333333333333333333333333333")
+
+(def results
+  (let [profile-roots [A B C D E F G H]
+        profile-payload (agent-room/record-payload "profile/version" profile-roots)
+        profile-refs (agent-room/record-refs "profile/version" profile-roots)
+        profile-cell (agent-room/record-cell
+                      (fn [text] (count text))
+                      (fn [text] "00")
+                      (fn [envelope] (str "sha(" envelope ")"))
+                      "profile/version"
+                      profile-roots)
+        receipt (agent-room/admission-receipt-cell
+                 (fn [text] (count text))
+                 (fn [text] "00")
+                 (fn [envelope] (str "sha(" envelope ")"))
+                 A B C D E F G H I)]
+    [(test/check "uses the stable HCV1 record tag"
+                 agent-room/record-type-tag
+                 14)
+     (test/check "frames profile fields in normative order"
+                 profile-payload
+                 (str "R:hestia-agent/1:profile/version:1:8:"
+                      A B C D E F G H))
+     (test/check "assigns field roles to HCP1 references"
+                 [(get (nth profile-refs 0) :role)
+                  (get (nth profile-refs 5) :role)
+                  (get (nth profile-refs 7) :role)]
+                 ["profile-id" "root-key" "delegation"])
+     (test/check "constructs an HCV1 record through explicit capabilities"
+                 (get profile-cell :root)
+                 (str "sha(HCV1:14:" (count profile-payload) ":00)"))
+     (test/check "domain-separates agent-room signing bytes"
+                 (agent-room/signing-payload "negotiation/offer" A)
+                 (str "GWAR1:negotiation/offer:" A))
+     (test/check "commits all admission transition boundaries"
+                 [(count (get receipt :refs))
+                  (get (nth (get receipt :refs) 0) :role)
+                  (get (nth (get receipt :refs) 8) :role)]
+                 [9 "previous-state" "sequence"])]))
+
+(test/print-results results)
