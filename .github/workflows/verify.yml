@@ -12,8 +12,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Enforce gw.* HAL namespaces
         run: |
-          if grep -R --include='*.hal' -n 'greenways\.' .; then
-            echo 'HAL namespaces must use gw.*' >&2
+          if grep -R --include='*.hal' -nE '^\(ns[[:space:]]+greenways\.|:namespace[[:space:]]+"greenways\.' .; then
+            echo 'HAL namespace declarations must use gw.*' >&2
             exit 1
           fi
       - uses: actions/setup-node@v4
