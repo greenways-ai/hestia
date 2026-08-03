@@ -5,11 +5,18 @@ import {
   textDecoder,
   textEncoder
 } from "./encoding.js";
-import { canonical, randomId, sha256 } from "./protocol.js";
+import { randomId } from "./protocol.js";
+import {
+  AGENT_RECORD_SCHEMAS,
+  HCV1_AGENT_PROTOCOL,
+  hcv1KeyFingerprint,
+  hcv1ValueRoot,
+  signHcv1AgentRecord,
+  verifyExactHcv1Acceptance,
+  verifyHcv1AgentRecord
+} from "./agent-hcv1.js";
 
-export const AGENT_PROTOCOL = "hestia-agent/1";
-const RECORD_DOMAIN = textEncoder.encode("HESTIA-AGENT-RECORD/1\0");
-const ROOT_DOMAIN = textEncoder.encode("HESTIA-AGENT-ROOT/1\0");
+export const AGENT_PROTOCOL = HCV1_AGENT_PROTOCOL;
 const CAPABILITY_DOMAIN = textEncoder.encode("HESTIA-ROOM-CAPABILITY/1\0");
 const PROOF_DOMAIN = textEncoder.encode("HESTIA-ROOM-ADMISSION/1\0");
 
@@ -24,38 +31,30 @@ function uniqueSorted(values) {
   return [...new Set(values ?? [])].sort();
 }
 
-function recordUnsigned(type, signerKey, body) {
-  return {
-    protocol: AGENT_PROTOCOL,
-    version: 1,
-    type: requireValue(type, "record type"),
-    signer_key: requireValue(signerKey, "signer key"),
-    body: body ?? null
-  };
+function assertRecordBody(type, body) {
+  const schema = AGENT_RECORD_SCHEMAS[type];
+  if (!schema) throw new Error(`unsupported Hestia agent record type: ${type}`);
+  const allowed = new Set(schema.map(([, property]) => property));
+  const extra = Object.keys(body ?? {}).filter((property) => !allowed.has(property));
+  if (extra.length) {
+    throw new Error(`${type} contains non-canonical fields: ${extra.join(", ")}`);
+  }
 }
 
-function recordBytes(type, signerKey, body) {
-  return concatBytes(
-    RECORD_DOMAIN,
-    textEncoder.encode(canonical(recordUnsigned(type, signerKey, body)))
-  );
-}
-
-async function prefixedRoot(domain, bytes) {
-  return "sha256:" + bytesToBase64Url(await sha256(concatBytes(domain, bytes)));
+async function domainCommitment(domain, ...parts) {
+  const digest = new Uint8Array(await crypto.subtle.digest(
+    "SHA-256",
+    concatBytes(domain, ...parts)
+  ));
+  return (await hcv1ValueRoot(digest)).root;
 }
 
 export async function valueRoot(type, value) {
-  return prefixedRoot(
-    ROOT_DOMAIN,
-    textEncoder.encode(`${type}\0${canonical(value)}`)
-  );
+  return (await hcv1ValueRoot({ type, value })).root;
 }
 
-export async function keyFingerprint(publicJwk) {
-  return "ed25519:" + bytesToBase64Url(await sha256(
-    textEncoder.encode(`HESTIA-ED25519-KEY/1\0${canonical(publicJwk)}`)
-  ));
+export function keyFingerprint(publicJwk) {
+  return hcv1KeyFingerprint(publicJwk);
 }
 
 export async function importAgentPublicKey(publicJwk) {
@@ -101,37 +100,13 @@ export async function generateAgentKey() {
 export async function signAgentRecord(type, body, key) {
   requireValue(key?.id, "key id");
   requireValue(key?.privateKey, "private key");
-  const bytes = recordBytes(type, key.id, body);
-  const root = await prefixedRoot(ROOT_DOMAIN, bytes);
-  const signature = new Uint8Array(await crypto.subtle.sign(
-    { name: "Ed25519" },
-    key.privateKey,
-    bytes
-  ));
-  return {
-    ...recordUnsigned(type, key.id, body),
-    root,
-    signature: bytesToBase64Url(signature)
-  };
+  assertRecordBody(type, body);
+  return signHcv1AgentRecord(type, body, key);
 }
 
 export async function verifyAgentRecord(record, publicKeyOrJwk, expectedType = record?.type) {
-  if (!record || record.protocol !== AGENT_PROTOCOL || record.version !== 1) {
-    throw new Error("invalid Hestia agent record protocol");
-  }
-  if (record.type !== expectedType) throw new Error(`expected ${expectedType} record`);
-  const bytes = recordBytes(record.type, record.signer_key, record.body);
-  const expectedRoot = await prefixedRoot(ROOT_DOMAIN, bytes);
-  if (record.root !== expectedRoot) throw new Error("agent record root mismatch");
-  const publicKey = await importAgentPublicKey(publicKeyOrJwk);
-  const valid = await crypto.subtle.verify(
-    { name: "Ed25519" },
-    publicKey,
-    base64UrlToBytes(record.signature ?? ""),
-    bytes
-  );
-  if (!valid) throw new Error("invalid agent record signature");
-  return record.body;
+  if (record?.type !== expectedType) throw new Error(`expected ${expectedType} record`);
+  return verifyHcv1AgentRecord(record, await importAgentPublicKey(publicKeyOrJwk));
 }
 
 export async function createDelegation({
@@ -212,10 +187,10 @@ export async function createAgentProfile({
   });
   const body = {
     profile_id: profileId,
-    profile_kind: kind,
-    name: requireValue(name, "profile name"),
     sequence: previousProfileRoot ? 2 : 1,
     previous_profile_root: previousProfileRoot,
+    name: requireValue(name, "profile name"),
+    profile_kind: kind,
     root_key: { id: rootKey.id, public_jwk: rootKey.publicJwk },
     operational_key: { id: operationalKey.id, public_jwk: operationalKey.publicJwk },
     delegation
@@ -240,7 +215,8 @@ export async function verifyAgentProfile(profileRecord, { at = new Date() } = {}
     throw new Error("profile delegation issuer mismatch");
   }
   if (delegationBody.subject_key !== body.operational_key.id
-      || canonical(delegationBody.subject_public_jwk) !== canonical(body.operational_key.public_jwk)) {
+      || await keyFingerprint(delegationBody.subject_public_jwk)
+         !== await keyFingerprint(body.operational_key.public_jwk)) {
     throw new Error("profile delegation subject mismatch");
   }
   return {
@@ -252,9 +228,10 @@ export async function verifyAgentProfile(profileRecord, { at = new Date() } = {}
 }
 
 export async function capabilityCommitment(capability, inviteId) {
-  return prefixedRoot(
+  return domainCommitment(
     CAPABILITY_DOMAIN,
-    concatBytes(textEncoder.encode(`${inviteId}\0`), capability)
+    textEncoder.encode(`${inviteId}\0`),
+    capability
   );
 }
 
@@ -283,8 +260,8 @@ export async function createRoomInvite({
     role,
     purposes: uniqueSorted(purposes),
     expires_at: expiresAt,
-    one_time: true,
-    capability_commitment: await capabilityCommitment(capability, inviteId)
+    capability_commitment: await capabilityCommitment(capability, inviteId),
+    one_time: true
   };
   return {
     record: await signAgentRecord("room/invitation", body, hostOperationalKey),
@@ -322,7 +299,10 @@ export async function verifyRoomInvite({
 }
 
 export function encodeRoomInvite(inviteRecord, capability) {
-  const record = bytesToBase64Url(textEncoder.encode(JSON.stringify(inviteRecord)));
+  const { hcp1_pack: ignoredPack, hcv1_cells: ignoredCells, ...projection } = inviteRecord;
+  void ignoredPack;
+  void ignoredCells;
+  const record = bytesToBase64Url(textEncoder.encode(JSON.stringify(projection)));
   return `#v=1&invite=${encodeURIComponent(record)}&cap=${encodeURIComponent(bytesToBase64Url(capability))}`;
 }
 
@@ -339,12 +319,10 @@ export function decodeRoomInvite(fragment) {
 }
 
 async function admissionCapabilityProof(capability, inviteRoot, guestProfileRoot) {
-  return prefixedRoot(
+  return domainCommitment(
     PROOF_DOMAIN,
-    concatBytes(
-      capability,
-      textEncoder.encode(`${inviteRoot}\0${guestProfileRoot}`)
-    )
+    capability,
+    textEncoder.encode(`${inviteRoot}\0${guestProfileRoot}`)
   );
 }
 
@@ -448,25 +426,25 @@ export async function sealRoomMessage({
     sent_at: sentAt
   };
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const additionalData = textEncoder.encode(canonical(metadata));
+  const additionalData = textEncoder.encode(JSON.stringify(metadata));
   const ciphertext = new Uint8Array(await crypto.subtle.encrypt({
     name: "AES-GCM",
     iv,
     additionalData,
     tagLength: 128
   }, epochKey, textEncoder.encode(plaintext)));
+  const encodedCiphertext = bytesToBase64Url(ciphertext);
   const body = {
     ...metadata,
     iv: bytesToBase64Url(iv),
-    ciphertext: bytesToBase64Url(ciphertext),
-    ciphertext_root: await valueRoot("room/ciphertext", bytesToBase64Url(ciphertext))
+    ciphertext: encodedCiphertext,
+    ciphertext_root: await valueRoot("room/ciphertext", encodedCiphertext)
   };
   return signAgentRecord("room/message", body, signingKey);
 }
 
 export async function openRoomMessage({ messageRecord, epochKey, senderPublicKey }) {
   const body = await verifyAgentRecord(messageRecord, senderPublicKey, "room/message");
-  const ciphertext = base64UrlToBytes(body.ciphertext);
   const expectedRoot = await valueRoot("room/ciphertext", body.ciphertext);
   if (body.ciphertext_root !== expectedRoot) throw new Error("room ciphertext root mismatch");
   const metadata = {
@@ -479,9 +457,9 @@ export async function openRoomMessage({ messageRecord, epochKey, senderPublicKey
   const plaintext = await crypto.subtle.decrypt({
     name: "AES-GCM",
     iv: base64UrlToBytes(body.iv),
-    additionalData: textEncoder.encode(canonical(metadata)),
+    additionalData: textEncoder.encode(JSON.stringify(metadata)),
     tagLength: 128
-  }, epochKey, ciphertext);
+  }, epochKey, base64UrlToBytes(body.ciphertext));
   return textDecoder.decode(plaintext);
 }
 
@@ -518,17 +496,18 @@ export async function createOffer({
   signingKey,
   offerId = `offer:${randomId()}`,
   supersedes = null,
-  validUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+  validUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  authorityRoot = null
 }) {
   const termsRoot = await valueRoot("negotiation/terms", terms);
   const body = {
     offer_id: offerId,
     room_id: roomId,
-    terms_root: termsRoot,
     terms,
     offered_by: offeredBy,
     supersedes,
-    valid_until: validUntil
+    valid_until: validUntil,
+    authority_root: authorityRoot
   };
   return {
     record: await signAgentRecord("negotiation/offer", body, signingKey),
@@ -541,14 +520,15 @@ export async function createAcceptance({
   acceptedBy,
   signingKey,
   humanApprovalRoot,
-  acceptedAt = new Date().toISOString()
+  acceptedAt = new Date().toISOString(),
+  authorityRoot = null
 }) {
   const body = {
-    offer_id: offerRecord.body.offer_id,
     offer_root: offerRecord.root,
     accepted_by: acceptedBy,
     human_approval_root: requireValue(humanApprovalRoot, "human approval root"),
-    accepted_at: acceptedAt
+    accepted_at: acceptedAt,
+    authority_root: authorityRoot
   };
   return signAgentRecord("negotiation/acceptance", body, signingKey);
 }
@@ -559,15 +539,11 @@ export async function verifyAcceptance({
   acceptanceRecord,
   acceptancePublicKey
 }) {
-  await verifyAgentRecord(offerRecord, offerPublicKey, "negotiation/offer");
-  const acceptance = await verifyAgentRecord(
+  if (offerRecord?.type !== "negotiation/offer") throw new Error("expected a negotiation offer");
+  return verifyExactHcv1Acceptance({
+    offerRecord,
+    offerPublicKey: await importAgentPublicKey(offerPublicKey),
     acceptanceRecord,
-    acceptancePublicKey,
-    "negotiation/acceptance"
-  );
-  if (acceptance.offer_root !== offerRecord.root
-      || acceptance.offer_id !== offerRecord.body.offer_id) {
-    throw new Error("acceptance does not bind the exact offer root");
-  }
-  return acceptance;
+    acceptancePublicKey: await importAgentPublicKey(acceptancePublicKey)
+  });
 }
