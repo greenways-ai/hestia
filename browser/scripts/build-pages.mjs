@@ -12,6 +12,7 @@ if (dirname(output) !== repository || !output.endsWith("/.pages")) {
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 await cp(resolve(repository, "browser/site"), output, { recursive: true });
+await cp(resolve(repository, "site/public/assets"), resolve(output, "assets"), { recursive: true });
 await cp(resolve(repository, "browser/demo"), resolve(output, "recovery"), { recursive: true });
 await cp(resolve(repository, "browser/lab"), resolve(output, "recovery/lab"), { recursive: true });
 await cp(resolve(repository, "browser/rooms"), resolve(output, "rooms"), { recursive: true });
