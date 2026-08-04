@@ -1,5 +1,7 @@
 import { DocumentRoom as DocumentRoomCore } from "./document-room.js";
 
+const acceptGenesisRecord = DocumentRoomCore.prototype.acceptGenesis;
+
 export function sequenceDocumentRoomBatch(room, batch, authorMemberId) {
   if (!(room instanceof DocumentRoomCore)) {
     throw new Error("sequenceDocumentRoomBatch requires a DocumentRoom");
@@ -21,5 +23,18 @@ if (!Object.hasOwn(DocumentRoomCore.prototype, "sequenceBatch")) {
     }
   });
 }
+
+Object.defineProperty(DocumentRoomCore.prototype, "acceptGenesis", {
+  configurable: false,
+  enumerable: false,
+  writable: false,
+  value(genesis) {
+    const record = genesis?.record ?? genesis;
+    return acceptGenesisRecord.call(this, record).then((accepted) => {
+      this.genesis = genesis?.record ? genesis : { record: accepted };
+      return this.genesis;
+    });
+  }
+});
 
 export const DocumentRoom = DocumentRoomCore;
