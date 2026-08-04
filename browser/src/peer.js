@@ -16,22 +16,48 @@ function signalUrl() {
   return url;
 }
 
+/**
+ * Signed, capability-bound WebRTC transport.
+ *
+ * CeremonyPeer keeps its historical name and defaults so recovery callers do
+ * not change. Document rooms opt into a different data protocol and channel
+ * label, plus an optional lossy awareness channel. Signalling stays on the
+ * blind relay's hestia-signal/1 ABI.
+ */
 export class CeremonyPeer extends EventTarget {
-  constructor({ invite, record, endpoint = signalUrl() }) {
+  constructor({
+    invite,
+    record,
+    endpoint = signalUrl(),
+    signalProtocol = "hestia-signal/1",
+    dataProtocol = "hestia-ceremony/1",
+    channelLabel = "hestia-ceremony-v1",
+    awarenessProtocol = null,
+    awarenessChannelLabel = null
+  }) {
     super();
     this.invite = invite;
     this.record = record;
     this.endpoint = endpoint;
+    this.signalProtocol = signalProtocol;
+    this.dataProtocol = dataProtocol;
+    this.channelLabel = channelLabel;
+    this.awarenessProtocol = awarenessProtocol;
+    this.awarenessChannelLabel = awarenessChannelLabel;
     this.signalSequence = 0;
     this.dataSequence = 0;
+    this.awarenessSequence = 0;
     this.receivedSignalSequence = 0;
     this.receivedDataSequence = 0;
+    this.receivedAwarenessSequence = 0;
     this.pendingIce = [];
     this.iceServers = null;
     this.serializeSignalSend = createSerialQueue();
     this.serializeSignalReceive = createSerialQueue();
     this.serializeDataSend = createSerialQueue();
     this.serializeDataReceive = createSerialQueue();
+    this.serializeAwarenessSend = createSerialQueue();
+    this.serializeAwarenessReceive = createSerialQueue();
   }
 
   emit(type, detail = {}) {
@@ -69,7 +95,7 @@ export class CeremonyPeer extends EventTarget {
   sendSignal(type, payload, to = this.peerId ?? null) {
     return this.serializeSignalSend(async () => {
       const envelope = await signEnvelope({
-        protocol: "hestia-signal/1",
+        protocol: this.signalProtocol,
         type,
         ceremony_id: this.invite.ceremony,
         from: this.record.peer_id,
@@ -105,7 +131,7 @@ export class CeremonyPeer extends EventTarget {
       publicKey = await importSigningPublicKey(envelope.payload.signing_public_key);
     }
     const verified = await verifyEnvelope(envelope, publicKey, this.capabilityKey);
-    if (verified.protocol !== "hestia-signal/1") throw new Error("invalid signalling protocol");
+    if (verified.protocol !== this.signalProtocol) throw new Error("invalid signalling protocol");
     if (verified.to && verified.to !== this.record.peer_id) return;
     if (verified.sequence <= this.receivedSignalSequence) throw new Error("replayed signalling message");
     this.receivedSignalSequence = verified.sequence;
@@ -121,7 +147,7 @@ export class CeremonyPeer extends EventTarget {
       this.peerFingerprint = computedFingerprint;
       if (this.record.trusted_peer_fingerprint
           && this.record.trusted_peer_fingerprint !== this.peerFingerprint) {
-        throw new Error("ceremony is already paired with another browser");
+        throw new Error("session is already paired with another browser");
       }
       this.record.trusted_peer_id = this.peerId;
       this.record.trusted_peer_fingerprint = this.peerFingerprint;
@@ -158,7 +184,13 @@ export class CeremonyPeer extends EventTarget {
     });
     this.peerConnection.addEventListener("datachannel", ({ channel }) => this.attachChannel(channel));
     if (this.record.peer_id < this.peerId) {
-      this.attachChannel(this.peerConnection.createDataChannel("hestia-ceremony-v1", { ordered: true }));
+      this.attachChannel(this.peerConnection.createDataChannel(this.channelLabel, { ordered: true }));
+      if (this.awarenessProtocol && this.awarenessChannelLabel) {
+        this.attachChannel(this.peerConnection.createDataChannel(
+          this.awarenessChannelLabel,
+          { ordered: false, maxRetransmits: 0 }
+        ));
+      }
       const offer = await this.peerConnection.createOffer();
       await this.peerConnection.setLocalDescription(offer);
       await this.sendSignal("offer", this.peerConnection.localDescription.toJSON());
@@ -189,7 +221,14 @@ export class CeremonyPeer extends EventTarget {
   }
 
   attachChannel(channel) {
-    if (this.channel) return;
+    if (this.awarenessChannelLabel && channel.label === this.awarenessChannelLabel) {
+      this.attachAwarenessChannel(channel);
+      return;
+    }
+    if (channel.label !== this.channelLabel || this.channel) {
+      channel.close();
+      return;
+    }
     this.channel = channel;
     channel.addEventListener("open", () => this.emit("connected", {
       peerId: this.peerId,
@@ -201,11 +240,25 @@ export class CeremonyPeer extends EventTarget {
     channel.addEventListener("close", () => this.emit("disconnected", { reason: "data channel closed" }));
   }
 
+  attachAwarenessChannel(channel) {
+    if (this.awarenessChannel) {
+      channel.close();
+      return;
+    }
+    this.awarenessChannel = channel;
+    channel.addEventListener("open", () => this.emit("awareness-connected", {
+      peerId: this.peerId
+    }));
+    channel.addEventListener("message", (event) => {
+      this.receiveAwareness(event.data).catch((error) => this.emit("error", { error }));
+    });
+  }
+
   send(type, payload) {
     return this.serializeDataSend(async () => {
-      if (this.channel?.readyState !== "open") throw new Error("ceremony channel is not open");
+      if (this.channel?.readyState !== "open") throw new Error("signed data channel is not open");
       const envelope = await signEnvelope({
-        protocol: "hestia-ceremony/1",
+        protocol: this.dataProtocol,
         type,
         ceremony_id: this.invite.ceremony,
         from: this.record.peer_id,
@@ -225,21 +278,60 @@ export class CeremonyPeer extends EventTarget {
   async receiveDataNow(encoded) {
     const envelope = JSON.parse(encoded);
     const verified = await verifyEnvelope(envelope, this.peerSigningKey, this.capabilityKey);
-    if (verified.protocol !== "hestia-ceremony/1"
+    if (verified.protocol !== this.dataProtocol
         || verified.ceremony_id !== this.invite.ceremony
         || verified.from !== this.peerId
         || verified.to !== this.record.peer_id) {
-      throw new Error("data channel ceremony mismatch");
+      throw new Error("signed data channel session mismatch");
     }
-    if (verified.sequence <= this.receivedDataSequence) throw new Error("replayed ceremony message");
+    if (verified.sequence <= this.receivedDataSequence) throw new Error("replayed data-channel message");
     this.receivedDataSequence = verified.sequence;
     this.emit("message", { type: verified.type, payload: verified.payload });
+  }
+
+  sendAwareness(type, payload) {
+    return this.serializeAwarenessSend(async () => {
+      if (!this.awarenessProtocol || this.awarenessChannel?.readyState !== "open") return false;
+      const envelope = await signEnvelope({
+        protocol: this.awarenessProtocol,
+        type,
+        ceremony_id: this.invite.ceremony,
+        from: this.record.peer_id,
+        to: this.peerId,
+        sequence: ++this.awarenessSequence,
+        nonce: randomId(),
+        payload
+      }, this.record.signing_private, this.capabilityKey);
+      this.awarenessChannel.send(JSON.stringify(envelope));
+      return true;
+    });
+  }
+
+  receiveAwareness(encoded) {
+    return this.serializeAwarenessReceive(() => this.receiveAwarenessNow(encoded));
+  }
+
+  async receiveAwarenessNow(encoded) {
+    const envelope = JSON.parse(encoded);
+    const verified = await verifyEnvelope(envelope, this.peerSigningKey, this.capabilityKey);
+    if (verified.protocol !== this.awarenessProtocol
+        || verified.ceremony_id !== this.invite.ceremony
+        || verified.from !== this.peerId
+        || verified.to !== this.record.peer_id) {
+      throw new Error("awareness channel session mismatch");
+    }
+    // The channel is deliberately unordered and unreliable. Older messages are
+    // stale awareness, not a protocol failure.
+    if (verified.sequence <= this.receivedAwarenessSequence) return;
+    this.receivedAwarenessSequence = verified.sequence;
+    this.emit("awareness", { type: verified.type, payload: verified.payload });
   }
 
   close() {
     if (this.channel?.readyState === "open") {
       this.sendSignal("cancel", {}).catch(() => {});
     }
+    this.awarenessChannel?.close();
     this.channel?.close();
     this.peerConnection?.close();
     this.socket?.close();
