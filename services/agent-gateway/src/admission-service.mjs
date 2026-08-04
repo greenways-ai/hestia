@@ -43,6 +43,11 @@ function publicAdmissionResult(prepared, signedReceiptRootHex, signature) {
       databaseRoot(prepared.result_state_root_hex, "result state root")
     );
   }
+  if (prepared.result_activity_root_hex) {
+    result.result_activity_root = prefixedRoot(
+      databaseRoot(prepared.result_activity_root_hex, "result activity root")
+    );
+  }
   return Object.freeze(result);
 }
 
@@ -98,6 +103,10 @@ async function admitRecord(transaction, submission, environmentId, signer) {
       capability: submission.capability
     });
     commit = (signature) => transaction.commitMember({ ...common, signature });
+  } else if (submission.recordKind === "room/document-attachment"
+      || submission.recordKind === "room/message-intent") {
+    prepared = await transaction.prepareActivity(common);
+    commit = (signature) => transaction.commitActivity({ ...common, signature });
   } else {
     throw new Error(`unhandled admitted record kind: ${submission.recordKind}`);
   }

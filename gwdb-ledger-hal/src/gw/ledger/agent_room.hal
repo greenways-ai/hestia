@@ -50,6 +50,10 @@
     ["room-id" "room-version" "host-profile" "membership-epoch" "members"
      "invitations" "policy" "kernel" "acceptance-mode" "status"]
 
+    (= kind "room/activity-state")
+    ["room-state" "previous-activity" "event" "activity-kind"
+     "actor-profile" "membership-epoch" "sequence"]
+
     (= kind "room/message")
     ["message-id" "room" "membership-epoch" "sender-profile" "sent-at" "iv"
      "ciphertext" "ciphertext-root"]

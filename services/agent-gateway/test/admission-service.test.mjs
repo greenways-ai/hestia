@@ -14,7 +14,8 @@ const ROOTS = Object.freeze({
   admissionReceipt: "f".repeat(64),
   admissionSigned: "1".repeat(64),
   state: "2".repeat(64),
-  environment: "3".repeat(64)
+  environment: "3".repeat(64),
+  activity: "4".repeat(64)
 });
 
 function signer() {
@@ -99,6 +100,21 @@ function database(environmentSigner) {
     async commitMember(input) {
       calls.push(["commitMember", input]);
       return ROOTS.admissionSigned;
+    },
+    async prepareActivity(input) {
+      calls.push(["prepareActivity", input]);
+      return {
+        ...prepared({
+          room_id: "room:test",
+          activity_kind: "message-intent"
+        }),
+        result_state_root_hex: undefined,
+        result_activity_root_hex: ROOTS.activity
+      };
+    },
+    async commitActivity(input) {
+      calls.push(["commitActivity", input]);
+      return ROOTS.admissionSigned;
     }
   };
   return {
@@ -122,11 +138,13 @@ function database(environmentSigner) {
   };
 }
 
-for (const [kind, prepare, commit] of [
-  ["profile/version", "prepareProfile", "commitProfile"],
-  ["room/version", "prepareRoomGenesis", "commitRoomGenesis"],
-  ["room/invitation", "prepareInvitation", "commitInvitation"],
-  ["room/admission-proof", "prepareMember", "commitMember"]
+for (const [kind, prepare, commit, resultRoot] of [
+  ["profile/version", "prepareProfile", "commitProfile", "state"],
+  ["room/version", "prepareRoomGenesis", "commitRoomGenesis", "state"],
+  ["room/invitation", "prepareInvitation", "commitInvitation", "state"],
+  ["room/admission-proof", "prepareMember", "commitMember", "state"],
+  ["room/document-attachment", "prepareActivity", "commitActivity", "activity"],
+  ["room/message-intent", "prepareActivity", "commitActivity", "activity"]
 ]) {
   test(`verifies and admits ${kind} through the exact database capability`, async () => {
     const environmentSigner = signer();
@@ -146,7 +164,13 @@ for (const [kind, prepare, commit] of [
     assert.equal(result.verification.signed_receipt_root, `sha256:${ROOTS.verificationSigned}`);
     assert.equal(result.admission.receipt_root, `sha256:${ROOTS.admissionReceipt}`);
     assert.equal(result.admission.signed_receipt_root, `sha256:${ROOTS.admissionSigned}`);
-    assert.equal(result.admission.result_state_root, `sha256:${ROOTS.state}`);
+    if (resultRoot === "state") {
+      assert.equal(result.admission.result_state_root, `sha256:${ROOTS.state}`);
+      assert.equal(result.admission.result_activity_root, undefined);
+    } else {
+      assert.equal(result.admission.result_activity_root, `sha256:${ROOTS.activity}`);
+      assert.equal(result.admission.result_state_root, undefined);
+    }
     assert.deepEqual(
       db.calls.map(([name]) => name),
       ["begin", "prepareVerification", "commitVerification", prepare, commit, "commit"]

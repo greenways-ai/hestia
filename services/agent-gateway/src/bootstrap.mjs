@@ -4,6 +4,7 @@ import { hcp1Pack } from "../../../browser/src/agent-hcv1.js";
 import {
   mergeHcv1Cells,
   profilePolicyRoots,
+  roomActivityPolicyRoots,
   roomPolicyRoots
 } from "../../../browser/src/agent-room-records.js";
 import { loadEnvironmentSigner } from "./environment-signer.mjs";
@@ -39,9 +40,11 @@ export async function bootstrapAgentEnvironment({
   const signer = await loadEnvironmentSigner(signingKeyFile);
   const profile = await profilePolicyRoots();
   const room = await roomPolicyRoots();
+  const activity = await roomActivityPolicyRoots();
   const bootstrapCells = mergeHcv1Cells(
     profile.bootstrap.hcv1Cells,
-    room.bootstrap.hcv1Cells
+    room.bootstrap.hcv1Cells,
+    activity.bootstrap.hcv1Cells
   );
   const bootstrapPack = Buffer.from(hcp1Pack(bootstrapCells), "utf8");
   const ownedSql = suppliedSql ? null : postgres(url, {
@@ -88,6 +91,16 @@ export async function bootstrapAgentEnvironment({
           ${[...allowedInvitePurposes]}::text[]
         )
       `;
+      await transaction`
+        SELECT * FROM hestia.environment_room_activity_policy_register(
+          ${id},
+          ${rootBytes(activity.documentPolicyRoot, "document policy root")},
+          ${rootBytes(
+            activity.messageDeliveryPolicyRoot,
+            "message delivery policy root"
+          )}
+        )
+      `;
       return {
         environment_id: id,
         environment_key_root: `sha256:${signerRows[0].key_root_hex}`,
@@ -96,6 +109,8 @@ export async function bootstrapAgentEnvironment({
         profile_kernel_root: profile.kernelRoot,
         room_policy_root: room.policyRoot,
         room_kernel_root: room.kernelRoot,
+        document_policy_root: activity.documentPolicyRoot,
+        message_delivery_policy_root: activity.messageDeliveryPolicyRoot,
         allowed_invite_purposes: [...allowedInvitePurposes],
         bootstrap_cell_count: bootstrapCells.length
       };
