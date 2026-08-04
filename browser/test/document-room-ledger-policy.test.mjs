@@ -14,7 +14,7 @@ test("document room delegates transformation to gw.ledger.document-ot", async ()
   assert.doesNotMatch(source, /\(defn transform-artefact-commit/);
 });
 
-test("Pages publishes the canonical ledger sources consumed by the room kernel", async () => {
+test("Pages publishes the canonical ledger and replay sources consumed by the room", async () => {
   const [kernel, build] = await Promise.all([
     read("../src/document-room-kernel.js"),
     read("../scripts/build-pages.mjs")
@@ -25,4 +25,6 @@ test("Pages publishes the canonical ledger sources consumed by the room kernel",
   assert.match(kernel, /hara-ledger\/document_ot\.hal/);
   assert.match(build, /gwdb-ledger-hal\/src\/gw\/ledger\/document_protocol\.hal/);
   assert.match(build, /gwdb-ledger-hal\/src\/gw\/ledger\/document_ot\.hal/);
+  assert.match(build, /resolve\(repository, "protocol"\)/);
+  assert.match(build, /resolve\(output, "protocol"\)/);
 });
