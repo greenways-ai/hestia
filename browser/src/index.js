@@ -18,5 +18,5 @@ export * from "./document-room-invite.js";
 export * from "./document-room-kernel.js";
 export * from "./document-room-member.js";
 export * from "./document-room-records.js";
-export * from "./document-room.js";
-export * from "./document-room-peer.js";
+export * from "./document-room-api.js";
+export * from "./document-room-peer-api.js";
