@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+repo_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
+cd "$repo_root"
+
+project="hestia-document-ledger-ci"
+endpoint="http://127.0.0.1:58787"
+compose=(docker compose --project-name "$project" --env-file .hestia/env -f compose.yaml)
+
+cleanup() {
+  if [[ -f .hestia/env ]]; then
+    "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
+
+scripts/hestia init >/dev/null
+# shellcheck disable=SC1091
+source .hestia/env
+
+"${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
+"${compose[@]}" up --detach --build postgres
+
+postgres_ready=false
+for _ in $(seq 1 120); do
+  if "${compose[@]}" exec -T postgres \
+       pg_isready -U postgres -d hestia >/dev/null 2>&1 \
+     && "${compose[@]}" exec -T postgres \
+       test -f /var/lib/postgresql/data/.hestia-migrations-complete \
+       >/dev/null 2>&1; then
+    postgres_ready=true
+    break
+  fi
+  sleep 1
+done
+if [[ "$postgres_ready" != true ]]; then
+  "${compose[@]}" logs postgres >&2
+  echo "Hestia PostgreSQL did not complete document-ledger initialization" >&2
+  exit 1
+fi
+
+"${compose[@]}" build agent-gateway
+"${compose[@]}" run --rm --no-deps \
+  -e "HESTIA_ADMIN_DATABASE_URL=postgres://postgres:${HESTIA_POSTGRES_PASSWORD}@postgres:5432/hestia?sslmode=disable" \
+  -e "HESTIA_ENVIRONMENT_ID=${HESTIA_ENVIRONMENT_ID:-hestia-local}" \
+  -e "HESTIA_ENVIRONMENT_SIGNING_KEY_FILE=/run/secrets/environment-signing.pem" \
+  agent-gateway node src/bootstrap.mjs >/dev/null
+"${compose[@]}" up --detach agent-gateway
+
+gateway_ready=false
+for _ in $(seq 1 60); do
+  if node -e "fetch('${endpoint}/health').then(async r=>{const j=await r.json();if(!r.ok||j.ok!==true)process.exit(1)}).catch(()=>process.exit(1))"; then
+    gateway_ready=true
+    break
+  fi
+  sleep 1
+done
+if [[ "$gateway_ready" != true ]]; then
+  "${compose[@]}" logs agent-gateway postgres >&2
+  echo "Hestia document gateway did not become ready" >&2
+  exit 1
+fi
+
+result="$(node services/agent-gateway/test-support/document-ledger-http.mjs "$endpoint")"
+document_id="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.document_id)' "$result")"
+expected_text="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.expected_text)' "$result")"
+
+app_psql() {
+  "${compose[@]}" exec -T -e PGPASSWORD="$HESTIA_APP_PASSWORD" postgres \
+    psql --no-psqlrc --set=ON_ERROR_STOP=1 --host 127.0.0.1 \
+      --username hestia_app --dbname hestia "$@"
+}
+
+state="$(
+  app_psql --tuples-only --no-align --field-separator='|' \
+    --set=document_id="$document_id" <<'SQL'
+SELECT
+  head.current_revision,
+  revision.result_ast_projection #>> '{children,0,children,0,text}',
+  (SELECT count(*) FROM hestia.document_revision r
+    WHERE r.document_id = head.document_id),
+  (SELECT count(*) FROM hestia.document_operation_projection o
+    WHERE o.document_id = head.document_id),
+  (SELECT count(*) FROM hestia.document_batch_admission a
+    WHERE a.document_id = head.document_id AND a.status = 'accepted'),
+  (SELECT count(*) FROM hestia.document_record_verification v
+    WHERE v.record_kind IN ('document/batch', 'document/transformation')
+      AND v.status = 'verified')
+FROM hestia.document_head head
+JOIN hestia.document_revision revision
+  ON revision.document_id = head.document_id
+ AND revision.revision = head.current_revision
+WHERE head.document_id = :'document_id';
+SQL
+)"
+
+expected="2|${expected_text}|2|2|2|4"
+if [[ "$state" != "$expected" ]]; then
+  echo "unexpected signed document ledger state: $state" >&2
+  "${compose[@]}" logs agent-gateway postgres >&2 || true
+  exit 1
+fi
+
+if app_psql --command="UPDATE hestia.document_revision SET revision = 99;" \
+  >/dev/null 2>&1; then
+  echo "hestia_app mutated append-only document history" >&2
+  exit 1
+fi
+
+printf 'admitted signed document %s through two OT revisions: %s\n' \
+  "$document_id" "$expected_text"
