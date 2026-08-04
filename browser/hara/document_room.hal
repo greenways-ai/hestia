@@ -1,0 +1,277 @@
+;; Hestia peer document room kernel. The browser owns WebRTC, cryptography and
+;; HCV1 projection; this module owns room lifecycle and adapts browser-shaped
+;; operations to the canonical gw.ledger.document-ot policy.
+(ns hestia.document-room
+  (:require [std.foundation :refer [assoc conj get merge nth]]
+            [gw.ledger.document-ot :as document-ot]))
+
+(def protocol "hestia-document-room/1")
+(def awareness-protocol "hestia-document-awareness/1")
+(def max-batch-operations document-ot/max-batch-operations)
+
+(defn command
+  [capability action args]
+  {"capability" capability "action" action "args" args})
+
+(defn initial-state
+  [role room-id document-id]
+  {"phase" "pairing"
+   "role" role
+   "room_id" room-id
+   "document_id" document-id
+   "epoch" 1
+   "connected" false
+   "revision" 0
+   "head_root" nil
+   "peer_id" nil
+   "pending_batches" 0
+   "last_outcome" nil
+   "error" nil})
+
+(defn status-copy
+  [state]
+  (let [phase (get state "phase")]
+    (cond
+      (= phase "pairing") ["Waiting for the other kernel" "Open the private room invite in a second browser."]
+      (= phase "connecting") ["Connecting kernels" "Negotiating an authenticated WebRTC channel."]
+      (= phase "joining") ["Authorising peer" "Exchanging room member keys and the signed room genesis."]
+      (= phase "active") ["Document room active" "Signed batches are sequenced and verified by both kernels."]
+      (= phase "sequencing") ["Sequencing signed batch" "The room kernel is transforming the batch onto the current head."]
+      (= phase "verifying") ["Verifying revision" "Replaying transformed operations and checking every signed root."]
+      (= phase "conflict") ["Signed conflict" "The document head was preserved and a conflict receipt was retained."]
+      (= phase "disconnected") ["Peer disconnected" "Local edits can continue as private pending batches."]
+      (= phase "error") ["Room held" (get state "error")]
+      true ["Hestia document room" phase])))
+
+(defn view
+  [state]
+  (let [copy (status-copy state)]
+    {"phase" (get state "phase")
+     "role" (get state "role")
+     "room_id" (get state "room_id")
+     "document_id" (get state "document_id")
+     "epoch" (get state "epoch")
+     "connected" (get state "connected")
+     "revision" (get state "revision")
+     "head_root" (get state "head_root")
+     "pending_batches" (get state "pending_batches")
+     "last_outcome" (get state "last_outcome")
+     "status_label" (nth copy 0)
+     "status_detail" (nth copy 1)}))
+
+(defn outcome
+  [state commands]
+  {"state" state "view" (view state) "commands" commands})
+
+(defn advance
+  [state event]
+  (let [kind (get event "type")
+        data (or (get event "data") {})]
+    (cond
+      (= kind "room/start")
+      (outcome state [(command "transport" "connect" [])])
+
+      (= kind "transport/connecting")
+      (outcome (assoc state "phase" "connecting") [])
+
+      (= kind "transport/connected")
+      (outcome (merge state {"phase" "joining" "connected" true})
+               [(command "transport" "send-join" [])])
+
+      (= kind "peer/joined")
+      (if (= (get state "role") "sequencer")
+        (outcome (assoc state "peer_id" (get data "peer_id"))
+                 [(command "room" "issue-genesis" [data])])
+        (outcome (assoc state "peer_id" (get data "peer_id")) []))
+
+      (= kind "room/genesis-accepted")
+      (outcome (merge state
+                      {"phase" "active"
+                       "epoch" (get data "epoch")
+                       "revision" (get data "revision")
+                       "head_root" (get data "head_root")})
+               [])
+
+      (= kind "edit/submit")
+      (if (= (get state "role") "sequencer")
+        (outcome (assoc state "phase" "sequencing")
+                 [(command "document" "sequence-local-batch" [data])])
+        (outcome (assoc state "pending_batches"
+                        (+ 1 (get state "pending_batches")))
+                 [(command "document" "sign-and-send-batch" [data])]))
+
+      (= kind "batch/received")
+      (if (= (get state "role") "sequencer")
+        (outcome (assoc state "phase" "sequencing")
+                 [(command "document" "sequence-remote-batch" [data])])
+        (throw (ex-info "only the room sequencer may admit batches" {})))
+
+      (= kind "commit/received")
+      (outcome (assoc state "phase" "verifying")
+               [(command "document" "verify-commit" [data])])
+
+      (= kind "revision/applied")
+      (outcome (merge state
+                      {"phase" (if (= (get data "outcome") "conflict")
+                                 "conflict"
+                                 "active")
+                       "revision" (get data "revision")
+                       "head_root" (get data "head_root")
+                       "pending_batches" (max 0 (- (get state "pending_batches") 1))
+                       "last_outcome" (get data "outcome")})
+               [])
+
+      (= kind "transport/disconnected")
+      (outcome (merge state {"phase" "disconnected" "connected" false}) [])
+
+      (= kind "error")
+      (outcome (merge state {"phase" "error" "error" (get data "message")}) [])
+
+      true
+      (throw (ex-info "unknown document room event" {"type" kind})))))
+
+(defn canonical-common
+  [operation]
+  {:id (get operation "id")
+   :type (get operation "type")
+   :base-revision (get operation "baseRevision")
+   :environment-sequence (get operation "environmentSequence")})
+
+(defn canonical-operation
+  [operation]
+  (let [kind (get operation "type")
+        common (canonical-common operation)]
+    (cond
+      (= kind "operation.noop")
+      (merge common {:noop-reason (get operation "noopReason")})
+
+      (= kind "text.splice")
+      (merge common
+             {:target-id (get operation "targetId")
+              :offset (get operation "offset")
+              :delete-count (or (get operation "deleteCount") 0)
+              :insert (or (get operation "insert") "")})
+
+      (= kind "node.insert")
+      (merge common
+             {:parent-id (get operation "parentId")
+              :before-id (get operation "beforeId")
+              :after-id (get operation "afterId")
+              :node (get operation "node")})
+
+      (= kind "node.delete")
+      (merge common
+             {:target-id (get operation "targetId")
+              :expected-root (get operation "expectedRoot")})
+
+      (= kind "node.set-attrs")
+      (merge common
+             {:target-id (get operation "targetId")
+              :expected-attrs (get operation "expectedAttrs")
+              :attrs (get operation "attrs")})
+
+      (= kind "artefact.commit")
+      (merge common
+             {:artefact-id (get operation "artefactId")
+              :artefact-node-id (get operation "artefactNodeId")
+              :source-text-id (get operation "sourceTextId")
+              :source-root (get operation "sourceRoot")
+              :result-root (get operation "resultRoot")
+              :media-type (get operation "mediaType")
+              :display (get operation "display")})
+
+      true
+      (throw (ex-info "unsupported browser document operation"
+                      {"type" kind})))))
+
+(defn canonical-operations
+  [operations]
+  (reduce (fn [out operation]
+            (conj out (canonical-operation operation)))
+          []
+          operations))
+
+(defn project-common
+  [operation]
+  {"id" (get operation :id)
+   "type" (get operation :type)
+   "baseRevision" (get operation :base-revision)
+   "environmentSequence" (get operation :environment-sequence)})
+
+(defn project-operation
+  [operation]
+  (let [kind (get operation :type)
+        common (project-common operation)]
+    (cond
+      (= kind "operation.noop")
+      (merge common {"noopReason" (get operation :noop-reason)})
+
+      (= kind "text.splice")
+      (merge common
+             {"targetId" (get operation :target-id)
+              "offset" (get operation :offset)
+              "deleteCount" (get operation :delete-count)
+              "insert" (get operation :insert)})
+
+      (= kind "node.insert")
+      (merge common
+             {"parentId" (get operation :parent-id)
+              "beforeId" (get operation :before-id)
+              "afterId" (get operation :after-id)
+              "node" (get operation :node)})
+
+      (= kind "node.delete")
+      (merge common
+             {"targetId" (get operation :target-id)
+              "expectedRoot" (get operation :expected-root)})
+
+      (= kind "node.set-attrs")
+      (merge common
+             {"targetId" (get operation :target-id)
+              "expectedAttrs" (get operation :expected-attrs)
+              "attrs" (get operation :attrs)})
+
+      (= kind "artefact.commit")
+      (merge common
+             {"artefactId" (get operation :artefact-id)
+              "artefactNodeId" (get operation :artefact-node-id)
+              "sourceTextId" (get operation :source-text-id)
+              "sourceRoot" (get operation :source-root)
+              "resultRoot" (get operation :result-root)
+              "mediaType" (get operation :media-type)
+              "display" (get operation :display)})
+
+      true
+      (throw (ex-info "unsupported canonical document operation"
+                      {:type kind})))))
+
+(defn project-operations
+  [operations]
+  (reduce (fn [out operation]
+            (conj out (project-operation operation)))
+          []
+          operations))
+
+(defn canonical-batch
+  [batch]
+  {:id (get batch "id")
+   :document-id (get batch "documentId")
+   :base-revision (get batch "baseRevision")
+   :operations (canonical-operations (get batch "operations"))})
+
+(defn project-batch
+  [batch]
+  {"id" (get batch :id)
+   "documentId" (get batch :document-id)
+   "baseRevision" (get batch :base-revision)
+   "operations" (project-operations (get batch :operations))})
+
+(defn transform-batch
+  "Maps browser-shaped operations through the canonical Hara ledger policy and
+   projects the transformed batch back to the browser protocol shape."
+  [batch accepted]
+  (project-batch
+   (document-ot/transform-batch
+    count
+    (canonical-batch batch)
+    (canonical-operations accepted))))

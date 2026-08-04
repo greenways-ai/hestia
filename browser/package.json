@@ -20,7 +20,13 @@
     "./agent-room-storage": "./src/agent-room-storage.js",
     "./document-hcv1": "./src/document-hcv1.js",
     "./document-records": "./src/document-records.js",
-    "./document-gateway": "./src/document-gateway.js"
+    "./document-gateway": "./src/document-gateway.js",
+    "./document-room-invite": "./src/document-room-invite.js",
+    "./document-room-kernel": "./src/document-room-kernel.js",
+    "./document-room-member": "./src/document-room-member.js",
+    "./document-room-records": "./src/document-room-records.js",
+    "./document-room": "./src/document-room-api.js",
+    "./document-room-peer": "./src/document-room-peer-api.js"
   },
   "scripts": {
     "build:pages": "node scripts/build-pages.mjs",

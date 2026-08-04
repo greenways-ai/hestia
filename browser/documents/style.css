@@ -1,0 +1,101 @@
+body {
+  margin: 0;
+  background: var(--hestia-page, #f4f2ec);
+  color: var(--hestia-ink, #17191d);
+}
+
+documents-main,
+main {
+  width: min(1120px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: clamp(64px, 10vw, 140px) 0;
+}
+
+.eyebrow {
+  margin: 0 0 18px;
+  font: 700 .72rem/1.2 ui-monospace, monospace;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  opacity: .62;
+}
+
+h1 {
+  max-width: 900px;
+  margin: 0;
+  font-size: clamp(3.2rem, 9vw, 7.5rem);
+  font-weight: 430;
+  line-height: .91;
+  letter-spacing: -.065em;
+}
+
+.lead {
+  max-width: 720px;
+  margin: 34px 0 0;
+  font-size: clamp(1rem, 1.5vw, 1.22rem);
+  line-height: 1.65;
+  opacity: .72;
+}
+
+.experiences {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 72px;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.experiences article {
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(26px, 4vw, 46px);
+  background: var(--hestia-surface, #fff);
+}
+
+.experiences article > span {
+  font: 700 .7rem/1 ui-monospace, monospace;
+  color: #8b4e32;
+}
+
+.experiences h2 {
+  margin: 48px 0 14px;
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  font-weight: 470;
+  letter-spacing: -.04em;
+}
+
+.experiences p {
+  margin: 0;
+  line-height: 1.6;
+  opacity: .7;
+}
+
+.experiences a {
+  margin-top: auto;
+  padding-top: 34px;
+  color: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.experiences a:hover {
+  color: #8b4e32;
+}
+
+.documents-footer {
+  margin-top: 60px;
+  padding-top: 24px;
+  border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  font: .7rem/1.5 ui-monospace, monospace;
+  opacity: .58;
+}
+
+@media (max-width: 720px) {
+  .experiences {
+    grid-template-columns: 1fr;
+  }
+
+  .experiences article {
+    min-height: 280px;
+  }
+}

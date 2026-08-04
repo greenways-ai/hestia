@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-theme-preference="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#f4f2ec">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data:; worker-src 'self'; base-uri 'none'; form-action 'none'">
+  <title>Hestia Kernel Document Room</title>
+  <meta name="description" content="Edit a signed Hara document directly between two browser kernels over WebRTC.">
+  <link rel="icon" href="../../hestia-browser/app-shell/hestia-sigil.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../hestia-browser/app-shell/hestia-shell.css">
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="../../hestia-browser/app-shell/hestia-shell.js"></script>
+</head>
+<body>
+  <header class="hestia-app-header">
+    <a class="hestia-app-brand" href="../../" aria-label="Hestia home">
+      <img src="../../hestia-browser/app-shell/hestia-sigil.svg" width="48" height="48" alt="">
+      <span class="hestia-app-brand__text"><strong>Hestia</strong><small>Kernel Document Room</small></span>
+    </a>
+    <nav class="hestia-app-nav" aria-label="Document room navigation">
+      <span class="hestia-app-badge">WebRTC OT</span>
+      <a href="#document">Document</a>
+      <a href="#ledger">Ledger</a>
+      <a href="../../rooms/">Agent office</a>
+    </nav>
+    <button class="hestia-theme-toggle" type="button" data-theme-toggle aria-label="Switch theme" title="Toggle light or dark. Shift-click to follow the system theme.">
+      <span class="hestia-theme-toggle__moon" aria-hidden="true">◐</span>
+      <span class="hestia-theme-toggle__sun" aria-hidden="true">☀</span>
+    </button>
+  </header>
+
+  <main class="room-page">
+    <section class="room-hero">
+      <div>
+        <p class="eyebrow">Two browser kernels · direct signed collaboration</p>
+        <h1>Write together without handing the document to a central editor.</h1>
+        <p class="room-hero__lead">One Hara kernel sequences the room. Both kernels verify every contributor batch, transformed operation, revision root and receipt over an authenticated WebRTC channel.</p>
+      </div>
+      <aside class="room-identity">
+        <span id="roleBadge" class="role-badge">Opening room…</span>
+        <dl>
+          <div><dt>Connection</dt><dd id="connectionState">Starting</dd></div>
+          <div><dt>Epoch</dt><dd id="epochState">1</dd></div>
+          <div><dt>Revision</dt><dd id="revisionState">0</dd></div>
+          <div><dt>Head</dt><dd id="headState">Origin</dd></div>
+        </dl>
+      </aside>
+    </section>
+
+    <section class="invite-strip" aria-labelledby="invite-title">
+      <div><p class="eyebrow">Private room invite</p><h2 id="invite-title">Open the second kernel.</h2><p>The capability remains in the URL fragment. The signalling relay can pair the browsers but cannot authenticate or read document messages.</p></div>
+      <div class="invite-control"><input id="inviteUrl" readonly aria-label="Private document room invite"><button id="copyInvite" class="button button--primary" type="button">Copy invite</button></div>
+    </section>
+
+    <div id="roomStatus" class="room-status" role="status" aria-live="polite">
+      <i></i><div><strong id="statusLabel">Starting the Hara kernel…</strong><span id="statusDetail">Loading the signed room policy and WebRTC transport.</span></div>
+    </div>
+
+    <section id="document" class="workspace">
+      <article class="document-sheet">
+        <header class="document-sheet__header">
+          <div><p class="eyebrow">Canonical rich-text/2 document</p><h2>Living systems memorandum</h2></div>
+          <span id="savedState">Revision 0</span>
+        </header>
+
+        <label class="document-field">
+          <span>Shared paragraph</span>
+          <textarea id="bodyText" rows="8" spellcheck="true" disabled></textarea>
+        </label>
+        <div class="edit-controls">
+          <label class="stale-control"><input id="staleBase" type="checkbox"><span>Build this batch from revision 0</span></label>
+          <button id="submitText" class="button button--primary" type="button" disabled>Sign and submit edit</button>
+        </div>
+        <p class="field-note">Use the revision-zero option after the other browser has already committed an edit. The sequencer kernel will transform this stale batch over the accepted room history.</p>
+
+        <section class="artefact-card" aria-labelledby="artefact-title">
+          <header><div><p class="eyebrow">Embedded Hara artefact</p><h3 id="artefact-title">Live calculation</h3></div><span id="artefactMode">live</span></header>
+          <label><span>HAL source</span><textarea id="artefactSource" rows="4" spellcheck="false" disabled></textarea></label>
+          <div class="artefact-actions">
+            <button id="submitSource" class="button" type="button" disabled>Submit source edit</button>
+            <button id="runArtefact" class="button" type="button" disabled>Run in local kernel</button>
+            <button id="commitArtefact" class="button button--ember" type="button" disabled>Commit reviewed snapshot</button>
+          </div>
+          <output id="artefactResult" class="artefact-result">Run the HAL source to project a live result.</output>
+        </section>
+      </article>
+
+      <aside class="room-inspector">
+        <section>
+          <p class="eyebrow">Room peers</p>
+          <h2>Independent verification</h2>
+          <div class="peer-card"><span>Local kernel</span><strong id="localPeer">Preparing key…</strong></div>
+          <div class="peer-card"><span>Remote kernel</span><strong id="remotePeer">Waiting for invite</strong></div>
+          <p>Transport signatures and the private capability protect the channel. GWDP1 signatures protect document intent and revision evidence independently of WebRTC.</p>
+        </section>
+        <section>
+          <p class="eyebrow">Awareness</p>
+          <div class="awareness-card"><span id="remoteAwarenessDot"></span><strong id="remoteAwareness">No remote cursor yet</strong></div>
+          <p>Cursor and focus updates use a separate unordered, non-retransmitted data channel. They never enter the canonical revision graph.</p>
+        </section>
+        <section>
+          <p class="eyebrow">Stale-edit proof</p>
+          <ol>
+            <li>Commit an edit in one browser.</li>
+            <li>In the other browser, tick revision zero.</li>
+            <li>Replace a different part of the original sentence.</li>
+            <li>Submit and inspect the transformed offset in the ledger.</li>
+          </ol>
+        </section>
+      </aside>
+    </section>
+
+    <section id="ledger" class="ledger-section">
+      <header><div><p class="eyebrow">Signed room ledger</p><h2>Every accepted head can be replayed.</h2></div><p>Contributor batch → Hara transformation → revision → environment receipt. Conflicts are signed but do not advance the head.</p></header>
+      <div id="ledgerEntries" class="ledger-entries"><p class="empty-ledger">No signed revisions yet.</p></div>
+    </section>
+
+    <section class="architecture-note">
+      <p class="eyebrow">What is—and is not—central</p>
+      <div><strong>Sequencer kernel</strong><span>Assigns one room order and signs the exact transformation.</span></div>
+      <div><strong>Every kernel</strong><span>Replays operations and checks the same AST, revision and receipt roots.</span></div>
+      <div><strong>Signalling/TURN</strong><span>May help packets meet; it has no document key or ordering authority.</span></div>
+      <div><strong>Durable Hestia</strong><span>Can later import the signed room history for backup, approval and delivery.</span></div>
+    </section>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

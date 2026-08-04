@@ -24,13 +24,19 @@ to learn before using Hestia.
 
 ## Live experiences
 
-The published Hestia site includes two complete browser experiences:
+The published Hestia site includes four browser experiences:
 
 - **Private Agent Office** at `/rooms/` runs the full
   `hestia.agent-room` HAL program. It appoints a principal agent, opens a private
   office, admits a bounded specialist, issues a mandate, records work, negotiates
   revised terms, binds human approval, creates a private receipt, prepares a
   selective presentation, rotates keys, revokes access and closes the office.
+- **Kernel Document Room** at `/documents/room/` connects two browser Hara
+  kernels over authenticated WebRTC. One kernel sequences signed document
+  batches while both independently replay the transformed operations and verify
+  the same revision and receipt roots. The experience includes deliberate
+  stale-base edits, an embedded Hara artefact, ephemeral awareness and explicit
+  reviewed snapshot commits.
 - **Continuity** at `/recovery-demo/` arranges three independent stewards and an
   owner-held factor, then runs the real threshold recovery ceremony locally. A
   coordination service may help the ceremony happen, but it never receives
@@ -38,8 +44,8 @@ The published Hestia site includes two complete browser experiences:
 - **Recovery laboratory** at `/recovery-demo/lab/` exposes the lower-level
   two-browser protocol for operators and protocol developers.
 
-Both primary experiences expose the actual `.hal` source and run it through the
-Hara/WASM browser kernel rather than simulating the workflow in presentation
+The primary experiences expose the actual `.hal` source and run it through the
+Hara/WASM browser kernel rather than simulating workflow policy in presentation
 code.
 
 ## Under the surface
@@ -72,6 +78,7 @@ Hestia Core provides:
 - exact-root human approvals;
 - encrypted room epochs and private update commitments;
 - signed document versions and provenance;
+- signed, peer-to-peer document OT between independently verifying Hara kernels;
 - private work receipts and bounded receipt presentations; and
 - replayable Hara state with ledger, cryptography and transport capabilities
   kept at visible boundaries.
@@ -135,6 +142,7 @@ After `scripts/hestia up`, the local endpoints include:
 
 - `http://127.0.0.1:58080/agent/v1/health` — signed-agent gateway health;
 - `http://127.0.0.1:58080/rooms/` — the Private Agent Office;
+- `http://127.0.0.1:58080/documents/room/` — the two-kernel WebRTC document room;
 - `http://127.0.0.1:58080/recovery/` — the Continuity experience; and
 - `http://127.0.0.1:58080/recovery/lab/` — the low-level recovery laboratory.
 
@@ -143,11 +151,13 @@ After `scripts/hestia up`, the local endpoints include:
 - [Local node operator guide](docs/local-node.md)
 - [Signed-agent gateway](docs/agent-gateway.md)
 - [Document Operations and Provenance Protocol v1](docs/document-protocol-v1.md)
+- [WebRTC kernel document room](docs/webrtc-document-room.md)
 - [Recovery protocol](docs/recovery-protocol.md)
 - [Agent Profiles and Private Rooms Protocol v0](docs/agent-rooms-protocol-v0.md)
 - [Two-browser recovery demo](docs/two-browser-demo.md)
 - [Demo publication guide](docs/publishing-demo.md)
 
 After `scripts/hestia up`, open <http://127.0.0.1:58080/rooms/> for the complete
-private-office workflow, or <http://127.0.0.1:58080/recovery/> to arrange and test
-continuity.
+private-office workflow, <http://127.0.0.1:58080/documents/room/> for direct
+signed document collaboration between two browser kernels, or
+<http://127.0.0.1:58080/recovery/> to arrange and test continuity.
