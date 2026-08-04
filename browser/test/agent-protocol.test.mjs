@@ -65,13 +65,14 @@ test("admits an external agent only with a signed invite and capability proof", 
     guestProfileRecord: guest.record,
     guestOperationalKey: guest.operationalKey
   });
+  const at = new Date();
   const verified = await verifyAdmissionProof({
     proofRecord: proof,
     inviteRecord: invite.record,
     capability: invite.capability,
     hostProfileRecord: host.record,
     guestProfileRecord: guest.record,
-    at: new Date("2026-08-04T00:00:00.000Z")
+    at
   });
   assert.equal(verified.invite.body.room_id, "room:test");
   assert.equal(verified.guest.body.profile_id, guest.record.body.profile_id);
@@ -81,7 +82,7 @@ test("admits an external agent only with a signed invite and capability proof", 
     inviteRecord: invite.record,
     capability: wrongCapability,
     hostProfileRecord: host.record,
-    at: new Date("2026-08-04T00:00:00.000Z")
+    at
   }), /capability/);
 });
 
