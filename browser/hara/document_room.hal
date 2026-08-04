@@ -1,0 +1,282 @@
+;; Hestia peer document room kernel. The browser owns WebRTC, cryptography and
+;; HCV1 projection; this module owns room lifecycle and deterministic OT order.
+(ns hestia.document-room
+  (:require [std.foundation :refer [assoc conj get merge nth]]))
+
+(def protocol "hestia-document-room/1")
+(def awareness-protocol "hestia-document-awareness/1")
+(def max-batch-operations 64)
+
+(defn command
+  [capability action args]
+  {"capability" capability "action" action "args" args})
+
+(defn initial-state
+  [role room-id document-id]
+  {"phase" "pairing"
+   "role" role
+   "room_id" room-id
+   "document_id" document-id
+   "epoch" 1
+   "connected" false
+   "revision" 0
+   "head_root" nil
+   "peer_id" nil
+   "pending_batches" 0
+   "last_outcome" nil
+   "error" nil})
+
+(defn status-copy
+  [state]
+  (let [phase (get state "phase")]
+    (cond
+      (= phase "pairing") ["Waiting for the other kernel" "Open the private room invite in a second browser."]
+      (= phase "connecting") ["Connecting kernels" "Negotiating an authenticated WebRTC channel."]
+      (= phase "joining") ["Authorising peer" "Exchanging room member keys and the signed room genesis."]
+      (= phase "active") ["Document room active" "Signed batches are sequenced and verified by both kernels."]
+      (= phase "sequencing") ["Sequencing signed batch" "The room kernel is transforming the batch onto the current head."]
+      (= phase "verifying") ["Verifying revision" "Replaying transformed operations and checking every signed root."]
+      (= phase "conflict") ["Signed conflict" "The document head was preserved and a conflict receipt was retained."]
+      (= phase "disconnected") ["Peer disconnected" "Local edits can continue as private pending batches."]
+      (= phase "error") ["Room held" (get state "error")]
+      true ["Hestia document room" phase])))
+
+(defn view
+  [state]
+  (let [copy (status-copy state)]
+    {"phase" (get state "phase")
+     "role" (get state "role")
+     "room_id" (get state "room_id")
+     "document_id" (get state "document_id")
+     "epoch" (get state "epoch")
+     "connected" (get state "connected")
+     "revision" (get state "revision")
+     "head_root" (get state "head_root")
+     "pending_batches" (get state "pending_batches")
+     "last_outcome" (get state "last_outcome")
+     "status_label" (nth copy 0)
+     "status_detail" (nth copy 1)}))
+
+(defn outcome
+  [state commands]
+  {"state" state "view" (view state) "commands" commands})
+
+(defn advance
+  [state event]
+  (let [kind (get event "type")
+        data (or (get event "data") {})]
+    (cond
+      (= kind "room/start")
+      (outcome state [(command "transport" "connect" [])])
+
+      (= kind "transport/connecting")
+      (outcome (assoc state "phase" "connecting") [])
+
+      (= kind "transport/connected")
+      (outcome (merge state {"phase" "joining" "connected" true})
+               [(command "transport" "send-join" [])])
+
+      (= kind "peer/joined")
+      (if (= (get state "role") "sequencer")
+        (outcome (assoc state "peer_id" (get data "peer_id"))
+                 [(command "room" "issue-genesis" [data])])
+        (outcome (assoc state "peer_id" (get data "peer_id")) []))
+
+      (= kind "room/genesis-accepted")
+      (outcome (merge state
+                      {"phase" "active"
+                       "epoch" (get data "epoch")
+                       "revision" (get data "revision")
+                       "head_root" (get data "head_root")})
+               [])
+
+      (= kind "edit/submit")
+      (if (= (get state "role") "sequencer")
+        (outcome (assoc state "phase" "sequencing")
+                 [(command "document" "sequence-local-batch" [data])])
+        (outcome (assoc state "pending_batches"
+                        (+ 1 (get state "pending_batches")))
+                 [(command "document" "sign-and-send-batch" [data])]))
+
+      (= kind "batch/received")
+      (if (= (get state "role") "sequencer")
+        (outcome (assoc state "phase" "sequencing")
+                 [(command "document" "sequence-remote-batch" [data])])
+        (throw (ex-info "only the room sequencer may admit batches" {})))
+
+      (= kind "commit/received")
+      (outcome (assoc state "phase" "verifying")
+               [(command "document" "verify-commit" [data])])
+
+      (= kind "revision/applied")
+      (outcome (merge state
+                      {"phase" (if (= (get data "outcome") "conflict")
+                                 "conflict"
+                                 "active")
+                       "revision" (get data "revision")
+                       "head_root" (get data "head_root")
+                       "pending_batches" (max 0 (- (get state "pending_batches") 1))
+                       "last_outcome" (get data "outcome")})
+               [])
+
+      (= kind "transport/disconnected")
+      (outcome (merge state {"phase" "disconnected" "connected" false}) [])
+
+      (= kind "error")
+      (outcome (merge state {"phase" "error" "error" (get data "message")}) [])
+
+      true
+      (throw (ex-info "unknown document room event" {"type" kind})))))
+
+(defn noop
+  [operation reason]
+  (assoc (assoc operation "type" "operation.noop") "noopReason" reason))
+
+(defn inserted-length
+  [operation]
+  (count (or (get operation "insert") "")))
+
+(defn map-position
+  [position accepted association]
+  (let [start (get accepted "offset")
+        deleted (or (get accepted "deleteCount") 0)
+        inserted (inserted-length accepted)
+        end (+ start deleted)]
+    (cond
+      (= deleted 0)
+      (if (or (> position start)
+              (and (= position start) (> association 0)))
+        (+ position inserted)
+        position)
+
+      (or (< position start)
+          (and (= position start) (< association 0)))
+      position
+
+      (or (> position end)
+          (and (= position end) (> association 0)))
+      (+ position (- inserted deleted))
+
+      true
+      (+ start (if (> association 0) inserted 0)))))
+
+(defn transform-text-splice
+  [incoming accepted]
+  (if (not (= (get incoming "targetId") (get accepted "targetId")))
+    incoming
+    (let [accepted-start (get accepted "offset")
+          accepted-delete (or (get accepted "deleteCount") 0)
+          accepted-end (+ accepted-start accepted-delete)
+          incoming-start (get incoming "offset")
+          incoming-delete (or (get incoming "deleteCount") 0)
+          incoming-end (+ incoming-start incoming-delete)
+          incoming-insert (inserted-length incoming)]
+      (cond
+        (and (> accepted-delete 0)
+             (> incoming-insert 0)
+             (= incoming-delete 0)
+             (> incoming-start accepted-start)
+             (< incoming-start accepted-end))
+        (throw (ex-info "insertion falls inside accepted deleted text"
+                        {"code" "text.insert-inside-deleted-range"}))
+
+        (and (= accepted-delete 0)
+             (= incoming-delete 0)
+             (= incoming-start accepted-start))
+        (assoc incoming "offset"
+               (+ incoming-start (inserted-length accepted)))
+
+        true
+        (let [start (map-position incoming-start accepted 1)
+              end (map-position incoming-end accepted 1)
+              next (assoc (assoc incoming "offset" (min start end))
+                          "deleteCount" (max 0 (- end start)))]
+          (if (and (= (get next "deleteCount") 0)
+                   (= (inserted-length next) 0))
+            (noop next "overlapping deletion already accepted")
+            next))))))
+
+(defn targets-deleted-node?
+  [operation deleted-id]
+  (or (= (get operation "targetId") deleted-id)
+      (= (get operation "parentId") deleted-id)
+      (= (get operation "artefactNodeId") deleted-id)))
+
+(defn transform-node-operation
+  [incoming accepted]
+  (cond
+    (and (= (get accepted "type") "node.delete")
+         (= (get incoming "type") "node.delete")
+         (= (get incoming "targetId") (get accepted "targetId")))
+    (noop incoming "target already deleted")
+
+    (and (= (get accepted "type") "node.delete")
+         (targets-deleted-node? incoming (get accepted "targetId")))
+    (throw (ex-info "operation targets a deleted node"
+                    {"code" "node.target-deleted"}))
+
+    true incoming))
+
+(defn transform-artefact-commit
+  [incoming accepted]
+  (cond
+    (and (= (get accepted "type") "node.delete")
+         (= (get incoming "artefactNodeId") (get accepted "targetId")))
+    (throw (ex-info "artefact was deleted before snapshot admission"
+                    {"code" "artefact.deleted"}))
+
+    (and (= (get accepted "type") "text.splice")
+         (= (get incoming "sourceTextId") (get accepted "targetId")))
+    (throw (ex-info "artefact source changed after the batch base"
+                    {"code" "artefact.source-changed"}))
+
+    (and (= (get accepted "type") "artefact.commit")
+         (= (get incoming "artefactId") (get accepted "artefactId"))
+         (= (get incoming "sourceRoot") (get accepted "sourceRoot"))
+         (= (get incoming "resultRoot") (get accepted "resultRoot")))
+    (noop incoming "identical artefact result already committed")
+
+    (and (= (get accepted "type") "artefact.commit")
+         (= (get incoming "artefactId") (get accepted "artefactId")))
+    (throw (ex-info "competing artefact results"
+                    {"code" "artefact.result-conflict"}))
+
+    true incoming))
+
+(defn transform-operation
+  [incoming accepted]
+  (cond
+    (= (get incoming "type") "operation.noop") incoming
+
+    (and (= (get incoming "type") "text.splice")
+         (= (get accepted "type") "text.splice"))
+    (transform-text-splice incoming accepted)
+
+    (= (get incoming "type") "artefact.commit")
+    (transform-artefact-commit incoming accepted)
+
+    true
+    (transform-node-operation incoming accepted)))
+
+(defn transform-through
+  [operation accepted]
+  (reduce (fn [next previous]
+            (transform-operation next previous))
+          operation
+          accepted))
+
+(defn transform-batch
+  "Maps a signed batch through accepted environment operations and earlier
+   transformed operations in its own atomic batch."
+  [batch accepted]
+  (let [operations (get batch "operations")
+        transformed
+        (reduce
+         (fn [out operation]
+           (conj out
+                 (transform-through
+                  (transform-through operation accepted)
+                  out)))
+         []
+         operations)]
+    (assoc batch "operations" transformed)))
