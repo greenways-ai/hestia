@@ -30,8 +30,10 @@ Object.defineProperty(DocumentRoomCore.prototype, "acceptGenesis", {
   writable: false,
   value(genesis) {
     const record = genesis?.record ?? genesis;
-    return acceptGenesisRecord.call(this, record).then((accepted) => {
-      this.genesis = genesis?.record ? genesis : { record: accepted };
+    const compatible = Object.assign({}, record, { record });
+    return acceptGenesisRecord.call(this, compatible).then(() => {
+      this.genesis = genesis?.record ? genesis : { record };
+      this.headRoot = record.root;
       return this.genesis;
     });
   }
