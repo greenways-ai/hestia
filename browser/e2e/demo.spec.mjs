@@ -6,6 +6,8 @@ import { expect, test } from "@playwright/test";
 import { createSignalingServer } from "../../services/signaling/src/server.mjs";
 
 const browserRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const repositoryRoot = resolve(browserRoot, "..");
+const artworkRoot = resolve(repositoryRoot, "site/public/assets");
 const activeContexts = new Set();
 let signal;
 let staticServer;
@@ -19,9 +21,47 @@ function contentType(path) {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
+    ".hal": "text/plain; charset=utf-8",
     ".wasm": "application/wasm",
-    ".webp": "image/webp"
+    ".webp": "image/webp",
+    ".jpg": "image/jpeg",
+    ".svg": "image/svg+xml"
   }[extname(path)] ?? "application/octet-stream";
+}
+
+function resolveRequest(requestPathname) {
+  const pathname = requestPathname.startsWith("/hestia/")
+    ? requestPathname.slice("/hestia".length)
+    : requestPathname;
+  if (pathname === "/recovery/lab/" || pathname === "/recovery/lab") {
+    return resolve(browserRoot, "lab/index.html");
+  }
+  if (pathname.startsWith("/recovery/lab/")) {
+    return resolve(browserRoot, "lab", pathname.slice("/recovery/lab/".length));
+  }
+  if (pathname === "/recovery/" || pathname === "/recovery"
+      || pathname === "/recovery-demo/" || pathname === "/recovery-demo") {
+    return resolve(browserRoot, "demo/index.html");
+  }
+  if (pathname.startsWith("/recovery-demo/")) {
+    return resolve(browserRoot, "demo", pathname.slice("/recovery-demo/".length));
+  }
+  if (pathname.startsWith("/recovery/")) {
+    return resolve(browserRoot, "demo", pathname.slice("/recovery/".length));
+  }
+  if (pathname.startsWith("/hestia-browser/")) {
+    return resolve(browserRoot, "src", pathname.slice("/hestia-browser/".length));
+  }
+  if (pathname.startsWith("/hara-runtime/")) {
+    return resolve(browserRoot, "vendor/hara", pathname.slice("/hara-runtime/".length));
+  }
+  if (pathname.startsWith("/hara/")) {
+    return resolve(browserRoot, "hara", pathname.slice("/hara/".length));
+  }
+  if (pathname.startsWith("/assets/")) {
+    return resolve(artworkRoot, pathname.slice("/assets/".length));
+  }
+  return null;
 }
 
 test.beforeAll(async () => {
@@ -31,23 +71,8 @@ test.beforeAll(async () => {
 
   staticServer = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
-    let file;
-    if (url.pathname === "/recovery/lab/" || url.pathname === "/recovery/lab") {
-      file = resolve(browserRoot, "lab/index.html");
-    } else if (url.pathname.startsWith("/recovery/lab/")) {
-      file = resolve(browserRoot, "lab", url.pathname.slice("/recovery/lab/".length));
-    } else if (url.pathname === "/recovery/" || url.pathname === "/recovery") {
-      file = resolve(browserRoot, "demo/index.html");
-    } else if (url.pathname.startsWith("/recovery/")) {
-      file = resolve(browserRoot, "demo", url.pathname.slice("/recovery/".length));
-    } else if (url.pathname.startsWith("/hestia-browser/")) {
-      file = resolve(browserRoot, "src", url.pathname.slice("/hestia-browser/".length));
-    } else if (url.pathname.startsWith("/hara-runtime/")) {
-      file = resolve(browserRoot, "vendor/hara", url.pathname.slice("/hara-runtime/".length));
-    } else if (url.pathname.startsWith("/hara/")) {
-      file = resolve(browserRoot, "hara", url.pathname.slice("/hara/".length));
-    }
-    if (!file || !file.startsWith(browserRoot)) {
+    const file = resolveRequest(url.pathname);
+    if (!file || (!file.startsWith(browserRoot) && !file.startsWith(artworkRoot))) {
       response.writeHead(404).end();
       return;
     }
@@ -125,6 +150,22 @@ async function waitForLabStatus(page, expected, label, timeout = 30_000) {
   expect(state.status, `${label} status detail: ${state.detail}`).toBe(expected);
 }
 
+async function waitForContinuity(page, timeout = 35_000) {
+  await page.waitForFunction(
+    () => Boolean(globalThis.__HESTIA_CONTINUITY_READY__ || globalThis.__HESTIA_CONTINUITY_ERROR__),
+    undefined,
+    { timeout }
+  );
+  const state = await page.evaluate(() => ({
+    ready: Boolean(globalThis.__HESTIA_CONTINUITY_READY__),
+    error: globalThis.__HESTIA_CONTINUITY_ERROR__ ?? null,
+    status: document.getElementById("kernelState")?.textContent ?? null,
+    detail: document.getElementById("kernelDetail")?.textContent ?? null
+  }));
+  if (state.error) throw new Error(`Continuity kernel failed: ${state.error} (${state.detail ?? "no detail"})`);
+  expect(state.ready).toBe(true);
+}
+
 function attachDiagnostics(name, page) {
   page.on("pageerror", (error) => console.error(`${name} page error: ${error?.stack ?? error}`));
   page.on("console", (message) => {
@@ -200,24 +241,26 @@ test("Hara/WASM owns ceremony transitions, commands, and views", async ({ page }
   expect(result.connected.view.status_label).toBe("Connected");
 });
 
-test("guided demo presents the recovery mechanism as a wombat story", async ({ page }) => {
-  await page.goto(origin + "/recovery/");
-  await expect(page.getByText("Demo", { exact: true })).toBeVisible();
-  await expect(page.locator(".story-step")).toHaveCount(5);
-  await expect(page.getByText("Advanced lab", { exact: true })).toHaveCount(0);
-  await expect(page.getByText(/Custodia communis/)).toHaveCount(0);
-  await expect(page.getByText(/Claves tuae|Colloquium privatum|guardian/i)).toHaveCount(0);
-  const explanation = page.locator(".story-step").first().locator(".help-popover p");
-  await expect(explanation).not.toBeVisible();
-  await page.locator(".story-step").first().locator("summary[aria-label='About identity creation']").click();
-  await expect(explanation).toBeVisible();
-  await expect(page.locator(".story-art").first()).toBeVisible();
-  await expect(page.locator(".story-art")).toHaveCount(5);
-  expect(await page.locator(".story-art").evaluateAll((images) => images.every((image) => image.complete && image.naturalWidth > 0))).toBe(true);
-  await expect(page.locator(".story-art").first()).toHaveAttribute("alt", /Mabel.*wombat/i);
+test("continuity presents a luxury private-office arrangement and starts under the production base path", async ({ page }) => {
+  attachDiagnostics("continuity", page);
+  await page.goto(origin + "/hestia/recovery-demo/");
+  await waitForContinuity(page);
+
+  await expect(page.getByRole("heading", { name: "Continuity, before you need it." })).toBeVisible();
+  await expect(page.locator(".principle-grid article")).toHaveCount(3);
+  await expect(page.getByText(/Mabel|wombat/i)).toHaveCount(0);
+  await expect(page.locator("#halProgramName")).toHaveText("hestia.workflow-v3");
+  await expect(page.locator("#halProgramVersion")).toHaveText("0.4.0");
+  await expect(page.locator("#halEventCount")).toHaveText("15");
+  await expect(page.locator("#halSource")).toContainText("(defn program-info");
+  await expect(page.locator("#halSource")).toContainText("Private Office Continuity");
+
+  const hero = page.locator(".continuity-hero__art img");
+  await expect(hero).toBeVisible();
+  expect(await hero.evaluate((image) => image.complete && image.naturalWidth > 0)).toBe(true);
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator(".story-art").first()).toBeVisible();
-  await expect(page.locator(".story-art").first()).toHaveCSS("object-fit", "cover");
+  await expect(hero).toBeVisible();
+  await expect(hero).toHaveCSS("object-fit", "cover");
 });
 
 test("legacy v1 invite recovers to v2 ceremony creation", async ({ page }) => {
@@ -229,46 +272,54 @@ test("legacy v1 invite recovers to v2 ceremony creation", async ({ page }) => {
   await expect(page).toHaveURL(/#v=2&ceremony=/);
 });
 
-test("guided v3 flow explains, recovers, and uses an identity", async ({ page }) => {
-  test.setTimeout(60_000);
-  await page.goto(origin + "/recovery/");
-  await page.getByRole("button", { name: "Choose recovery helpers" }).click();
+test("guided continuity flow protects, restores, and proves a private office", async ({ page }) => {
+  test.setTimeout(70_000);
+  attachDiagnostics("guided continuity", page);
+  await page.goto(origin + "/hestia/recovery-demo/");
+  await waitForContinuity(page);
+
+  await page.getByRole("button", { name: "Choose continuity stewards" }).click();
   await expect(page.locator(".authority-option")).toHaveCount(6);
   await page.locator(".authority-option").nth(0).click();
   await page.locator(".authority-option").nth(2).click();
   await page.locator(".authority-option").nth(4).click();
-  await page.getByRole("button", { name: "Review protection" }).click();
-  await page.getByRole("button", { name: "Create demo identity" }).click();
-  await expect(page.getByRole("heading", { name: "Mabel's identity is protected" })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText("2-of-3 protection configured")).toBeVisible();
+  await page.getByRole("button", { name: "Review the arrangement" }).click();
+  await page.getByRole("button", { name: "Seal the continuity plan" }).click();
+  await expect(page.getByRole("heading", { name: "Your continuity plan is sealed" })).toBeVisible({ timeout: 25_000 });
+  await expect(page.getByText("2-of-3 stewardship arranged")).toBeVisible();
+
   const secrets = page.locator(".secrets-accordion");
   await expect(secrets).not.toHaveAttribute("open", "");
-  await secrets.getByText("Show secrets", { exact: true }).click();
+  await secrets.getByText("Show continuity material", { exact: true }).click();
   await expect(secrets).toHaveAttribute("open", "");
-  await expect(secrets.getByText("Hide secrets", { exact: true })).toBeVisible();
+  await expect(secrets.getByText("Hide continuity material", { exact: true })).toBeVisible();
   await expect(secrets.locator(".share-grid .secret-card")).toHaveCount(3);
-  await secrets.getByText("Hide secrets", { exact: true }).click();
+  await secrets.getByText("Hide continuity material", { exact: true }).click();
   await expect(secrets).not.toHaveAttribute("open", "");
-  await page.getByRole("button", { name: "Simulate lost access" }).click();
-  await expect(page.getByRole("heading", { name: "Mabel has lost access" })).toBeVisible();
-  await page.getByRole("button", { name: "Ask the helpers" }).click();
+
+  await page.getByRole("button", { name: "Simulate an unavailable office key" }).click();
+  await expect(page.getByRole("heading", { name: "The office key is unavailable" })).toBeVisible();
+  await page.getByRole("button", { name: "Ask the stewards" }).click();
   await page.locator(".authority").nth(0).click();
   await page.locator(".authority").nth(1).click();
-  await page.getByRole("button", { name: "Restore identity" }).click();
-  await expect(page.getByRole("heading", { name: "Mabel's identity is restored" })).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Send a signed demo message" }).click();
-  await expect(page.locator("#chatBadge")).toHaveText("Verified identity");
+  await page.getByRole("button", { name: "Restore the private office" }).click();
+  await expect(page.getByRole("heading", { name: "The private office is restored" })).toBeVisible({ timeout: 35_000 });
+
+  await page.getByRole("button", { name: "Sign a continuity proof" }).click();
+  await expect(page.locator("#chatBadge")).toHaveText("Verified office");
   await page.locator("#technical > summary").click();
-  await page.getByText("Show demo cryptographic values", { exact: true }).click();
-  await expect(page.getByText("Private identity key", { exact: true })).toBeVisible();
-  await expect(page.locator(".raw-values strong").filter({ hasText: "Device-secured factor" })).toBeVisible();
-  await expect(page.locator(".share-grid .secret-card")).toHaveCount(3);
+  await page.getByText("Show demonstration cryptographic values", { exact: true }).click();
+  await expect(page.getByText("Private office key", { exact: true })).toBeVisible();
+  await expect(page.locator(".raw-values strong").filter({ hasText: "Owner-held continuity factor" })).toBeVisible();
+  await expect(page.locator(".raw-values .share-grid .secret-card")).toHaveCount(3);
+
   await page.getByRole("button", { name: "Back" }).click();
-  await expect(page.getByRole("heading", { name: "Two helpers approved recovery" })).toBeVisible();
-  await page.getByRole("button", { name: "Return to restored identity" }).click();
-  await expect(page.getByRole("heading", { name: "Mabel's identity is restored" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Two stewards approved continuity" })).toBeVisible();
+  await page.getByRole("button", { name: "Return to the restored office" }).click();
+  await expect(page.getByRole("heading", { name: "The private office is restored" })).toBeVisible();
   await page.getByRole("button", { name: "Restart" }).click();
-  await expect(page.getByRole("heading", { name: "Meet Mabel the wombat" })).toBeVisible({ timeout: 20_000 });
+  await waitForContinuity(page);
+  await expect(page.getByRole("heading", { name: "Name the office you are protecting" })).toBeVisible({ timeout: 25_000 });
 });
 
 test("reusable peers sharing one URL recover and reconnect", async ({ browser }) => {
