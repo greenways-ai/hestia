@@ -19,7 +19,10 @@ async function argumentsFor(operations) {
     documentValuePlan({ profile: "writer" }),
     documentValuePlan({ purpose: "document.edit" })
   ]);
-  const ast = { id: "document:bound", children: [{ id: "text:one", type: "text", text: "", marks: [] }] };
+  const ast = {
+    id: "document:bound",
+    children: [{ id: "text:one", type: "text", text: "", marks: [] }]
+  };
   return {
     documentId: ast.id,
     baseAst: ast,
@@ -32,14 +35,17 @@ async function argumentsFor(operations) {
 }
 
 test("requires one to 64 independently rooted operations", async () => {
+  const emptyBatch = await argumentsFor([]);
   await assert.rejects(
-    () => createDocumentBatchBundle(await argumentsFor([])),
+    () => createDocumentBatchBundle(emptyBatch),
     /one to 64 operations/
   );
+
+  const oversizedBatch = await argumentsFor(
+    Array.from({ length: 65 }, (_, index) => operation(index))
+  );
   await assert.rejects(
-    () => createDocumentBatchBundle(await argumentsFor(
-      Array.from({ length: 65 }, (_, index) => operation(index))
-    )),
+    () => createDocumentBatchBundle(oversizedBatch),
     /one to 64 operations/
   );
 });
