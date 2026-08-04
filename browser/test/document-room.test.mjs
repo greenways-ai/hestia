@@ -147,3 +147,24 @@ test("tampering with a transformed result is rejected by the receiving kernel", 
   await assert.rejects(() => guest.applyCommit(tampered), /transformation root binding mismatch/);
   assert.equal(text(guest.document), "Hello world");
 });
+
+test("tampering with only the advertised revision root is rejected", async () => {
+  const { host, guest, hostMember } = await rooms();
+  const batch = await host.createBatch([{
+    id: "operation:revision-tamper",
+    type: "text.splice",
+    targetId: "text:one",
+    offset: 0,
+    deleteCount: 0,
+    insert: "Signed "
+  }]);
+  const commit = await host.sequenceBatch(batch, hostMember.descriptor.memberId);
+  const tampered = structuredClone(commit);
+  tampered.revision.root = `sha256:${"0".repeat(64)}`;
+  await assert.rejects(
+    () => guest.applyCommit(tampered),
+    /revision root binding mismatch/
+  );
+  assert.equal(guest.revision, 0);
+  assert.equal(text(guest.document), "Hello world");
+});
