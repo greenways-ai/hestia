@@ -454,8 +454,13 @@ export class DocumentRoom extends EventTarget {
       this.snapshots.get(Number(commit.batch.baseRevision))
     );
     const verified = await verifyRoomCommitBundle(commit, {
-      sequencerPublicJwk: sequencer.publicKeyJwk,
-      expectedPreviousAst: this.document
+      contributorPublicKey: author.publicKeyJwk,
+      contributorProfileRecord: author.profileRecord,
+      contributorDelegationRecord: author.delegationRecord,
+      sequencerPublicKey: sequencer.publicKeyJwk,
+      expectedDocument: this.document,
+      expectedRevision: this.revision,
+      expectedRevisionRoot: this.headRoot
     });
     let replayed = cloneValue(this.document);
     if (commit.outcome === "accepted") {
