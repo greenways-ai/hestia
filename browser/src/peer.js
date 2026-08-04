@@ -7,6 +7,7 @@ import {
   signEnvelope,
   verifyEnvelope
 } from "./protocol.js";
+import { createSerialQueue } from "./kernel-queue.js";
 
 function signalUrl() {
   if (globalThis.HESTIA_SIGNAL_URL) return new URL(globalThis.HESTIA_SIGNAL_URL);
@@ -27,6 +28,10 @@ export class CeremonyPeer extends EventTarget {
     this.receivedDataSequence = 0;
     this.pendingIce = [];
     this.iceServers = null;
+    this.serializeSignalSend = createSerialQueue();
+    this.serializeSignalReceive = createSerialQueue();
+    this.serializeDataSend = createSerialQueue();
+    this.serializeDataReceive = createSerialQueue();
   }
 
   emit(type, detail = {}) {
@@ -61,21 +66,30 @@ export class CeremonyPeer extends EventTarget {
     }));
   }
 
-  async sendSignal(type, payload, to = this.peerId ?? null) {
-    const envelope = await signEnvelope({
-      protocol: "hestia-signal/1",
-      type,
-      ceremony_id: this.invite.ceremony,
-      from: this.record.peer_id,
-      to,
-      sequence: ++this.signalSequence,
-      nonce: randomId(),
-      payload
-    }, this.record.signing_private, this.capabilityKey);
-    this.socket.send(JSON.stringify(envelope));
+  sendSignal(type, payload, to = this.peerId ?? null) {
+    return this.serializeSignalSend(async () => {
+      const envelope = await signEnvelope({
+        protocol: "hestia-signal/1",
+        type,
+        ceremony_id: this.invite.ceremony,
+        from: this.record.peer_id,
+        to,
+        sequence: ++this.signalSequence,
+        nonce: randomId(),
+        payload
+      }, this.record.signing_private, this.capabilityKey);
+      if (this.socket?.readyState !== WebSocket.OPEN) {
+        throw new Error("signalling connection is not open");
+      }
+      this.socket.send(JSON.stringify(envelope));
+    });
   }
 
-  async receiveSignal(encoded) {
+  receiveSignal(encoded) {
+    return this.serializeSignalReceive(() => this.receiveSignalNow(encoded));
+  }
+
+  async receiveSignalNow(encoded) {
     const envelope = JSON.parse(encoded);
     if (envelope.type === "server/ice-config") {
       this.iceServers = envelope.ice_servers ?? [];
@@ -187,22 +201,28 @@ export class CeremonyPeer extends EventTarget {
     channel.addEventListener("close", () => this.emit("disconnected", { reason: "data channel closed" }));
   }
 
-  async send(type, payload) {
-    if (this.channel?.readyState !== "open") throw new Error("ceremony channel is not open");
-    const envelope = await signEnvelope({
-      protocol: "hestia-ceremony/1",
-      type,
-      ceremony_id: this.invite.ceremony,
-      from: this.record.peer_id,
-      to: this.peerId,
-      sequence: ++this.dataSequence,
-      nonce: randomId(),
-      payload
-    }, this.record.signing_private, this.capabilityKey);
-    this.channel.send(JSON.stringify(envelope));
+  send(type, payload) {
+    return this.serializeDataSend(async () => {
+      if (this.channel?.readyState !== "open") throw new Error("ceremony channel is not open");
+      const envelope = await signEnvelope({
+        protocol: "hestia-ceremony/1",
+        type,
+        ceremony_id: this.invite.ceremony,
+        from: this.record.peer_id,
+        to: this.peerId,
+        sequence: ++this.dataSequence,
+        nonce: randomId(),
+        payload
+      }, this.record.signing_private, this.capabilityKey);
+      this.channel.send(JSON.stringify(envelope));
+    });
   }
 
-  async receiveData(encoded) {
+  receiveData(encoded) {
+    return this.serializeDataReceive(() => this.receiveDataNow(encoded));
+  }
+
+  async receiveDataNow(encoded) {
     const envelope = JSON.parse(encoded);
     const verified = await verifyEnvelope(envelope, this.peerSigningKey, this.capabilityKey);
     if (verified.protocol !== "hestia-ceremony/1"
