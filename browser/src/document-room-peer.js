@@ -1,5 +1,9 @@
 import { CeremonyPeer } from "./peer.js";
 import { createSerialQueue } from "./kernel-queue.js";
+import {
+  assertGenesisMemberBinding,
+  verifyDocumentRoomMember
+} from "./document-room-member.js";
 
 export const DOCUMENT_ROOM_DATA_PROTOCOL = "hestia-document-room/1";
 export const DOCUMENT_ROOM_AWARENESS_PROTOCOL = "hestia-document-awareness/1";
@@ -25,6 +29,7 @@ export class DocumentRoomPeer extends EventTarget {
     this.record = record;
     this.room = room;
     this.role = room.role;
+    this.pendingGenesis = null;
     this.serialize = createSerialQueue();
     this.transport = new CeremonyPeer({
       invite,
@@ -43,9 +48,15 @@ export class DocumentRoomPeer extends EventTarget {
   }
 
   bindTransport() {
-    for (const type of ["peer", "connection-state", "disconnected", "error"]) {
+    for (const type of ["peer", "connection-state", "error"]) {
       this.transport.addEventListener(type, ({ detail }) => this.emit(type, detail));
     }
+    this.transport.addEventListener("disconnected", ({ detail }) => {
+      this.serialize(async () => {
+        this.emit("disconnected", detail);
+        await this.execute(await this.room.kernel.dispatch("transport/disconnected", detail));
+      }).catch((error) => this.fail(error));
+    });
     this.transport.addEventListener("connected", ({ detail }) => {
       this.serialize(async () => {
         this.emit("connected", detail);
@@ -62,6 +73,9 @@ export class DocumentRoomPeer extends EventTarget {
   }
 
   async start() {
+    await verifyDocumentRoomMember(this.room.localMember(), {
+      documentId: this.room.document.id
+    });
     await this.execute(await this.room.kernel.dispatch("room/start"));
     return this;
   }
@@ -114,26 +128,49 @@ export class DocumentRoomPeer extends EventTarget {
     this.emit("ready", { role: this.role, genesis });
   }
 
+  async acceptGenesisPayload(payload) {
+    const projections = payload?.genesis?.record?.body?.members;
+    if (!Array.isArray(projections) || !projections.length) {
+      throw new Error("document room genesis has no signed membership");
+    }
+    for (const projection of projections) {
+      const member = this.room.members.get(projection.member_id);
+      if (!member?.profileRecord?.body || !member?.delegationRecord?.body) {
+        this.pendingGenesis = payload;
+        return false;
+      }
+      await verifyDocumentRoomMember(member, { documentId: this.room.document.id });
+      assertGenesisMemberBinding(projection, member);
+    }
+    this.pendingGenesis = null;
+    await this.room.acceptGenesis(payload.genesis);
+    await this.execute(await this.room.kernel.dispatch("room/genesis-accepted", {
+      epoch: payload.genesis.record.body.epoch,
+      revision: this.room.revision,
+      head_root: this.room.headRoot
+    }));
+    this.emit("ready", { role: this.role, genesis: payload.genesis });
+    await this.requestSync();
+    return true;
+  }
+
   async handleMessage(type, payload) {
     if (type === "room/join") {
       if (payload.roomId !== this.room.roomId || payload.documentId !== this.room.document.id) {
         throw new Error("document room join mismatch");
       }
+      await verifyDocumentRoomMember(payload.member, {
+        documentId: this.room.document.id
+      });
       this.room.addMember(payload.member);
       await this.execute(await this.room.kernel.dispatch("peer/joined", {
         peer_id: payload.member.memberId
       }));
+      if (this.pendingGenesis) await this.acceptGenesisPayload(this.pendingGenesis);
       return;
     }
     if (type === "room/genesis") {
-      await this.room.acceptGenesis(payload.genesis);
-      await this.execute(await this.room.kernel.dispatch("room/genesis-accepted", {
-        epoch: payload.genesis.record.body.epoch,
-        revision: this.room.revision,
-        head_root: this.room.headRoot
-      }));
-      this.emit("ready", { role: this.role, genesis: payload.genesis });
-      await this.requestSync();
+      await this.acceptGenesisPayload(payload);
       return;
     }
     if (type === "document/batch") {
@@ -159,7 +196,10 @@ export class DocumentRoomPeer extends EventTarget {
       return;
     }
     if (type === "document/sync-response") {
-      if (!this.room.genesis && payload.genesis) await this.room.acceptGenesis(payload.genesis);
+      if (!this.room.genesis && payload.genesis) {
+        const accepted = await this.acceptGenesisPayload({ genesis: payload.genesis });
+        if (!accepted) return;
+      }
       for (const commit of payload.commits || []) await this.verifyCommit(commit);
       this.emit("sync", { snapshot: payload.snapshot });
       return;
