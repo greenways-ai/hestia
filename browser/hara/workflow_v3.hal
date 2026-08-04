@@ -1,21 +1,45 @@
-;; Guided choose-3, recover-with-2 identity workflow. Hara owns product state and emits
-;; capability commands; the browser is an IOC adapter only.
+;; Hestia continuity workflow for a private agent office.
+;; Hara owns the ceremony state and emits capability commands; browser cryptography
+;; and any optional coordination service remain replaceable host adapters.
 (ns hestia.workflow-v3
   (:require [std.foundation :refer [assoc conj count get merge nth]]))
 
+(def PROGRAM
+  {"namespace" "hestia.workflow-v3"
+   "version" "0.4.0"
+   "title" "Hestia Private Office Continuity"
+   "events" ["scenario/select"
+             "authorities/select"
+             "identity/create"
+             "identity/created"
+             "factor/secured"
+             "education/enrollment-start"
+             "education/enrollment-next"
+             "identity/lost"
+             "recovery/start"
+             "authority/approved"
+             "recovery/code-entered"
+             "education/recovery-start"
+             "education/recovery-next"
+             "recovery/complete"
+             "chat/message"]
+   "promise" "Arrange continuity before it is needed, without placing the private office under one service's control."})
+
+(defn program-info [] PROGRAM)
+
 (def PERSONAL
   {"id" "personal"
-   "title" "Recover a personal identity"
-   "authority_options" [{"id" "notary" "name" "Community Notary" "required" ["passport"]}
-                        {"id" "bank" "name" "Community Bank" "required" ["address"]}
-                        {"id" "contact" "name" "Trusted Contact" "required" ["liveness"]}
-                        {"id" "solicitor" "name" "Family Solicitor" "required" ["identity-record"]}
-                        {"id" "employer" "name" "Current Employer" "required" ["employment"]}
+   "title" "Protect a private agent office"
+   "authority_options" [{"id" "notary" "name" "Independent Notary" "required" ["identity-record"]}
+                        {"id" "bank" "name" "Private Banking Contact" "required" ["verified-relationship"]}
+                        {"id" "contact" "name" "Trusted Steward" "required" ["live-confirmation"]}
+                        {"id" "solicitor" "name" "Family Solicitor" "required" ["continuity-mandate"]}
+                        {"id" "employer" "name" "Professional Adviser" "required" ["current-engagement"]}
                         {"id" "civic" "name" "Civic Registry" "required" ["civil-record"]}]})
 
 (def ORGANIZATION
   {"id" "organization"
-   "title" "Recover an organization signer"
+   "title" "Protect an organization signer"
    "authority_options" [{"id" "legal" "name" "Legal Counsel" "required" ["board-resolution"]}
                         {"id" "hr" "name" "People Operations" "required" ["employment"]}
                         {"id" "finance" "name" "Finance Controller" "required" ["signing-authority"]}
@@ -33,13 +57,13 @@
    "approvals" [] "chat" [] "enrollment_step" -1 "recovery_step" -1 "error" nil})
 
 (defn key-inventory [state]
-  [{"id" "identity" "name" "Identity signing key" "kind" "ECDSA P-256"
+  [{"id" "identity" "name" "Private office signing key" "kind" "ECDSA P-256"
     "status" (if (get state "lost") "lost" (if (get state "identity") "active" "not-created"))
     "secret_visible" false}
-   {"id" "factor" "name" "Credential vault factor" "kind" "256-bit managed user factor"
+   {"id" "factor" "name" "Owner-held continuity factor" "kind" "256-bit owner factor"
     "status" (if (get state "factor_saved") "secured-automatically" "not-created")
     "secret_visible" false}
-   {"id" "shares" "name" "Authority recovery shares" "kind" "Shamir 2-of-3"
+   {"id" "shares" "name" "Steward recovery shares" "kind" "Shamir 2-of-3"
     "status" (if (get state "factor_saved") "distributed" "not-created")
     "secret_visible" false}])
 
