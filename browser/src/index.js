@@ -13,3 +13,4 @@ export * from "./agent-gateway.js";
 export * from "./agent-room-storage.js";
 export * from "./document-hcv1.js";
 export * from "./document-records.js";
+export * from "./document-gateway.js";
