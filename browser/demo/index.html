@@ -5,25 +5,25 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#f4f2ec">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
-  <title>Hestia Recovery — Optional identity recovery extension</title>
-  <meta name="description" content="A guided preview of the optional Hestia Recovery extension, built on personal keys and signed state without a service master key.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; worker-src 'self'; base-uri 'none'; form-action 'none'">
+  <title>Hestia Continuity — Private agent-office recovery</title>
+  <meta name="description" content="Arrange continuity for a private agent office with independent stewards, an owner-held factor and a live Hara recovery workflow.">
   <link rel="icon" href="../hestia-browser/app-shell/hestia-sigil.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="../hestia-browser/app-shell/hestia-shell.css">
+  <link rel="stylesheet" href="./style.css">
   <script type="module" src="../hestia-browser/app-shell/hestia-shell.js"></script>
 </head>
 <body>
   <header class="hestia-app-header">
-    <a class="hestia-app-brand" href="../" aria-label="Hestia core home">
+    <a class="hestia-app-brand" href="../" aria-label="Hestia home">
       <img src="../hestia-browser/app-shell/hestia-sigil.svg" width="48" height="48" alt="">
-      <span class="hestia-app-brand__text"><strong>Hestia</strong><small>Recovery extension</small></span>
+      <span class="hestia-app-brand__text"><strong>Hestia</strong><small>Continuity</small></span>
     </a>
-    <nav class="hestia-app-nav" aria-label="Hestia Recovery navigation">
-      <span class="hestia-app-badge">Demo</span>
-      <a href="../">Hestia core</a>
-      <a href="../rooms/">Agent Rooms</a>
-      <a href="https://github.com/greenways-ai/hestia">GitHub ↗</a>
+    <nav class="hestia-app-nav" aria-label="Hestia Continuity navigation">
+      <span class="hestia-app-badge">Live HAL</span>
+      <a href="#plan">Continuity plan</a>
+      <a href="#how-it-works">How it works</a>
+      <a href="../rooms/">Private Agent Office</a>
     </nav>
     <button class="hestia-theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark theme" title="Toggle light or dark. Shift-click to follow the system theme.">
       <span class="hestia-theme-toggle__moon" aria-hidden="true">◐</span>
@@ -31,50 +31,73 @@
     </button>
   </header>
 
-  <aside class="hestia-extension-note" aria-label="Hestia Recovery product context">
-    <strong>Optional extension</strong>
-    <p>Recovery is built on Hestia's personal keystore and signed state chain. Greenways may provide ceremony coordination as a service, but participant keys and recovery authority remain outside any Greenways master key. <a href="../">Understand Hestia core</a>.</p>
-  </aside>
-
   <main>
-    <section class="hero" aria-labelledby="mechanism-title">
-      <header class="hero-copy">
-        <p class="eyebrow">Hestia Recovery · guided extension preview</p>
-        <h1 id="mechanism-title">Two of three,<br>plus you.</h1>
-        <p>Follow Mabel the wombat through an optional recovery ceremony. Independent helpers coordinate around identity keys that remain anchored to the owner's Hestia state.</p>
-      </header>
+    <section class="continuity-hero" aria-labelledby="continuity-title">
+      <picture class="continuity-hero__art" aria-hidden="true">
+        <source srcset="../assets/hestia-recovery-keepers.webp" type="image/webp">
+        <img src="../assets/hestia-recovery-keepers.jpg" alt="">
+      </picture>
+      <div class="continuity-hero__veil"></div>
+      <div class="continuity-hero__copy">
+        <p class="eyebrow">Private office continuity · arranged in advance</p>
+        <h1 id="continuity-title">Continuity, before you need it.</h1>
+        <p>Your private agent office should not disappear because a device is lost or a key becomes unavailable. Hestia lets you appoint independent stewards, keep your own factor, and restore the office only when the agreed threshold is met.</p>
+        <div class="continuity-hero__actions">
+          <a class="button button--primary" href="#plan">Arrange a continuity plan</a>
+          <a class="button" href="#how-it-works">See the arrangement</a>
+        </div>
+      </div>
+      <aside class="kernel-card" aria-live="polite">
+        <div class="kernel-card__state"><i id="kernelLight"></i><span><strong id="kernelState">Opening the continuity desk…</strong><small id="kernelDetail">Loading the Hara/WASM recovery program.</small></span></div>
+        <dl>
+          <div><dt>Program</dt><dd id="halProgramName">hestia.workflow-v3</dd></div>
+          <div><dt>Version</dt><dd id="halProgramVersion">—</dd></div>
+          <div><dt>Transitions</dt><dd id="halEventCount">—</dd></div>
+          <div><dt>Processing</dt><dd>Local browser</dd></div>
+        </dl>
+        <button id="retryKernel" class="button button--quiet" type="button" hidden>Retry the recovery program</button>
+      </aside>
+    </section>
 
-      <div class="story" role="list" aria-label="Five stages of identity recovery">
-        <article class="story-step" role="listitem"><img class="story-art" src="./wombat-create.webp" alt="Mabel and three wombat friends prepare a burrow while Mabel holds its carved wooden key"><div class="story-content"><b>01</b><strong>Create identity</strong><details class="help-popover"><summary aria-label="About identity creation">?</summary><p>Mabel's wooden burrow key represents the identity key the browser creates and encrypts locally.</p></details></div></article>
-        <article class="story-step" role="listitem"><img class="story-art" src="./wombat-protect.webp" alt="Three wombat helpers carry separate wooden recovery clues to their own burrows"><div class="story-content"><b>02</b><strong>Protect with 2-of-3</strong><details class="help-popover"><summary aria-label="About threshold protection">?</summary><p>Each helper represents an independent recovery authority. Any two shares can reconstruct their part of the secret.</p></details></div></article>
-        <article class="story-step" role="listitem"><img class="story-art" src="./wombat-lost.webp" alt="Mabel finds her burrow key missing but still holds her personal paw-mark token"><div class="story-content"><b>03</b><strong>Lose access</strong><details class="help-popover"><summary aria-label="About lost access">?</summary><p>The original device can disappear without giving any authority enough information to restore the identity alone.</p></details></div></article>
-        <article class="story-step" role="listitem"><img class="story-art" src="./wombat-approve.webp" alt="Two wombat helpers bring their separate recovery clues to Mabel"><div class="story-content"><b>04</b><strong>Approve recovery</strong><details class="help-popover"><summary aria-label="About recovery approval">?</summary><p>Two selected authorities independently verify the request and release their shares.</p></details></div></article>
-        <article class="story-step" role="listitem"><img class="story-art" src="./wombat-restore.webp" alt="The four wombats celebrate after recovering the wooden key and reopening Mabel's burrow"><div class="story-content"><b>05</b><strong>Restore identity</strong><details class="help-popover"><summary aria-label="About identity restoration">?</summary><p>The two shares combine with Mabel's separately held factor to decrypt and restore the identity key.</p></details></div></article>
+    <section id="how-it-works" class="continuity-principles" aria-labelledby="principles-title">
+      <header>
+        <p class="eyebrow">A discreet continuity arrangement</p>
+        <h2 id="principles-title">No single steward can take over your office.</h2>
+        <p>The recovery service may coordinate availability and approvals. It never receives enough material to restore the office by itself.</p>
+      </header>
+      <div class="principle-grid">
+        <article><span>01</span><h3>Choose three independent stewards</h3><p>A solicitor, adviser, banking contact, trusted person or other independent party can each hold one protected share.</p></article>
+        <article><span>02</span><h3>Keep the final factor yourself</h3><p>Even two approved steward shares are not enough without the factor that remains under your control.</p></article>
+        <article><span>03</span><h3>Restore, rotate and carry on</h3><p>The office key is restored locally, verified, and ready to be rotated so your agents and workflows continue with a clean history.</p></article>
       </div>
     </section>
 
-    <section class="demo-workspace" aria-labelledby="demo-title">
+    <section id="plan" class="demo-workspace" aria-labelledby="demo-title">
       <header class="workspace-head">
-        <div><p class="eyebrow">Local cryptographic demo</p><h2 id="demo-title">Help Mabel recover</h2></div>
-        <p>The wombat story is fictional. The cryptography still runs locally in this browser, and no hosted coordinator receives the plaintext recovery material.</p>
+        <div><p class="eyebrow">Live Hara continuity workflow</p><h2 id="demo-title">Arrange the plan, then test it.</h2></div>
+        <p>The interface runs the real threshold split, recovery and signing operations in this browser. Hara owns the ceremony state; browser adapters perform the cryptography.</p>
       </header>
-      <nav class="progress" aria-label="Recovery progress">
-        <span class="active">1 <b>Set up</b></span><span>2 <b>Protect</b></span><span>3 <b>Lose access</b></span><span>4 <b>Approve</b></span><span>5 <b>Restore</b></span>
+      <nav class="progress" aria-label="Continuity progress">
+        <span class="active">1 <b>Appoint</b></span><span>2 <b>Protect</b></span><span>3 <b>Lose access</b></span><span>4 <b>Approve</b></span><span>5 <b>Restore</b></span>
       </nav>
-      <section id="screen" class="panel" aria-live="polite"><div class="loading"><span></span>Starting the secure demo…</div></section>
+      <section id="screen" class="panel" aria-live="polite"><div class="loading"><span></span>Opening the continuity workflow…</div></section>
     </section>
 
     <details id="technical" class="technical-panel" hidden>
-      <summary><span><b>Technical details</b><small>Keys, shares, policy engines and demo messages</small></span><i aria-hidden="true">+</i></summary>
+      <summary><span><b>Continuity record and live HAL</b><small>Inspect the workflow, keys, shares and signed proof used by this demonstration</small></span><i aria-hidden="true">+</i></summary>
       <div class="technical-body">
-        <aside class="architecture-note"><strong>Independent policy engines</strong><p>Each authority makes its own evidence and share-release decision. This browser places the engines together only to make the mechanism observable.</p></aside>
-        <section id="keys" hidden><div class="section-head"><div><p class="eyebrow">Recovery material</p><h2>Keys and shares</h2></div><span class="badge">Demo transparency</span></div><div id="keyList" class="key-grid"></div></section>
-        <section id="chat" hidden><div class="section-head"><div><p class="eyebrow">Optional communication</p><h2>Authority messages</h2></div><span id="chatBadge" class="badge">Verified device</span></div><div id="messages" class="messages"><p class="empty">Messages remain in this browser session.</p></div><form id="chatForm" class="chat-form"><select id="chatAuthority" aria-label="Authority"></select><input id="chatInput" maxlength="2000" required placeholder="Ask an authority a question…"><button>Send</button></form></section>
+        <aside class="architecture-note"><strong>Coordination is not custody</strong><p>Each steward evaluates a request independently. This browser co-locates the educational policy engines so the complete mechanism can be observed, while the recovery material remains local.</p></aside>
+        <details class="hal-source">
+          <summary>Open the live recovery <code>.hal</code> source</summary>
+          <pre><code id="halSource">Loading hestia.workflow-v3…</code></pre>
+        </details>
+        <section id="keys" hidden><div class="section-head"><div><p class="eyebrow">Continuity material</p><h2>Keys and steward shares</h2></div><span class="badge">Demo transparency</span></div><div id="keyList" class="key-grid"></div></section>
+        <section id="chat" hidden><div class="section-head"><div><p class="eyebrow">Optional coordination</p><h2>Steward messages</h2></div><span id="chatBadge" class="badge">Verified office</span></div><div id="messages" class="messages"><p class="empty">Messages remain in this browser session.</p></div><form id="chatForm" class="chat-form"><select id="chatAuthority" aria-label="Steward"></select><input id="chatInput" maxlength="2000" required placeholder="Ask a steward a question…"><button>Send</button></form></section>
       </div>
     </details>
   </main>
 
-  <footer><span>GREENWAYS / HESTIA RECOVERY</span><span>Optional extension preview · Fictional people and records · Local browser processing</span></footer>
+  <footer><span>GREENWAYS / HESTIA CONTINUITY</span><span>Local Hara/WASM demonstration · coordination without custody</span></footer>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
