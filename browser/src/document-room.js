@@ -454,8 +454,13 @@ export class DocumentRoom extends EventTarget {
       this.snapshots.get(Number(commit.batch.baseRevision))
     );
     const verified = await verifyRoomCommitBundle(commit, {
-      sequencerPublicJwk: sequencer.publicKeyJwk,
-      expectedPreviousAst: this.document
+      contributorPublicKey: author.publicKeyJwk,
+      contributorProfileRecord: author.profileRecord,
+      contributorDelegationRecord: author.delegationRecord,
+      sequencerPublicKey: sequencer.publicKeyJwk,
+      expectedDocument: this.document,
+      expectedRevision: this.revision,
+      expectedRevisionRoot: this.headRoot
     });
     let replayed = cloneValue(this.document);
     if (commit.outcome === "accepted") {
@@ -466,18 +471,17 @@ export class DocumentRoom extends EventTarget {
         operations: commit.transformedOperations
       }, sourceRootOptions(await sourceRootIndex(this.document)));
       const replayPlan = await documentValuePlan(replayed);
-      if (!sameRoot(replayPlan, commit.transformation.resultAstPlan)
-          || !sameRoot(replayPlan, commit.revision.resultAstPlan)) {
+      if (!sameRoot(replayPlan, verified.resultAstPlan)) {
         throw new Error("document room replay result root mismatch");
       }
       this.document = replayed;
       this.revision = Number(commit.revision.body.revision);
-      this.headRoot = commit.revision.record.root;
+      this.headRoot = commit.revision.root;
       this.snapshots.set(this.revision, cloneValue(this.document));
     } else if (commit.outcome === "conflict") {
       if (commit.revision) throw new Error("conflicted document room commit cannot contain a revision");
       const currentPlan = await documentValuePlan(this.document);
-      if (!sameRoot(currentPlan, commit.transformation.resultAstPlan)) {
+      if (!sameRoot(currentPlan, verified.resultAstPlan)) {
         throw new Error("conflicted document room result must preserve the current AST");
       }
     } else {
@@ -490,7 +494,7 @@ export class DocumentRoom extends EventTarget {
       outcome: commit.outcome,
       batchRoot: commit.batch.record.root,
       transformationRoot: commit.transformation.record.root,
-      revisionRoot: commit.revision?.record?.root || null,
+      revisionRoot: commit.revision?.root || null,
       receiptRoot: commit.receipt.record.root,
       transformedOperations: cloneValue(commit.transformedOperations),
       conflict: cloneValue(commit.conflict),

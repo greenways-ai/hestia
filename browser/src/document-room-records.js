@@ -346,15 +346,52 @@ export async function verifyRoomCommitBundle(commit, {
       || transformationBody.outcome !== commit.outcome) {
     throw new Error("document room transformation root binding mismatch");
   }
+
+  let revisionPlan = null;
+  if (commit.outcome === "accepted") {
+    if (!commit.revision?.root || !commit.revision?.body) {
+      throw new Error("accepted document room commit requires a revision record");
+    }
+    const revisionBody = commit.revision.body;
+    const encodedRevision = await encodeDocumentRecordBody("document/revision", revisionBody);
+    revisionPlan = Object.freeze({ root: `sha256:${encodedRevision.root}` });
+    if (!sameRoot(commit.revision, revisionPlan)
+        || revisionBody.document_id !== expectedDocument.id
+        || Number(revisionBody.revision) !== Number(expectedRevision) + 1
+        || !sameOptionalRoot(revisionBody.previous_revision_root, expectedRevisionRoot)
+        || !sameRoot(revisionBody.previous_ast_root, previousAstPlan)
+        || !sameRoot(revisionBody.batch_root, commit.batch.record)
+        || !sameRoot(revisionBody.transformation_root, commit.transformation.record)
+        || !sameRoot(revisionBody.transformed_operations_root, operationVector)
+        || !sameRoot(revisionBody.result_ast_root, resultAstPlan)
+        || (contributorProfileRecord
+          && !sameRoot(revisionBody.author_profile_root, contributorProfileRecord))
+        || !sameRoot(
+          revisionBody.environment_key_root,
+          commit.transformation.record.signer_key_root
+        )) {
+      throw new Error("document room revision root binding mismatch");
+    }
+  } else if (commit.outcome === "conflict") {
+    if (commit.revision != null) {
+      throw new Error("conflicted document room commit cannot contain a revision record");
+    }
+  } else {
+    throw new Error("unknown document room commit outcome");
+  }
+
   const [outcomePlan, sequencePlan] = await Promise.all([
     documentValuePlan(commit.outcome),
     documentValuePlan(commit.sequence)
   ]);
   const receiptBody = commit.receipt.record.body;
-  if (!sameRoot(receiptBody.batch_root, commit.batch.record)
+  if (receiptBody.document_id !== expectedDocument.id
+      || Number(receiptBody.base_revision) !== Number(commit.batch.baseRevision)
+      || !sameRoot(receiptBody.batch_root, commit.batch.record)
       || !sameRoot(receiptBody.transformation_root, commit.transformation.record)
       || !sameOptionalRoot(receiptBody.previous_revision_root, expectedRevisionRoot)
       || !sameRoot(receiptBody.transformed_operations_root, operationVector)
+      || !sameOptionalRoot(receiptBody.result_revision_root, revisionPlan)
       || !sameRoot(receiptBody.result_ast_root, resultAstPlan)
       || !sameRoot(receiptBody.outcome_root, outcomePlan)
       || !sameRoot(receiptBody.sequence_root, sequencePlan)) {
@@ -365,6 +402,7 @@ export async function verifyRoomCommitBundle(commit, {
     batchExpectedPlan,
     previousAstPlan,
     resultAstPlan,
+    revisionPlan,
     originalOperationPlans,
     originalOperationVector,
     operationPlans,
