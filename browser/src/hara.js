@@ -17,6 +17,8 @@ const resources = Object.freeze([
 ]);
 
 let runtimePromise;
+const registeredResources = new Set(resources.map(([namespace]) => namespace));
+let resourceRegistration = Promise.resolve();
 
 export function requireWebCrypto() {
   if (!globalThis.isSecureContext && !["localhost", "127.0.0.1"].includes(location.hostname)) {
@@ -57,6 +59,17 @@ export function haraAssetManifest() {
   });
 }
 
+async function fetchResourceSources(entries) {
+  return Promise.all(entries.map(async ([namespace, value]) => {
+    const url = value instanceof URL ? value : new URL(value, import.meta.url);
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(`Unable to load Hara module ${namespace} (${response.status}) from ${url.pathname}`);
+    }
+    return [namespace, await response.text()];
+  }));
+}
+
 async function loadRuntime() {
   const crypto = requireWebCrypto();
   const context = new HtaContext({
@@ -71,14 +84,7 @@ async function loadRuntime() {
       }
     }
   });
-  const sources = await Promise.all(resources.map(async ([namespace, url]) => {
-    const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error(`Unable to load Hara module ${namespace} (${response.status}) from ${url.pathname}`);
-    }
-    return [namespace, await response.text()];
-  }));
-  await context.call("register-resources", [sources]);
+  await context.call("register-resources", [await fetchResourceSources(resources)]);
   return context;
 }
 
@@ -88,6 +94,17 @@ export function haraRuntime() {
     throw error;
   });
   return runtimePromise;
+}
+
+export function registerHaraResources(entries) {
+  resourceRegistration = resourceRegistration.then(async () => {
+    const pending = entries.filter(([namespace]) => !registeredResources.has(namespace));
+    if (!pending.length) return;
+    const context = await haraRuntime();
+    await context.call("register-resources", [await fetchResourceSources(pending)]);
+    for (const [namespace] of pending) registeredResources.add(namespace);
+  });
+  return resourceRegistration;
 }
 
 export async function haraSession(name, requires) {
