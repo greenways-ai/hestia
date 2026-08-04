@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { generateAgentKey } from "../src/agent-protocol.js";
 import { documentValuePlan } from "../src/document-hcv1.js";
-import { DocumentRoom } from "../src/document-room.js";
+import { DocumentRoom } from "../src/document-room-api.js";
 import { transformBatch } from "../../protocol/document-ot.js";
 
 function documentAst(text = "Hello world") {
@@ -82,6 +82,12 @@ async function rooms() {
   return { host, guest, hostMember, guestMember };
 }
 
+test("public room API keeps the environment sequence separate from batch sequencing", async () => {
+  const { host } = await rooms();
+  assert.equal(host.sequence, 0);
+  assert.equal(typeof host.sequenceBatch, "function");
+});
+
 test("two kernels converge after a stale signed batch is transformed over the room history", async () => {
   const { host, guest, hostMember, guestMember } = await rooms();
 
@@ -93,7 +99,7 @@ test("two kernels converge after a stale signed batch is transformed over the ro
     deleteCount: 0,
     insert: "Bright "
   }]);
-  const firstCommit = await host.sequence(firstBatch, hostMember.descriptor.memberId);
+  const firstCommit = await host.sequenceBatch(firstBatch, hostMember.descriptor.memberId);
   await guest.applyCommit(firstCommit);
   assert.equal(text(host.document), "Bright Hello world");
   assert.equal(text(guest.document), "Bright Hello world");
@@ -111,7 +117,7 @@ test("two kernels converge after a stale signed batch is transformed over the ro
     baseRevision: 0,
     baseDocument: guest.snapshots.get(0)
   });
-  const secondCommit = await host.sequence(secondBatch, guestMember.descriptor.memberId);
+  const secondCommit = await host.sequenceBatch(secondBatch, guestMember.descriptor.memberId);
   await guest.applyCommit(secondCommit);
 
   assert.equal(text(host.document), "Bright Hello Hara");
@@ -135,7 +141,7 @@ test("tampering with a transformed result is rejected by the receiving kernel", 
     deleteCount: 0,
     insert: "Safe "
   }]);
-  const commit = await host.sequence(batch, hostMember.descriptor.memberId);
+  const commit = await host.sequenceBatch(batch, hostMember.descriptor.memberId);
   const tampered = structuredClone(commit);
   tampered.resultAst.children[0].children[0].text = "Unsafe";
   await assert.rejects(() => guest.applyCommit(tampered), /transformation root binding mismatch/);
