@@ -6,17 +6,20 @@ import {
   documentSigningBytes,
   documentValuePlan
 } from "../../../browser/src/document-hcv1.js";
-import { createDocumentBatchBundle } from "../../../browser/src/document-records.js";
+import {
+  createDocumentBatchBundle,
+  createDocumentOperationPlan
+} from "../../../browser/src/document-records.js";
 import { createEnvironmentSigner } from "../src/environment-signer.mjs";
 import { createDocumentLedgerService } from "../src/document-ledger-service.mjs";
 
 const root = (character) => character.repeat(64);
 
-function fixture(text = "Hello world") {
+function fixture(text = "Hello world", revision = 0) {
   return {
     profile: "greenways.rich-text/2",
     id: "document:service",
-    revision: 0,
+    revision,
     children: [{
       id: "paragraph:one",
       type: "paragraph",
@@ -33,7 +36,7 @@ async function batchFixture() {
     documentValuePlan({ purpose: "document.edit", document_id: "document:service" })
   ]);
   const baseAst = fixture();
-  const expectedResultAst = fixture("Hello Hara");
+  const expectedResultAst = fixture("Hello Hara", 1);
   const bundle = await createDocumentBatchBundle({
     documentId: baseAst.id,
     batchId: "batch:service",
@@ -147,9 +150,23 @@ test("verifies batch and transformation, then signs only ledger-prepared receipt
     "revision.commit"
   ]);
   assert.equal(database.preparedRevision.resultAst.children[0].children[0].text, "Hello Hara");
+  assert.equal(database.preparedRevision.resultAst.revision, 1);
 });
 
-test("rebases a stale signed batch through operations already accepted by the Hara ledger", async () => {
+test("rejects an expected result that is signed but not produced by replay", async () => {
+  const { bundle } = await batchFixture();
+  bundle.expectedResultAst.children[0].children[0].text = "Forged result";
+  await assert.rejects(
+    () => createDocumentLedgerService({
+      database: fakeDatabase(),
+      signer: environmentSigner(),
+      environmentId: "hestia-test"
+    }).admit({ batch: bundle }),
+    /expected result does not match replay/
+  );
+});
+
+test("rebases a stale signed batch through root-verified operations already accepted by the Hara ledger", async () => {
   const { bundle } = await batchFixture();
   const accepted = {
     id: "operation:accepted",
@@ -158,16 +175,22 @@ test("rebases a stale signed batch through operations already accepted by the Ha
     offset: 0,
     deleteCount: 0,
     insert: "Bright ",
+    baseRevision: 0,
     environmentSequence: 1
   };
+  const acceptedPlan = await createDocumentOperationPlan(
+    bundle.documentId,
+    accepted,
+    accepted.baseRevision
+  );
   const database = fakeDatabase({
     head: {
       revision: "1",
       revisionRoot: `sha256:${root("7")}`,
       astRoot: `sha256:${root("8")}`,
-      ast: fixture("Bright Hello world")
+      ast: fixture("Bright Hello world", 1)
     },
-    acceptedOperations: [accepted]
+    acceptedOperations: [{ root: acceptedPlan.root, operation: accepted }]
   });
   const result = await createDocumentLedgerService({
     database,
@@ -180,7 +203,39 @@ test("rebases a stale signed batch through operations already accepted by the Ha
     database.preparedRevision.resultAst.children[0].children[0].text,
     "Bright Hello Hara"
   );
+  assert.equal(database.preparedRevision.resultAst.revision, 2);
   assert.equal(database.preparedRevision.transformedOperations[0].offset, 13);
+});
+
+test("rejects a corrupted accepted-operation projection before using it for OT", async () => {
+  const { bundle } = await batchFixture();
+  const accepted = {
+    id: "operation:accepted",
+    type: "text.splice",
+    targetId: "text:one",
+    offset: 0,
+    deleteCount: 0,
+    insert: "Bright ",
+    baseRevision: 0,
+    environmentSequence: 1
+  };
+  const database = fakeDatabase({
+    head: {
+      revision: "1",
+      revisionRoot: `sha256:${root("7")}`,
+      astRoot: `sha256:${root("8")}`,
+      ast: fixture("Bright Hello world", 1)
+    },
+    acceptedOperations: [{ root: `sha256:${root("9")}`, operation: accepted }]
+  });
+  await assert.rejects(
+    () => createDocumentLedgerService({
+      database,
+      signer: environmentSigner(),
+      environmentId: "hestia-test"
+    }).admit({ batch: bundle }),
+    /does not match its Hara ledger root/
+  );
 });
 
 test("creates a signed conflict receipt without advancing the document result", async () => {
