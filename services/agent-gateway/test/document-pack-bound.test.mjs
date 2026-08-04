@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { generateAgentKey } from "../../../browser/src/agent-protocol.js";
-import { documentValuePlan } from "../../../browser/src/document-hcv1.js";
+import {
+  createAgentProfile,
+  generateAgentKey
+} from "../../../browser/src/agent-protocol.js";
 import { createDocumentBatchBundle } from "../../../browser/src/document-records.js";
 import { DOCUMENT_HCP1_MAX_CELLS } from "../src/document-ledger-service.mjs";
 
@@ -10,19 +12,17 @@ function packCellCount(pack) {
   return Number(/^HCP1:([0-9]+):/.exec(pack)?.[1]);
 }
 
-test("a realistic signed rich-text batch fits the document-specific cell bound", async () => {
-  const key = await generateAgentKey();
-  const [profile, delegation] = await Promise.all([
-    documentValuePlan({
-      profile_id: "profile:pack-bound",
-      sequence: 1,
-      purposes: ["document.edit"]
-    }),
-    documentValuePlan({
-      purpose: "document.edit",
-      document_id: "document:pack-bound"
-    })
-  ]);
+test("a production-shaped signed rich-text batch fits the document-specific cell bound", async () => {
+  const rootKey = await generateAgentKey();
+  const operationalKey = await generateAgentKey();
+  const profile = await createAgentProfile({
+    profileId: "profile:pack-bound",
+    name: "Document Pack Bound Fixture",
+    rootKey,
+    operationalKey,
+    purposes: ["profile.update", "document.edit"],
+    validUntil: "2099-01-01T00:00:00.000Z"
+  });
   const baseAst = {
     profile: "greenways.rich-text/2",
     id: "document:pack-bound",
@@ -51,9 +51,9 @@ test("a realistic signed rich-text batch fits the document-specific cell bound",
       insert: "Hara"
     }],
     expectedResultAst,
-    authorProfileRecord: profile,
-    delegationRecord: delegation,
-    signingKey: key
+    authorProfileRecord: profile.record,
+    delegationRecord: profile.delegation,
+    signingKey: operationalKey
   });
   const cells = packCellCount(bundle.record.hcp1_pack);
   assert.ok(cells > 128, `fixture no longer exercises the old bound: ${cells}`);
