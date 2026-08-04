@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 
 const browserRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const repositoryRoot = resolve(browserRoot, "..");
 let staticServer;
 let origin;
 
@@ -27,6 +28,13 @@ function repositoryFile(pathname) {
   if (pathname.startsWith("/hara/")) {
     return resolve(browserRoot, "hara", pathname.slice("/hara/".length));
   }
+  if (pathname.startsWith("/hara-ledger/")) {
+    return resolve(
+      repositoryRoot,
+      "gwdb-ledger-hal/src/gw/ledger",
+      pathname.slice("/hara-ledger/".length)
+    );
+  }
   return undefined;
 }
 
@@ -42,7 +50,7 @@ test.beforeAll(async () => {
       return;
     }
     const file = repositoryFile(url.pathname);
-    if (!file || !file.startsWith(browserRoot)) {
+    if (!file || !file.startsWith(repositoryRoot)) {
       response.writeHead(404).end();
       return;
     }
