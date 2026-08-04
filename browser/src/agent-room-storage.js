@@ -1,4 +1,4 @@
-const databaseName = "hestia-agent-rooms-v1";
+const databaseName = "hestia-private-agent-office-v2";
 const storeName = "workspaces";
 
 function database() {
