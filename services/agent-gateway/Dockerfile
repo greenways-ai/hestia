@@ -9,6 +9,7 @@ RUN cd services/agent-gateway \
 
 COPY services/agent-gateway/src ./services/agent-gateway/src
 COPY browser/src ./browser/src
+COPY protocol/document-ot.js ./protocol/document-ot.js
 
 WORKDIR /opt/hestia/services/agent-gateway
 EXPOSE 8787
