@@ -35,6 +35,9 @@ function repositoryFile(pathname) {
       pathname.slice("/hara-ledger/".length)
     );
   }
+  if (pathname.startsWith("/protocol/")) {
+    return resolve(repositoryRoot, "protocol", pathname.slice("/protocol/".length));
+  }
   return undefined;
 }
 
