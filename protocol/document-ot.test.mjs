@@ -121,17 +121,18 @@ test("admission is atomic and returns a signed-receipt-shaped conflict", () => {
 });
 
 test("rebases a batch through accepted operations and applies it", () => {
-  const document = fixture();
-  const accepted = [splice({ id: "accepted", environmentSequence: 1, offset: 0, insert: "Bright " })];
+  const base = fixture();
+  const acceptedOperation = splice({ id: "accepted", environmentSequence: 1, offset: 0, insert: "Bright " });
+  const environment = applyOperation(base, acceptedOperation);
   const batch = {
     id: "batch-1",
-    documentId: document.id,
+    documentId: base.id,
     baseRevision: 0,
     operations: [splice({ id: "incoming", offset: 6, deleteCount: 5, insert: "Hara" })]
   };
-  const admission = admitBatch(document, batch, accepted);
+  const admission = admitBatch(environment, batch, [acceptedOperation]);
   assert.equal(admission.accepted, true);
-  assert.equal(admission.result.children[0].children[0].text, "Hello Hara");
+  assert.equal(admission.result.children[0].children[0].text, "Bright Hello Hara");
   assert.equal(admission.receipt.operations[0].disposition, "applied");
 });
 
