@@ -155,6 +155,20 @@
 
 .hestia-app-nav a:hover { color: var(--hestia-accent-3); }
 
+.hestia-app-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  color: var(--hestia-accent-3);
+  background: color-mix(in srgb, var(--hestia-accent-3) 9%, var(--hestia-surface));
+  border: 1px solid color-mix(in srgb, var(--hestia-accent-3) 32%, var(--hestia-line));
+  border-radius: 999px;
+  font: 700 .61rem var(--mono);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
 .hestia-theme-toggle {
   width: 48px;
   height: 48px;
