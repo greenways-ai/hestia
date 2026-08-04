@@ -1,5 +1,21 @@
-import { haraSession, toHta, toPlain } from "./hara.js";
+import {
+  haraSession,
+  registerHaraResources,
+  toHta,
+  toPlain
+} from "./hara.js";
 import { createSerialQueue } from "./kernel-queue.js";
+
+const ledgerResources = Object.freeze([
+  [
+    "gw.ledger.document-protocol",
+    new URL("../hara-ledger/document_protocol.hal", import.meta.url)
+  ],
+  [
+    "gw.ledger.document-ot",
+    new URL("../hara-ledger/document_ot.hal", import.meta.url)
+  ]
+]);
 
 let nextKernel = 0;
 
@@ -8,6 +24,7 @@ export async function createDocumentRoomKernel({ role, roomId, documentId }) {
     throw new Error("document room kernel role must be sequencer or participant");
   }
   if (!roomId || !documentId) throw new Error("document room kernel requires roomId and documentId");
+  await registerHaraResources(ledgerResources);
   const session = await haraSession(
     `HESTIA-DOCUMENT-ROOM-${++nextKernel}`,
     "[hestia.document-room :as room]"
