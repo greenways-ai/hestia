@@ -1,3 +1,4 @@
+import "./document-room-api.js";
 import { CeremonyPeer } from "./peer.js";
 import { createSerialQueue } from "./kernel-queue.js";
 import {
@@ -225,7 +226,7 @@ export class DocumentRoomPeer extends EventTarget {
 
   async sequenceLocalBatch({ operations, options = {} }) {
     const batch = await this.room.createBatch(operations, options);
-    const commit = await this.room.sequence(batch, this.room.localMemberId);
+    const commit = await this.room.sequenceBatch(batch, this.room.localMemberId);
     this.room.history.at(-1).commit = commit;
     await this.transport.send("document/commit", commit);
     await this.execute(await this.room.kernel.dispatch("revision/applied", {
@@ -237,7 +238,7 @@ export class DocumentRoomPeer extends EventTarget {
   }
 
   async sequenceRemoteBatch({ batch, authorMemberId }) {
-    const commit = await this.room.sequence(batch, authorMemberId);
+    const commit = await this.room.sequenceBatch(batch, authorMemberId);
     this.room.history.at(-1).commit = commit;
     await this.transport.send("document/commit", commit);
     await this.execute(await this.room.kernel.dispatch("revision/applied", {
