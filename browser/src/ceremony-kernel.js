@@ -1,5 +1,5 @@
-import { haraSession, toHta, toPlain } from "/hestia-browser/hara.js";
-import { createSerialQueue } from "/hestia-browser/kernel-queue.js";
+import { haraSession, toHta, toPlain } from "./hara.js";
+import { createSerialQueue } from "./kernel-queue.js";
 
 let nextKernel = 0;
 

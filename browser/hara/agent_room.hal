@@ -1,7 +1,33 @@
-;; Hestia agent profile, private-room, and negotiation kernel.
-;; Host adapters verify cryptography and execute the returned capability commands.
+;; Hestia private agent office, workflow, and receipt kernel.
+;; Hara owns product state and policy transitions. Host adapters verify signatures,
+;; perform cryptography, persist records, and execute returned capability commands.
 (ns hestia.agent-room
   (:require [std.foundation :refer [assoc conj count get merge]]))
+
+(def PROGRAM
+  {"namespace" "hestia.agent-room"
+   "version" "0.2.0"
+   "title" "Hestia Private Agent Office"
+   "events" ["profile/register"
+             "profile/rotate-key"
+             "room/create"
+             "room/invite"
+             "room/admit"
+             "workflow/mandate"
+             "workflow/record"
+             "document/attach"
+             "message/send"
+             "negotiation/propose"
+             "negotiation/counter"
+             "negotiation/accept"
+             "workflow/complete"
+             "receipt/share"
+             "room/revoke"
+             "room/close"]
+   "capabilities" ["ledger" "crypto" "transport"]
+   "promise" "Appoint agents, bound their work, approve decisions, and share receipts without surrendering the private office."})
+
+(defn program-info [] PROGRAM)
 
 (defn command
   [capability action args]
@@ -45,8 +71,11 @@
    "room" nil
    "members" {}
    "invites" {}
+   "mandates" {}
+   "work_log" []
    "documents" {}
    "offers" {}
+   "receipts" {}
    "membership_epoch" 0
    "transcript" []
    "accepted_offer" nil})
@@ -61,9 +90,12 @@
      "membership_epoch" (get state "membership_epoch")
      "member_count" (count (get state "members"))
      "invite_count" (count (get state "invites"))
+     "mandate_count" (count (get state "mandates"))
+     "work_count" (count (get state "work_log"))
      "document_count" (count (get state "documents"))
      "offer_count" (count (get state "offers"))
      "message_count" (count (get state "transcript"))
+     "receipt_count" (count (get state "receipts"))
      "accepted_offer" (get state "accepted_offer")}))
 
 (defn outcome
@@ -149,12 +181,15 @@
                        "profile_root" (get profile "profile_root")
                        "operational_key" (get profile "operational_key")
                        "delegation_root" (get profile "delegation_root")
-                       "role" "owner"
+                       "role" "principal"
                        "purposes" ["room.admin"
                                    "room.message"
+                                   "workflow.assign"
+                                   "workflow.approve"
                                    "document.attach"
                                    "negotiation.propose"
-                                   "negotiation.accept"]
+                                   "negotiation.accept"
+                                   "receipt.share"]
                        "status" "active"
                        "joined_epoch" epoch}
           record (merge room
@@ -232,6 +267,56 @@
           (command "crypto" "rotate-room-epoch"
                    [(get (get state "room") "room_id") epoch])
           (command "transport" "publish-membership" [record])])))))
+
+(defn create-mandate
+  [state data]
+  (do
+    (require-open state "workflow/mandate")
+    (require-true (get data "authority_verified") "authority_verified")
+    (let [mandate-id (require-present (get data "mandate_id") "mandate_id")
+          member-id (require-present (get data "member_id") "member_id")
+          member (get (get state "members") member-id)]
+      (require-present member "member")
+      (if (= "active" (get member "status"))
+        true
+        (throw (ex-info "mandate requires an active agent"
+                        {"member_id" member-id
+                         "status" (get member "status")})))
+      (require-present (get data "brief_root") "brief_root")
+      (require-present (get data "workflow_root") "workflow_root")
+      (let [mandate (merge data
+                           {"status" "active"
+                            "created_epoch" (get state "membership_epoch")})
+            mandates (assoc (get state "mandates") mandate-id mandate)]
+        (outcome
+         (assoc state "mandates" mandates)
+         [(ledger-command "workflow/mandate-created" mandate)
+          (command "transport" "deliver-envelope" [mandate])])))))
+
+(defn record-work
+  [state data]
+  (do
+    (require-open state "workflow/record")
+    (require-true (get data "member_authorized") "member_authorized")
+    (let [mandate-id (require-present (get data "mandate_id") "mandate_id")
+          mandate (get (get state "mandates") mandate-id)]
+      (require-present mandate "mandate")
+      (if (= "active" (get mandate "status"))
+        true
+        (throw (ex-info "work may only be recorded against an active mandate"
+                        {"mandate_id" mandate-id
+                         "status" (get mandate "status")})))
+      (require-present (get data "step_id") "step_id")
+      (require-present (get data "action_root") "action_root")
+      (require-present (get data "result_root") "result_root")
+      (let [sequence (+ 1 (count (get state "work_log")))
+            entry (merge data
+                         {"sequence" sequence
+                          "membership_epoch" (get state "membership_epoch")})
+            work-log (conj (get state "work_log") entry)]
+        (outcome
+         (assoc state "work_log" work-log)
+         [(ledger-command "workflow/work-recorded" entry)])))))
 
 (defn revoke-member
   [state data]
@@ -380,6 +465,61 @@
          [(ledger-command "negotiation/offer-accepted" record)
           (command "transport" "deliver-envelope" [record])])))))
 
+(defn complete-mandate
+  [state data]
+  (do
+    (require-open state "workflow/complete")
+    (require-true (get data "authority_verified") "authority_verified")
+    (require-true (get data "human_approval_verified") "human_approval_verified")
+    (let [mandate-id (require-present (get data "mandate_id") "mandate_id")
+          mandate (get (get state "mandates") mandate-id)]
+      (require-present mandate "mandate")
+      (if (= "active" (get mandate "status"))
+        true
+        (throw (ex-info "only an active mandate may be completed"
+                        {"mandate_id" mandate-id
+                         "status" (get mandate "status")})))
+      (require-present (get data "completion_root") "completion_root")
+      (require-present (get data "receipt_root") "receipt_root")
+      (let [completed (merge mandate
+                             {"status" "completed"
+                              "completion_root" (get data "completion_root")
+                              "receipt_root" (get data "receipt_root")})
+            mandates (assoc (get state "mandates") mandate-id completed)
+            receipt-id (or (get data "receipt_id") mandate-id)
+            receipt {"receipt_id" receipt-id
+                     "mandate_id" mandate-id
+                     "receipt_root" (get data "receipt_root")
+                     "status" "private"
+                     "completed_epoch" (get state "membership_epoch")}
+            receipts (assoc (get state "receipts") receipt-id receipt)]
+        (outcome
+         (merge state {"mandates" mandates "receipts" receipts})
+         [(ledger-command "workflow/mandate-completed" completed)])))))
+
+(defn share-receipt
+  [state data]
+  (do
+    (require-open state "receipt/share")
+    (require-true (get data "authority_verified") "authority_verified")
+    (let [receipt-id (require-present (get data "receipt_id") "receipt_id")
+          receipt (get (get state "receipts") receipt-id)]
+      (require-present receipt "receipt")
+      (if (= (get receipt "receipt_root") (get data "receipt_root"))
+        true
+        (throw (ex-info "shared receipt must bind the exact private receipt root"
+                        {"receipt_id" receipt-id})))
+      (require-present (get data "audience") "audience")
+      (let [shared (merge receipt
+                          {"status" "shared"
+                           "audience" (get data "audience")
+                           "share_root" (get data "share_root")})
+            receipts (assoc (get state "receipts") receipt-id shared)]
+        (outcome
+         (assoc state "receipts" receipts)
+         [(ledger-command "receipt/shared" shared)
+          (command "transport" "publish-receipt" [shared])])))))
+
 (defn close-room
   [state data]
   (do
@@ -408,12 +548,16 @@
       (= kind "room/create") (create-room state data)
       (= kind "room/invite") (issue-invite state data)
       (= kind "room/admit") (admit-member state data)
+      (= kind "workflow/mandate") (create-mandate state data)
+      (= kind "workflow/record") (record-work state data)
       (= kind "room/revoke") (revoke-member state data)
       (= kind "document/attach") (attach-document state data)
       (= kind "message/send") (send-message state data)
       (= kind "negotiation/propose") (propose-offer state data)
       (= kind "negotiation/counter") (counter-offer state data)
       (= kind "negotiation/accept") (accept-offer state data)
+      (= kind "workflow/complete") (complete-mandate state data)
+      (= kind "receipt/share") (share-receipt state data)
       (= kind "room/close") (close-room state data)
       true
       (throw (ex-info "unknown agent-room event" {"type" kind})))))

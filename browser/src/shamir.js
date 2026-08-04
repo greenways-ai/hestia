@@ -1,4 +1,4 @@
-import { haraSession, requireWebCrypto } from "/hestia-browser/hara.js";
+import { haraSession, requireWebCrypto } from "./hara.js";
 
 let runtimePromise;
 

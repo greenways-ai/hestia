@@ -4,8 +4,8 @@ import MosaicMark from "../components/MosaicMark.astro";
 import ArtworkCatalogue from "../components/ArtworkCatalogue.astro";
 import ThemedArtwork from "@greenways-ai/visual-language/ThemedArtwork.astro";
 
-const title = "Hestia · Personal keystore and signed Hara state chain";
-const description = "A local-first personal keystore and append-only state chain for human and agent keys, with state expressed and replayed as Hara/HAL AST.";
+const title = "Hestia · A private office for your agents";
+const description = "Give every agent a role, a bounded key and a signed workflow. Follow work, approve decisions, and share elegant receipts only when you choose.";
 const base = `${import.meta.env.BASE_URL.replace(/\/+$/, "")}/`;
 ---
 <BaseLayout title={title} description={description}>
@@ -13,42 +13,42 @@ const base = `${import.meta.env.BASE_URL.replace(/\/+$/, "")}/`;
     <ThemedArtwork class="hero-art" light={`${base}assets/hestia-greyhound-day.webp`} dark={`${base}assets/hestia-greyhound-night.webp`} lightMobile={`${base}assets/hestia-greyhound-day.webp`} darkMobile={`${base}assets/hestia-greyhound-night.webp`} lightAlt="A greyhound standing beside a garnet couch in a couture winter garden" darkAlt="The greyhound asleep on the garnet couch beside a lit hearth" position="center" />
     <div class="hero-veil"></div>
     <div class="hero-copy section-shell">
-      <p class="technical-kicker"><i></i> Personal keystore · signed Hara state</p>
-      <h1 id="hero-title">Your keys.<br />Your state.<br />Your chain.</h1>
-      <p>Hestia keeps human and agent keys under your control and records every accepted transition as content-addressed, replayable Hara state. Run it locally, inspect its history, and add recovery or collaboration without surrendering custody.</p>
+      <p class="technical-kicker"><i></i> Private agent office · secured by you</p>
+      <h1 id="hero-title">A private office<br />for everything<br />your agents do.</h1>
+      <p>Give every agent a named role, a bounded key and a clear workflow. See what has been done on your behalf, approve the moments that matter, and share a polished receipt when a client, partner or adviser asks.</p>
       <div class="hero-actions">
-        <a class="action action--ember" href="#operate">Run Hestia locally <span aria-hidden="true">↓</span></a>
-        <a class="action" href="#state-chain">Understand the state chain <span aria-hidden="true">↓</span></a>
+        <a class="action action--ember" href={`${base}rooms/`}>Open the private agent office <span aria-hidden="true">↗</span></a>
+        <a class="action" href="#overview">See how it works <span aria-hidden="true">↓</span></a>
         <a class="action" href="https://github.com/greenways-ai/hestia">View source ↗</a>
       </div>
-      <div class="hero-command"><code>scripts/hestia up</code><span>Personal node · open source</span></div>
+      <div class="hero-command"><code>HESTIA PRIVATE OFFICE</code><span>Private by default · receipts on demand</span></div>
     </div>
-    <div class="hero-inscription" aria-hidden="true"><span>OWN</span><i></i><span>SIGN</span><i></i><span>REPLAY</span><i></i><span>EXTEND</span></div>
+    <div class="hero-inscription" aria-hidden="true"><span>APPOINT</span><i></i><span>FOLLOW</span><i></i><span>APPROVE</span><i></i><span>SHARE</span></div>
   </section>
 
   <section id="overview" class="home-section purpose-section" aria-labelledby="overview-title">
     <header class="section-heading">
-      <p class="technical-kicker">01 · Personal keystore</p>
-      <div><p class="eyebrow">Authority before accounts</p><h2 id="overview-title">Keep authority<br />close to home.</h2></div>
-      <p>Hestia begins with keys you control. Human identities, agent profiles and delegated operational keys remain anchored to a personal root rather than to a service account.</p>
+      <p class="technical-kicker">01 · Your private agent office</p>
+      <div><p class="eyebrow">A well-run house</p><h2 id="overview-title">Keep every agent<br />beautifully in hand.</h2></div>
+      <p>Hestia turns a collection of capable agents into a private, legible office. Each agent is known by name, receives only the authority it needs, and works inside mandates that remain visible to you.</p>
     </header>
     <div class="purpose-grid">
-      <article><b>01</b><h3>Root identities</h3><p>Create and rotate the keys that represent a person or long-lived agent profile without making a hosted platform the source of identity.</p></article>
-      <article><b>02</b><h3>Delegated keys</h3><p>Give an agent only the purposes it needs. Operational and room keys can be scoped, replaced and revoked without replacing the root.</p></article>
-      <article><b>03</b><h3>Local custody</h3><p>Browser and node runtimes keep private key material close to the operator. Export, backup and publication remain explicit choices.</p></article>
+      <article><b>01</b><h3>Named agents</h3><p>Maintain a lasting profile for each personal or specialist agent, with a replaceable daily key beneath it.</p></article>
+      <article><b>02</b><h3>Bounded mandates</h3><p>State the brief, permitted workflow, spending or action limits, and the decisions that must return to you.</p></article>
+      <article><b>03</b><h3>Human approvals</h3><p>Let agents prepare, compare and negotiate while keeping commitments, purchases and final terms under explicit human control.</p></article>
     </div>
   </section>
 
   <section id="state-chain" class="home-section purpose-section" aria-labelledby="state-chain-title">
     <header class="section-heading">
-      <p class="technical-kicker">02 · Signed state chain</p>
-      <div><p class="eyebrow">A personal blockchain without a token network</p><h2 id="state-chain-title">State with<br />a memory.</h2></div>
-      <p>Hestia is an append-only chain of accepted state roots. Each transition can be signed, linked to the state before it, replayed through the Hara kernel and verified independently.</p>
+      <p class="technical-kicker">02 · Work receipts</p>
+      <div><p class="eyebrow">Private by default. Presentable on demand.</p><h2 id="state-chain-title">Know what was done.<br />Show only what matters.</h2></div>
+      <p>Hestia keeps a private record of briefs, agent work, proposals and approvals. When accountability is requested, it can prepare a bounded receipt that proves the relevant history without opening the rest of your office.</p>
     </header>
     <div class="purpose-grid">
-      <article><b>01</b><h3>Hara semantics</h3><p>State, policy and transition intent are represented as Hara/HAL values and AST rather than hidden inside one database implementation.</p></article>
-      <article><b>02</b><h3>Signed roots</h3><p>Canonical HCV1 cells produce content-addressed roots that can be linked, signed and carried between browser and server runtimes.</p></article>
-      <article><b>03</b><h3>Replayable history</h3><p>Receipts and previous roots make accepted change inspectable. Adapters may change while the semantic chain remains portable.</p></article>
+      <article><b>01</b><h3>Signed work trail</h3><p>Every important step can be tied to the agent, mandate, source material and result that produced it.</p></article>
+      <article><b>02</b><h3>Exact approvals</h3><p>Your approval binds the precise recommendation, contract or terms you saw—not a later approximation.</p></article>
+      <article><b>03</b><h3>Shareable receipts</h3><p>Prepare a client, partner or adviser presentation from selected evidence while the private office remains private.</p></article>
     </div>
   </section>
 
@@ -58,56 +58,56 @@ const base = `${import.meta.env.BASE_URL.replace(/\/+$/, "")}/`;
         <source srcset={`${base}assets/hestia-local-ledger.webp`} type="image/webp" />
         <img src={`${base}assets/hestia-local-ledger.jpg`} width="1536" height="1024" loading="lazy" alt="An ember-lit mosaic hearth connected to concentric ledger nodes" />
       </picture>
-      <MosaicMark class="trust-mark" label="Hestia signed state chain" />
+      <MosaicMark class="trust-mark" label="Hestia private work receipt" />
     </div>
     <div class="trust-copy">
-      <p class="technical-kicker"><i></i> 03 · Semantic state, durable evidence</p>
-      <h2 id="chain-proof-title">The meaning lives<br />above the database.</h2>
-      <p>Hara owns the deterministic state model. HCV1 supplies canonical content roots. IndexedDB and PostgreSQL provide storage and multi-writer operation without becoming the definition of the state itself.</p>
+      <p class="technical-kicker"><i></i> 03 · Quiet assurance</p>
+      <h2 id="chain-proof-title">The evidence is there<br />when you need it.</h2>
+      <p>Most of the time, Hestia should feel like a calm household book: who is working, what they were asked to do, and what is waiting for your attention. Beneath it, every accepted step can carry a durable signature and an independently verifiable root.</p>
       <dl>
-        <div><dt>Semantic state</dt><dd>Hara/HAL AST, values, policies and transitions</dd></div>
-        <div><dt>Durable encoding</dt><dd>Canonical HCV1 cells, roots, signatures and receipts</dd></div>
-        <div><dt>Storage adapters</dt><dd>Browser IndexedDB or a PostgreSQL-backed personal node</dd></div>
+        <div><dt>Private record</dt><dd>The complete office history stays with you</dd></div>
+        <div><dt>Portable receipt</dt><dd>A selected presentation can travel without exposing unrelated work</dd></div>
+        <div><dt>Independent check</dt><dd>A recipient can verify that the presented terms and approvals have not changed</dd></div>
       </dl>
-      <a class="action action--ember" href="https://github.com/greenways-ai/hestia/blob/main/docs/document-protocol-v1.md">Read a state protocol ↗</a>
+      <a class="action action--ember" href={`${base}rooms/#receipts`}>See a receipt being made ↗</a>
     </div>
   </section>
 
   <section id="architecture" class="home-section architecture-section" aria-labelledby="architecture-title">
     <header class="section-heading">
-      <p class="technical-kicker">04 · Core architecture</p>
-      <div><p class="eyebrow">Every authority boundary made visible</p><h2 id="architecture-title">One core.<br />Replaceable edges.</h2></div>
-      <p>Keys establish authority, Hara describes state and policy, the signed chain records accepted roots, and adapters provide storage, transport and cryptography as explicit capabilities.</p>
+      <p class="technical-kicker">04 · Under the surface</p>
+      <div><p class="eyebrow">Elegance above, precision below</p><h2 id="architecture-title">A calm interface.<br />A rigorous office.</h2></div>
+      <p>Hestia uses keys, signed workflows and deterministic Hara programs to make agent authority and work history precise. The cryptography supports the experience; it is not the experience being sold.</p>
     </header>
-    <div class="architecture-flow" aria-label="Hestia architecture flows from user and agent keys through Hara state into a signed HCV1 chain and replaceable storage adapters">
-      <span><small>OWN</small><b>User + agent keys</b><em>authority</em></span><i aria-hidden="true">→</i>
-      <span><small>DESCRIBE</small><b>Hara / HAL AST</b><em>state</em></span><i aria-hidden="true">→</i>
-      <span class="architecture-core"><small>COMMIT</small><b>HCV1 chain</b><em>signed roots</em></span><i aria-hidden="true">→</i>
-      <span><small>ADAPT</small><b>Browser + Postgres</b><em>storage</em></span>
+    <div class="architecture-flow" aria-label="Hestia appoints a named agent, gives it a signed mandate, returns decisions for human approval and prepares a selective receipt">
+      <span><small>APPOINT</small><b>Named agent</b><em>identity</em></span><i aria-hidden="true">→</i>
+      <span><small>MANDATE</small><b>Signed workflow</b><em>authority</em></span><i aria-hidden="true">→</i>
+      <span class="architecture-core"><small>APPROVE</small><b>Human decision</b><em>control</em></span><i aria-hidden="true">→</i>
+      <span><small>PRESENT</small><b>Work receipt</b><em>accountability</em></span>
     </div>
     <div class="capability-grid">
-      <article><span>01</span><strong>Semantic core</strong><p>Deterministic Hara kernels decide state transitions before storage or transport adapters act.</p></article>
-      <article><span>02</span><strong>Content-addressed chain</strong><p>Canonical roots connect state versions and make exact accepted values independently verifiable.</p></article>
-      <article><span>03</span><strong>Explicit capabilities</strong><p>Cryptography, persistence and communication are requested at visible boundaries instead of hidden inside policy code.</p></article>
-      <article><span>04</span><strong>Replaceable infrastructure</strong><p>Run locally in a browser, operate a PostgreSQL node, or replace a relay without replacing personal authority.</p></article>
+      <article><span>01</span><strong>Agent keys</strong><p>Each agent has a lasting identity and a replaceable operational key for everyday work.</p></article>
+      <article><span>02</span><strong>Workflow signatures</strong><p>Mandates, work entries, recommendations and approvals stay bound to their exact context.</p></article>
+      <article><span>03</span><strong>Private history</strong><p>The complete record remains in the owner-controlled office rather than becoming a public activity feed.</p></article>
+      <article><span>04</span><strong>Portable proofs</strong><p>Selected receipts can be shared and checked without making a hosted service the source of truth.</p></article>
     </div>
   </section>
 
   <section id="extensions" class="home-section purpose-section" aria-labelledby="extensions-title">
     <header class="section-heading">
-      <p class="technical-kicker">05 · Optional extensions</p>
-      <div><p class="eyebrow">Built on Hestia, not confused with Hestia</p><h2 id="extensions-title">Keys and state<br />come first.</h2></div>
-      <p>Documents, recovery ceremonies and private agent rooms use the keystore and signed state chain. They are useful Hestia extensions, but none of them defines the core product.</p>
+      <p class="technical-kicker">05 · House services</p>
+      <div><p class="eyebrow">A complete private office</p><h2 id="extensions-title">Continuity and collaboration,<br />arranged around you.</h2></div>
+      <p>The private agent office is the everyday experience. Document provenance and continuity arrangements extend it when you need deeper records, independent stewards or a managed coordination service.</p>
     </header>
     <div class="purpose-grid">
-      <article><b>01</b><h3>Documents</h3><p>Sign document versions, provenance and operation roots while keeping the canonical state portable and replayable.</p></article>
-      <article><b>02</b><h3>Recovery</h3><p>Coordinate independent approvals and threshold reconstruction without introducing a Greenways master key or plaintext share custodian.</p></article>
-      <article><b>03</b><h3>Agent Rooms</h3><p>Use profiles, delegated keys and exact roots for bounded membership, encrypted communication and human-approved negotiation.</p></article>
+      <article><b>01</b><h3>Private Agent Office</h3><p>Appoint agents, issue mandates, follow work, approve exact terms, rotate access and close an engagement cleanly.</p></article>
+      <article><b>02</b><h3>Continuity</h3><p>Arrange independent stewards and an owner-held factor so a lost device does not take the private office with it.</p></article>
+      <article><b>03</b><h3>Documents</h3><p>Keep signed versions, provenance and operation histories beside the workflows that created and approved them.</p></article>
     </div>
     <div class="hero-actions">
-      <a class="action action--ember" href={`${base}recovery-demo/`}>Open Recovery extension ↗</a>
-      <a class="action" href={`${base}rooms/`}>Open Agent Rooms extension ↗</a>
-      <a class="action" href="https://github.com/greenways-ai/hestia/tree/main/docs">Browse protocols ↗</a>
+      <a class="action action--ember" href={`${base}rooms/`}>Open the private agent office ↗</a>
+      <a class="action" href={`${base}recovery-demo/`}>Arrange continuity ↗</a>
+      <a class="action" href="https://github.com/greenways-ai/hestia/tree/main/docs">Browse the protocols ↗</a>
     </div>
   </section>
 
@@ -117,20 +117,20 @@ const base = `${import.meta.env.BASE_URL.replace(/\/+$/, "")}/`;
         <source srcset={`${base}assets/hestia-recovery-keepers.webp`} type="image/webp" />
         <img src={`${base}assets/hestia-recovery-keepers.jpg`} width="1536" height="1024" loading="lazy" alt="Three independent mosaic sanctuary chambers joined around a central circle" />
       </picture>
-      <MosaicMark class="trust-mark" label="Greenways services powered by Hestia" />
+      <MosaicMark class="trust-mark" label="Greenways concierge services powered by Hestia" />
     </div>
     <div class="trust-copy">
-      <p class="technical-kicker"><i></i> 06 · Greenways service layer</p>
-      <h2 id="services-title">Services can help.<br />They do not own.</h2>
-      <p>Greenways can operate ceremony coordination, availability, invitation delivery and blind relay services around Hestia. The personal node remains the root of identity, membership and accepted state.</p>
+      <p class="technical-kicker"><i></i> 06 · Optional Greenways services</p>
+      <h2 id="services-title">Concierge operation.<br />Personal authority.</h2>
+      <p>Greenways can make Hestia easier to live with by coordinating continuity ceremonies, invitation delivery and private-agent availability. The service can arrange the room; it does not become the owner of the house.</p>
       <dl>
-        <div><dt>Recovery service</dt><dd>Coordinates accredited keepers, notifications and policy workflows</dd></div>
-        <div><dt>Rooms service</dt><dd>Provides rendezvous, relay, presence and optional encrypted mailbox delivery</dd></div>
-        <div><dt>Trust boundary</dt><dd>No service master key; final authority remains with participant keys and Hestia roots</dd></div>
+        <div><dt>Continuity coordination</dt><dd>Steward availability, notifications and ceremony guidance</dd></div>
+        <div><dt>Rendezvous & delivery</dt><dd>Agent invitations, presence and blind encrypted relay</dd></div>
+        <div><dt>Trust boundary</dt><dd>Your keys, approvals and private work history remain under your control</dd></div>
       </dl>
       <div class="hero-actions">
-        <a class="action action--ember" href={`${base}recovery-demo/`}>Try Recovery service preview ↗</a>
-        <a class="action" href={`${base}rooms/`}>Try Rooms service preview ↗</a>
+        <a class="action action--ember" href={`${base}recovery-demo/`}>See the continuity service ↗</a>
+        <a class="action" href={`${base}rooms/`}>Enter the private agent office ↗</a>
       </div>
     </div>
   </section>
@@ -142,19 +142,19 @@ const base = `${import.meta.env.BASE_URL.replace(/\/+$/, "")}/`;
     </picture>
     <div class="operate-veil"></div>
     <div class="operate-copy section-shell">
-      <p class="technical-kicker"><i></i> 07 · Run your personal node</p>
-      <h2 id="operate-title">Keep the hearth<br />close to home.</h2>
-      <p>One operator command starts the deliberately small Hestia stack. The node owns its local secrets, validates signed state and exposes extensions only when the operator chooses.</p>
+      <p class="technical-kicker"><i></i> 07 · Keep it close</p>
+      <h2 id="operate-title">Your private office,<br />on your own terms.</h2>
+      <p>Use the browser experience, run a personal node, or combine self-custody with optional Greenways coordination. The essential arrangement stays the same: agents work through authority you define, and the record belongs to you.</p>
       <pre><code>scripts/hestia init
 scripts/hestia doctor
 scripts/hestia up</code></pre>
       <dl>
-        <div><dt>Core</dt><dd>Personal keystore + signed Hara state chain</dd></div>
-        <div><dt>Distribution</dt><dd>Browser runtime and source-built local node</dd></div>
-        <div><dt>License</dt><dd>Apache-2.0</dd></div>
+        <div><dt>Everyday experience</dt><dd>Agent roles, mandates, approvals and receipts</dd></div>
+        <div><dt>Deployment</dt><dd>Local browser workspace or source-built personal node</dd></div>
+        <div><dt>Service layer</dt><dd>Optional coordination without surrendering office authority</dd></div>
       </dl>
       <div class="hero-actions">
-        <a class="action action--ember" href="https://github.com/greenways-ai/hestia">View source ↗</a>
+        <a class="action action--ember" href={`${base}rooms/`}>Open the live office ↗</a>
         <a class="action" href="https://github.com/greenways-ai/hestia/blob/main/docs/local-node.md">Read the operator guide ↗</a>
       </div>
     </div>
