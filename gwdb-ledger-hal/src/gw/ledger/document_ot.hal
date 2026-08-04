@@ -1,5 +1,5 @@
 (ns gw.ledger.document-ot
-  (:require [std.foundation :refer [assoc conj get max min reduce]]
+  (:require [std.foundation :refer [assoc conj get reduce]]
             [gw.ledger.document-protocol :as document]))
 
 (def protocol "greenways-document/1")
@@ -73,6 +73,14 @@
   [scalar-count operation]
   (scalar-count (get operation :insert)))
 
+(defn lower-number
+  [left right]
+  (if (< left right) left right))
+
+(defn upper-number
+  [left right]
+  (if (> left right) left right))
+
 (defn map-position
   "Maps one Unicode-scalar offset through one accepted splice. scalar-count is
    explicit because UTF-16 host string length is not the protocol unit."
@@ -130,8 +138,8 @@
         true
         (let [start (map-position scalar-count incoming-start accepted 1)
               end (map-position scalar-count incoming-end accepted 1)
-              next (assoc (assoc incoming :offset (min start end))
-                          :delete-count (max 0 (- end start)))]
+              next (assoc (assoc incoming :offset (lower-number start end))
+                          :delete-count (upper-number 0 (- end start)))]
           (if (and (= (get next :delete-count) 0)
                    (= (inserted-length scalar-count next) 0))
             (noop next "overlapping deletion already accepted")
