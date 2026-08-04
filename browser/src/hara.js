@@ -1,9 +1,12 @@
 import { HtaContext, HtaKeyword } from "../hara-runtime/index.js";
 
 const assetUrl = (path) => new URL(path, import.meta.url);
+const runtimeBase = import.meta.url.startsWith("file:")
+  ? assetUrl("../vendor/hara/")
+  : assetUrl("../hara-runtime/");
 const runtimeAssets = Object.freeze({
-  worker: assetUrl("../hara-runtime/worker.js"),
-  module: assetUrl("../hara-runtime/hara_wasm_raw.wasm")
+  worker: new URL("worker.js", runtimeBase),
+  module: new URL("hara_wasm_raw.wasm", runtimeBase)
 });
 const resources = Object.freeze([
   ["std.crypto.shamir", assetUrl("../hara/shamir.hal")],
