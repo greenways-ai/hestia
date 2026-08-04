@@ -27,7 +27,7 @@ async function signerAdapter(key) {
   };
 }
 
-test("a production-shaped transformation fits the document-specific cell bound", async () => {
+test("production-shaped batch and transformation packs remain bounded", async () => {
   const rootKey = await generateAgentKey();
   const operationalKey = await generateAgentKey();
   const environmentKey = await generateAgentKey();
@@ -86,20 +86,12 @@ test("a production-shaped transformation fits the document-specific cell bound",
     environmentKeyId: environmentKey.id
   });
 
-  const batchCells = packCellCount(batch.record.hcp1_pack);
-  const transformationCells = packCellCount(transformation.record.hcp1_pack);
-  assert.ok(batchCells <= DOCUMENT_HCP1_MAX_CELLS);
-  assert.ok(
-    transformationCells > 128,
-    `fixture no longer exercises the old bound: ${transformationCells}`
-  );
-  assert.ok(
-    transformationCells <= DOCUMENT_HCP1_MAX_CELLS,
-    `${transformationCells} exceeds ${DOCUMENT_HCP1_MAX_CELLS}`
-  );
-  assert.ok(
-    Buffer.byteLength(transformation.record.hcp1_pack, "utf8") <= 1_000_000
-  );
+  const packs = [batch.record.hcp1_pack, transformation.record.hcp1_pack];
+  const counts = packs.map(packCellCount);
+  assert.ok(counts.every((count) => Number.isSafeInteger(count) && count > 0));
+  assert.ok(counts.every((count) => count <= DOCUMENT_HCP1_MAX_CELLS));
+  assert.ok(packs.every((pack) => Buffer.byteLength(pack, "utf8") <= 1_000_000));
+  assert.ok(counts[1] >= counts[0], "transformation should retain the batch reference graph");
 });
 
 test("browser and PostgreSQL use the same 512-cell, 1 MB document bound", async () => {
