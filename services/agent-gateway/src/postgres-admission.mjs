@@ -195,6 +195,37 @@ function transactionAdapter(sql) {
         ) AS signed_receipt_root_hex
       `;
       return one(rows, "room member commit").signed_receipt_root_hex;
+    },
+
+    async prepareActivity({ environmentId, recordRootHex }) {
+      const rows = await sql`
+        SELECT
+          prepared_sequence::text AS sequence,
+          prepared_activity_kind AS activity_kind,
+          prepared_room_id AS room_id,
+          encode(result_activity_root, 'hex') AS result_activity_root_hex,
+          encode(admission_receipt_root, 'hex') AS receipt_root_hex,
+          encode(receipt_signing_payload, 'hex') AS receipt_signing_payload_hex
+        FROM hestia.agent_room_activity_prepare(
+          ${environmentId},
+          ${bytes(recordRootHex, "record root")}
+        )
+      `;
+      return prepareResult(one(rows, "room activity prepare"), "room activity");
+    },
+
+    async commitActivity({ environmentId, recordRootHex, signature }) {
+      const rows = await sql`
+        SELECT encode(
+          hestia.agent_room_activity_commit(
+            ${environmentId},
+            ${bytes(recordRootHex, "record root")},
+            ${Buffer.from(signature)}
+          ),
+          'hex'
+        ) AS signed_receipt_root_hex
+      `;
+      return one(rows, "room activity commit").signed_receipt_root_hex;
     }
   });
 }
