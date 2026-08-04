@@ -2,7 +2,7 @@ import { defineConfig } from "astro/config";
 import sitemap from "@astrojs/sitemap";
 
 export default defineConfig({
-  site: "https://opensource.greenways.ai",
+  site: "https://oss.greenways.ai",
   base: "/hestia",
   output: "static",
   integrations: [sitemap()],

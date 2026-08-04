@@ -12,7 +12,7 @@ test("the microsite has the canonical Hestia identity and primary journeys", asy
     source("src/layouts/BaseLayout.astro"),
     source("src/pages/index.astro")
   ]);
-  assert.match(config, /site: "https:\/\/opensource\.greenways\.ai"/);
+  assert.match(config, /site: "https:\/\/oss\.greenways\.ai"/);
   assert.match(config, /base: "\/hestia"/);
   assert.match(layout, /GREENWAYS/);
   assert.match(layout, /SoftwareSourceCode/);
