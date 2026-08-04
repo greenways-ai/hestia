@@ -1,35 +1,53 @@
 import { pathToFileURL } from "node:url";
 import { createAgentAdmissionService } from "./admission-service.mjs";
+import { createDocumentLedgerService } from "./document-ledger-service.mjs";
 import { loadEnvironmentSigner } from "./environment-signer.mjs";
 import { createAgentGatewayHttpServer } from "./http-server.mjs";
 import { createPostgresAdmissionDatabase } from "./postgres-admission.mjs";
+import { createPostgresDocumentDatabase } from "./postgres-document.mjs";
 
 export async function startAgentGateway(options = {}) {
   const database = options.database ?? createPostgresAdmissionDatabase(options.databaseOptions);
+  const documentDatabase = options.documentDatabase
+    ?? createPostgresDocumentDatabase(options.documentDatabaseOptions ?? options.databaseOptions);
   const signer = options.signer ?? await loadEnvironmentSigner(
     options.signingKeyFile ?? process.env.HESTIA_ENVIRONMENT_SIGNING_KEY_FILE
   );
+  const environmentId = options.environmentId
+    ?? process.env.HESTIA_ENVIRONMENT_ID
+    ?? "hestia-local";
   const service = options.service ?? createAgentAdmissionService({
     database,
     signer,
-    environmentId: options.environmentId
-      ?? process.env.HESTIA_ENVIRONMENT_ID
-      ?? "hestia-local"
+    environmentId
+  });
+  const documentService = options.documentService ?? createDocumentLedgerService({
+    database: documentDatabase,
+    signer,
+    environmentId
   });
   await service.health();
-  const http = createAgentGatewayHttpServer({ service, ...options.httpOptions });
+  const http = createAgentGatewayHttpServer({
+    service,
+    documentService,
+    ...options.httpOptions
+  });
   await http.listen();
 
   let closed = false;
   return Object.freeze({
     service,
+    documentService,
     http,
     address: http.address(),
     async close() {
       if (closed) return;
       closed = true;
       await http.close();
-      await service.close();
+      await Promise.all([
+        service.close(),
+        documentDatabase.close?.()
+      ]);
     }
   });
 }

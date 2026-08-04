@@ -1,0 +1,52 @@
+name: document-ledger
+
+on:
+  pull_request:
+    paths:
+      - "browser/src/document-*.js"
+      - "browser/test/document-*.test.mjs"
+      - "protocol/document-ot.js"
+      - "services/agent-gateway/src/document-*.mjs"
+      - "services/agent-gateway/src/postgres-document.mjs"
+      - "services/agent-gateway/test/document-*.test.mjs"
+      - "gwdb-ledger-hal/src/gw/ledger/document_ot.hal"
+      - "migrations/20260804050000_document_ot_ledger.sql"
+      - "docs/document-protocol-v1.md"
+  push:
+    branches: [main]
+    paths:
+      - "browser/src/document-*.js"
+      - "browser/test/document-*.test.mjs"
+      - "protocol/document-ot.js"
+      - "services/agent-gateway/src/document-*.mjs"
+      - "services/agent-gateway/src/postgres-document.mjs"
+      - "services/agent-gateway/test/document-*.test.mjs"
+      - "gwdb-ledger-hal/src/gw/ledger/document_ot.hal"
+      - "migrations/20260804050000_document_ot_ledger.sql"
+      - "docs/document-protocol-v1.md"
+
+permissions:
+  contents: read
+
+jobs:
+  document-ledger:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            browser/package-lock.json
+            services/agent-gateway/package-lock.json
+      - run: npm ci
+        working-directory: browser
+      - run: node --test test/document-*.test.mjs
+        working-directory: browser
+      - run: npm ci
+        working-directory: services/agent-gateway
+      - run: node --test test/document-*.test.mjs
+        working-directory: services/agent-gateway
+      - name: Apply all Hestia migrations
+        run: bash scripts/test-agent-record-verification

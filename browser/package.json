@@ -17,7 +17,10 @@
     "./agent-hcv1": "./src/agent-hcv1.js",
     "./agent-room-records": "./src/agent-room-records.js",
     "./agent-gateway": "./src/agent-gateway.js",
-    "./agent-room-storage": "./src/agent-room-storage.js"
+    "./agent-room-storage": "./src/agent-room-storage.js",
+    "./document-hcv1": "./src/document-hcv1.js",
+    "./document-records": "./src/document-records.js",
+    "./document-gateway": "./src/document-gateway.js"
   },
   "scripts": {
     "build:pages": "node scripts/build-pages.mjs",

@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { AgentGatewayInputError, AGENT_HTTP_PROTOCOL } from "./protocol.mjs";
+import { DOCUMENT_HTTP_PROTOCOL } from "./document-ledger-service.mjs";
 
 const securityHeaders = Object.freeze({
   "cache-control": "no-store",
@@ -21,11 +22,11 @@ function json(response, status, value) {
   response.end(`${JSON.stringify(value)}\n`);
 }
 
-function methodNotAllowed(response, allowed) {
+function methodNotAllowed(response, allowed, protocol = AGENT_HTTP_PROTOCOL) {
   response.writeHead(405, { ...securityHeaders, allow: allowed });
   response.end(`${JSON.stringify({
     ok: false,
-    protocol: AGENT_HTTP_PROTOCOL,
+    protocol,
     error: { code: "method-not-allowed", message: `use ${allowed}` }
   })}\n`);
 }
@@ -56,13 +57,13 @@ function safeDatabaseMessage(error) {
   return value.replace(/^PostgresError:\s*/i, "").slice(0, 300);
 }
 
-function errorResponse(error, debug) {
+function errorResponse(error, debug, protocol = AGENT_HTTP_PROTOCOL) {
   if (error instanceof AgentGatewayInputError || error instanceof BodyTooLargeError) {
     return {
       status: error.status ?? 400,
       body: {
         ok: false,
-        protocol: AGENT_HTTP_PROTOCOL,
+        protocol,
         error: { code: error.code ?? "invalid-request", message: error.message }
       }
     };
@@ -72,7 +73,7 @@ function errorResponse(error, debug) {
       status: 409,
       body: {
         ok: false,
-        protocol: AGENT_HTTP_PROTOCOL,
+        protocol,
         error: {
           code: "admission-rejected",
           message: safeDatabaseMessage(error)
@@ -84,7 +85,7 @@ function errorResponse(error, debug) {
     status: 500,
     body: {
       ok: false,
-      protocol: AGENT_HTTP_PROTOCOL,
+      protocol,
       error: {
         code: "gateway-error",
         message: debug ? safeDatabaseMessage(error) : "Hestia could not complete the request"
@@ -100,6 +101,7 @@ function originAllowed(request, allowedOrigins) {
 
 export function createAgentGatewayHttpServer({
   service,
+  documentService = null,
   host = process.env.HESTIA_AGENT_GATEWAY_HOST ?? "0.0.0.0",
   port = Number(process.env.HESTIA_AGENT_GATEWAY_PORT ?? 8787),
   maxBodyBytes = Number(process.env.HESTIA_AGENT_GATEWAY_MAX_BODY_BYTES ?? 1_100_000),
@@ -113,11 +115,12 @@ export function createAgentGatewayHttpServer({
     throw new Error("agent gateway HTTP server requires an admission service");
   }
   const http = createServer(async (request, response) => {
+    let responseProtocol = AGENT_HTTP_PROTOCOL;
     try {
       if (!originAllowed(request, allowedOrigins)) {
         json(response, 403, {
           ok: false,
-          protocol: AGENT_HTTP_PROTOCOL,
+          protocol: responseProtocol,
           error: { code: "origin-not-allowed", message: "request origin is not allowed" }
         });
         return;
@@ -142,14 +145,30 @@ export function createAgentGatewayHttpServer({
         json(response, 200, await service.admit(await readJson(request, maxBodyBytes)));
         return;
       }
+      if (url.pathname === "/v1/documents/imports") {
+        responseProtocol = DOCUMENT_HTTP_PROTOCOL;
+        if (request.method !== "POST") {
+          return methodNotAllowed(response, "POST", DOCUMENT_HTTP_PROTOCOL);
+        }
+        if (!documentService?.admit) {
+          json(response, 503, {
+            ok: false,
+            protocol: DOCUMENT_HTTP_PROTOCOL,
+            error: { code: "document-service-unavailable", message: "document ledger service is unavailable" }
+          });
+          return;
+        }
+        json(response, 200, await documentService.admit(await readJson(request, maxBodyBytes)));
+        return;
+      }
       json(response, 404, {
         ok: false,
-        protocol: AGENT_HTTP_PROTOCOL,
-        error: { code: "not-found", message: "unknown Hestia agent gateway route" }
+        protocol: responseProtocol,
+        error: { code: "not-found", message: "unknown Hestia gateway route" }
       });
     } catch (error) {
       if (debug) console.error(error);
-      const result = errorResponse(error, debug);
+      const result = errorResponse(error, debug, responseProtocol);
       json(response, result.status, result.body);
     }
   });
