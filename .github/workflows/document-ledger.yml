@@ -9,8 +9,10 @@ on:
       - "services/agent-gateway/src/document-*.mjs"
       - "services/agent-gateway/src/postgres-document.mjs"
       - "services/agent-gateway/test/document-*.test.mjs"
+      - "services/agent-gateway/test-support/document-*.mjs"
       - "gwdb-ledger-hal/src/gw/ledger/document_ot.hal"
-      - "migrations/20260804050000_document_ot_ledger.sql"
+      - "migrations/*document_ot*.sql"
+      - "scripts/test-document-ledger-gateway"
       - "docs/document-protocol-v1.md"
   push:
     branches: [main]
@@ -21,8 +23,10 @@ on:
       - "services/agent-gateway/src/document-*.mjs"
       - "services/agent-gateway/src/postgres-document.mjs"
       - "services/agent-gateway/test/document-*.test.mjs"
+      - "services/agent-gateway/test-support/document-*.mjs"
       - "gwdb-ledger-hal/src/gw/ledger/document_ot.hal"
-      - "migrations/20260804050000_document_ot_ledger.sql"
+      - "migrations/*document_ot*.sql"
+      - "scripts/test-document-ledger-gateway"
       - "docs/document-protocol-v1.md"
 
 permissions:
@@ -31,6 +35,7 @@ permissions:
 jobs:
   document-ledger:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -48,5 +53,5 @@ jobs:
         working-directory: services/agent-gateway
       - run: node --test test/document-*.test.mjs
         working-directory: services/agent-gateway
-      - name: Apply all Hestia migrations
-        run: bash scripts/test-agent-record-verification
+      - name: Admit two signed document revisions through HTTP and PostgreSQL
+        run: bash scripts/test-document-ledger-gateway
