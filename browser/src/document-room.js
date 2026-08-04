@@ -18,6 +18,14 @@ import {
   verifyRoomCommitBundle
 } from "./document-room-records.js";
 
+const DOCUMENT_CONFLICT_PREFIXES = Object.freeze([
+  "text.",
+  "node.",
+  "artefact.",
+  "mark.",
+  "document."
+]);
+
 function root(value, name = "document root") {
   return documentRootHex(value, name);
 }
@@ -29,6 +37,25 @@ function sameRoot(left, right) {
 function sameJwk(left, right) {
   const keys = (value) => Object.keys(value || {}).sort().map((key) => [key, value[key]]);
   return JSON.stringify(keys(left)) === JSON.stringify(keys(right));
+}
+
+function plainValue(value) {
+  if (value === undefined || value === null || typeof value !== "object") {
+    return value ?? null;
+  }
+  if (value instanceof Uint8Array) return value;
+  if (Array.isArray(value)) return value.map(plainValue);
+  if (value instanceof Map) {
+    return Object.fromEntries([...value].map(([key, item]) => [
+      typeof key === "object" && key?.name ? key.name : String(key),
+      plainValue(item)
+    ]));
+  }
+  if (Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, plainValue(item)]));
+  }
+  if (value?.name && Object.keys(value).length <= 2) return value.name;
+  return String(value);
 }
 
 function canonicalOperation(operation) {
@@ -63,14 +90,24 @@ function sourceRootOptions(index) {
 }
 
 function conflictFrom(error) {
+  const data = plainValue(error?.data || error?.details || null);
+  const rawCode = data?.code?.name
+    || data?.code
+    || error?.code
+    || null;
+  const code = rawCode == null ? null : String(rawCode).replace(/^:/, "");
   return {
-    code: error?.data?.code?.name
-      || error?.data?.code
-      || error?.code
-      || "document.transform-failed",
+    code,
     message: error?.message || String(error),
-    details: error?.data || error?.details || null
+    details: data
   };
+}
+
+function recognisedConflict(conflict, error) {
+  if (error?.name === "DocumentConflictError") return true;
+  return Boolean(conflict.code && DOCUMENT_CONFLICT_PREFIXES.some(
+    (prefix) => conflict.code.startsWith(prefix)
+  ));
 }
 
 async function keyRootPlan(key) {
@@ -118,7 +155,7 @@ async function verifyBatchProjection(bundle, member, baseDocument) {
       || !sameRoot(body.expected_result_root, expectedPlan)
       || !sameRoot(body.author_profile_root, member.profileRecord)
       || !sameRoot(body.delegation_root, member.delegationRecord)) {
-    throw new Error("signed document batch projection does not match its HCV1 roots");
+    throw new Error("signed document batch projection mismatch");
   }
   return { basePlan, expectedPlan, operationPlans, operationVector };
 }
@@ -130,123 +167,144 @@ export class DocumentRoom extends EventTarget {
     document,
     kernel,
     documentKey,
-    localMember
+    localMember,
+    epoch = 1
   }) {
     super();
-    if (role !== "sequencer" && role !== "participant") {
-      throw new Error("document room role must be sequencer or participant");
-    }
-    if (!roomId || !document?.id || !kernel?.transform || !documentKey || !localMember) {
-      throw new Error("document room is missing its kernel, document, key or member");
+    if (role !== "sequencer" && role !== "participant") throw new Error("invalid document room role");
+    if (!roomId || !document?.id || !kernel || !documentKey?.id || !localMember?.memberId) {
+      throw new Error("document room requires room, document, kernel, key and local member");
     }
     this.role = role;
     this.roomId = roomId;
-    this.documentKey = documentKey;
-    this.kernel = kernel;
     this.document = cloneValue(document);
-    this.revision = 0;
-    this.headRoot = null;
-    this.sequence = 0;
-    this.genesis = null;
-    this.members = new Map([[localMember.memberId, { ...localMember }]]);
+    this.kernel = kernel;
+    this.documentKey = documentKey;
     this.localMemberId = localMember.memberId;
+    this.epoch = Number(epoch);
+    this.genesis = null;
+    this.revision = Number(document.revision || 0);
+    this.sequence = 0;
+    this.headRoot = null;
     this.history = [];
-    this.snapshots = new Map([[0, cloneValue(document)]]);
+    this.snapshots = new Map([[this.revision, cloneValue(document)]]);
+    this.members = new Map([[localMember.memberId, cloneValue(localMember)]]);
   }
 
   emit(type, detail = {}) {
     this.dispatchEvent(new CustomEvent(type, { detail }));
   }
 
-  localMember() {
-    return this.members.get(this.localMemberId);
-  }
-
   addMember(member) {
-    if (!member?.memberId || !member?.publicKeyJwk
-        || !member?.profileRecord?.root || !member?.delegationRecord?.root) {
+    if (!member?.memberId || !member?.publicKeyJwk || !member?.profileRecord?.root || !member?.delegationRecord?.root) {
       throw new Error("document room member is incomplete");
     }
-    if (this.genesis) {
-      const admitted = this.genesis.record.body.members.find((value) => value.member_id === member.memberId);
-      if (!admitted || !sameJwk(admitted.public_key_jwk, member.publicKeyJwk)) {
-        throw new Error("document room membership is fixed for the current epoch");
-      }
-    }
-    this.members.set(member.memberId, { ...member });
-    this.emit("member", { member: memberProjection(member) });
-    return this.members.get(member.memberId);
+    this.members.set(member.memberId, cloneValue(member));
+    this.emit("member", { member: cloneValue(member) });
+    return member;
   }
 
   member(memberId) {
     const member = this.members.get(memberId);
-    if (!member) throw new Error(`unknown document room member: ${memberId}`);
+    if (!member) throw new Error(`document room member is unknown: ${memberId}`);
     return member;
   }
 
+  localMember() {
+    return this.member(this.localMemberId);
+  }
+
+  snapshot() {
+    return Object.freeze({
+      protocol: "hestia-document-room-snapshot/1",
+      roomId: this.roomId,
+      epoch: this.genesis?.record?.body?.epoch || this.epoch,
+      sequence: this.sequence,
+      revision: this.revision,
+      headRoot: this.headRoot,
+      document: cloneValue(this.document),
+      members: [...this.members.values()].map(cloneValue)
+    });
+  }
+
   async issueGenesis() {
-    if (this.role !== "sequencer") throw new Error("only the sequencer may issue room genesis");
-    if (this.members.size < 2) throw new Error("document room genesis waits for the invited peer");
+    if (this.role !== "sequencer") throw new Error("only the room sequencer may issue genesis");
+    if (this.genesis) return this.genesis;
+    const members = [...this.members.values()].sort((left, right) => left.memberId.localeCompare(right.memberId));
+    const initialAstPlan = await documentValuePlan(this.document);
     const genesis = await createDocumentRoomGenesis({
       roomId: this.roomId,
       documentId: this.document.id,
-      initialAst: this.snapshots.get(0),
-      sequencerKey: this.documentKey,
-      members: [...this.members.values()].map(memberProjection),
-      epoch: 1
+      epoch: this.epoch,
+      initialAst: this.document,
+      members: members.map(memberProjection),
+      sequencerKey: this.documentKey
     });
     this.genesis = genesis;
-    this.emit("genesis", { genesis });
+    this.headRoot = genesis.record.root;
+    this.snapshots.set(0, cloneValue(this.document));
+    this.emit("genesis", { genesis, initialAstPlan });
     return genesis;
   }
 
   async acceptGenesis(genesis) {
-    const verified = await verifyDocumentRoomGenesis(genesis.record, {
+    const verified = await verifyDocumentRoomGenesis(genesis, {
       roomId: this.roomId,
-      documentId: this.document.id
+      documentId: this.document.id,
+      expectedInitialAst: this.document
     });
-    const localProjection = verified.body.members.find((value) => value.member_id === this.localMemberId);
-    if (!localProjection || !sameJwk(localProjection.public_key_jwk, this.localMember().publicKeyJwk)) {
-      throw new Error("local document key is not a member of this signed room epoch");
+    const localProjection = verified.body.members.find((member) => member.member_id === this.localMemberId);
+    if (!localProjection) throw new Error("local member is absent from document room genesis");
+    const local = this.localMember();
+    if (!sameJwk(localProjection.public_key_jwk, local.publicKeyJwk)
+        || !sameRoot(localProjection.profile_root, local.profileRecord)
+        || !sameRoot(localProjection.delegation_root, local.delegationRecord)) {
+      throw new Error("document room genesis local membership mismatch");
     }
-    this.genesis = genesis;
-    this.document = cloneValue(verified.body.initial_ast);
-    this.revision = 0;
-    this.headRoot = null;
-    this.sequence = 0;
-    this.history = [];
-    this.snapshots = new Map([[0, cloneValue(this.document)]]);
     for (const projection of verified.body.members) {
-      const existing = this.members.get(projection.member_id);
+      const member = this.members.get(projection.member_id);
+      if (member) continue;
       this.members.set(projection.member_id, {
         memberId: projection.member_id,
         label: projection.label,
         role: projection.role,
         publicKeyJwk: projection.public_key_jwk,
-        profileRecord: existing?.profileRecord || { root: projection.profile_root },
-        delegationRecord: existing?.delegationRecord || { root: projection.delegation_root }
+        profileRecord: { root: projection.profile_root },
+        delegationRecord: { root: projection.delegation_root }
       });
     }
-    this.emit("genesis", { genesis, verified });
-    return verified;
+    this.genesis = genesis;
+    this.epoch = Number(verified.body.epoch);
+    this.headRoot = genesis.record.root;
+    this.snapshots.set(0, cloneValue(this.document));
+    this.emit("genesis", { genesis });
+    return genesis;
   }
 
   async createBatch(operations, {
     baseRevision = this.revision,
     baseDocument = this.snapshots.get(baseRevision)
   } = {}) {
-    if (!this.genesis) throw new Error("document room is not active yet");
-    if (!baseDocument) throw new Error(`document room has no snapshot for revision ${baseRevision}`);
+    if (!this.genesis) throw new Error("document room has no signed genesis");
+    if (!Array.isArray(operations) || !operations.length || operations.length > 64) {
+      throw new Error("document room batches require one to 64 operations");
+    }
+    if (!baseDocument) throw new Error(`document base revision is unavailable: ${baseRevision}`);
     const member = this.localMember();
-    const signedOperations = operations.map((operation) => ({ ...operation, baseRevision }));
+    const batchId = crypto.randomUUID();
     const projected = {
-      id: `batch:${crypto.randomUUID()}`,
+      id: batchId,
       documentId: this.document.id,
       baseRevision,
-      operations: signedOperations.map(canonicalOperation)
+      operations: operations.map((operation) => ({
+        ...canonicalOperation(operation),
+        id: operation.id || crypto.randomUUID(),
+        baseRevision
+      }))
     };
+    const signedOperations = projected.operations.map((operation) => ({ ...operation }));
     const expectedResultAst = applyBatch(
-      baseDocument,
+      cloneValue(baseDocument),
       projected,
       sourceRootOptions(await sourceRootIndex(baseDocument))
     );
@@ -303,8 +361,10 @@ export class DocumentRoom extends EventTarget {
         operations: transformedOperations
       }, sourceRootOptions(await sourceRootIndex(previousDocument)));
     } catch (error) {
+      const proposed = conflictFrom(error);
+      if (!recognisedConflict(proposed, error)) throw error;
       outcome = "conflict";
-      conflict = conflictFrom(error);
+      conflict = proposed;
       transformedOperations = [];
       resultAst = previousDocument;
     }
@@ -378,107 +438,69 @@ export class DocumentRoom extends EventTarget {
     if (commit?.protocol !== "hestia-document-room-commit/1"
         || commit.roomId !== this.roomId
         || Number(commit.epoch) !== Number(this.genesis.record.body.epoch)) {
-      throw new Error("document room commit epoch mismatch");
+      throw new Error("document room commit identity mismatch");
     }
-    if (Number(commit.sequence) !== this.sequence + 1) {
-      throw new Error("document room commit sequence is not contiguous");
+    if (Number(commit.sequence) !== this.sequence + 1
+        || Number(commit.previousRevision) !== this.revision
+        || commit.previousRevisionRoot !== this.headRoot) {
+      throw new Error("document room commit does not extend the current head");
     }
-    const member = this.member(commit.authorMemberId);
+    const sequencer = this.members.get(this.genesis.record.body.sequencer_member_id);
+    const author = this.member(commit.authorMemberId);
+    if (!sequencer) throw new Error("document room sequencer membership is missing");
+    await verifyBatchProjection(
+      commit.batch,
+      author,
+      this.snapshots.get(Number(commit.batch.baseRevision))
+    );
     const verified = await verifyRoomCommitBundle(commit, {
-      contributorPublicKey: member.publicKeyJwk,
-      contributorProfileRecord: member.profileRecord,
-      contributorDelegationRecord: member.delegationRecord,
-      sequencerPublicKey: this.genesis.record.body.sequencer_key,
-      expectedDocument: this.document,
-      expectedRevision: this.revision,
-      expectedRevisionRoot: this.headRoot
+      sequencerPublicJwk: sequencer.publicKeyJwk,
+      expectedPreviousAst: this.document
     });
-    const replayed = commit.outcome === "accepted"
-      ? applyBatch(this.document, {
+    let replayed = cloneValue(this.document);
+    if (commit.outcome === "accepted") {
+      replayed = applyBatch(replayed, {
         id: commit.batch.batchId,
         documentId: this.document.id,
         baseRevision: commit.batch.baseRevision,
         operations: commit.transformedOperations
-      }, sourceRootOptions(await sourceRootIndex(this.document)))
-      : cloneValue(this.document);
-    const replayedPlan = await documentValuePlan(replayed);
-    if (!sameRoot(replayedPlan, verified.resultAstPlan)) {
-      throw new Error("document room replay result does not match the signed transformation");
-    }
-
-    if (commit.outcome === "accepted") {
-      const sequencerPublicKey = await crypto.subtle.importKey(
-        "jwk",
-        this.genesis.record.body.sequencer_key,
-        { name: "Ed25519" },
-        true,
-        ["verify"]
-      );
-      const recreatedRevision = await createRoomRevisionBundle({
-        documentId: this.document.id,
-        revision: this.revision + 1,
-        previousRevisionRoot: this.headRoot,
-        previousAst: this.document,
-        batchRecord: commit.batch.record,
-        transformationRecord: commit.transformation.record,
-        transformedOperations: commit.transformedOperations,
-        resultAst: replayed,
-        authorProfileRecord: member.profileRecord,
-        environmentKeyRoot: await keyRootPlan({ publicKey: sequencerPublicKey })
-      });
-      if (!commit.revision || !sameRoot(commit.revision, recreatedRevision)) {
-        throw new Error("document room revision root mismatch");
+      }, sourceRootOptions(await sourceRootIndex(this.document)));
+      const replayPlan = await documentValuePlan(replayed);
+      if (!sameRoot(replayPlan, commit.transformation.resultAstPlan)
+          || !sameRoot(replayPlan, commit.revision.resultAstPlan)) {
+        throw new Error("document room replay result root mismatch");
       }
       this.document = replayed;
-      this.revision += 1;
-      this.headRoot = commit.revision.root;
+      this.revision = Number(commit.revision.body.revision);
+      this.headRoot = commit.revision.record.root;
       this.snapshots.set(this.revision, cloneValue(this.document));
     } else if (commit.outcome === "conflict") {
-      if (commit.revision) throw new Error("conflicted document room commit must not contain a revision");
+      if (commit.revision) throw new Error("conflicted document room commit cannot contain a revision");
+      const currentPlan = await documentValuePlan(this.document);
+      if (!sameRoot(currentPlan, commit.transformation.resultAstPlan)) {
+        throw new Error("conflicted document room result must preserve the current AST");
+      }
     } else {
-      throw new Error("document room commit outcome is invalid");
+      throw new Error("unknown document room commit outcome");
     }
-
-    const receiptBody = commit.receipt.record.body;
-    if (commit.outcome === "accepted" && !sameRoot(receiptBody.result_revision_root, commit.revision)) {
-      throw new Error("document room receipt revision mismatch");
-    }
-    if (commit.outcome === "conflict" && receiptBody.result_revision_root != null) {
-      throw new Error("conflict receipt must not reference a revision");
-    }
-
-    const historyEntry = {
-      sequence: commit.sequence,
+    this.sequence = Number(commit.sequence);
+    this.history.push({
+      sequence: this.sequence,
       revision: this.revision,
-      revisionRoot: this.headRoot,
       outcome: commit.outcome,
-      authorMemberId: commit.authorMemberId,
       batchRoot: commit.batch.record.root,
       transformationRoot: commit.transformation.record.root,
+      revisionRoot: commit.revision?.record?.root || null,
       receiptRoot: commit.receipt.record.root,
       transformedOperations: cloneValue(commit.transformedOperations),
-      conflict: commit.conflict || null,
-      commit
-    };
-    this.sequence = Number(commit.sequence);
-    this.history.push(historyEntry);
-    this.emit("commit", { commit, historyEntry, document: cloneValue(this.document) });
-    return historyEntry;
-  }
-
-  snapshot() {
-    return Object.freeze({
-      roomId: this.roomId,
-      document: cloneValue(this.document),
-      revision: this.revision,
-      headRoot: this.headRoot,
-      sequence: this.sequence,
-      genesis: this.genesis,
-      history: cloneValue(this.history)
+      conflict: cloneValue(commit.conflict),
+      authorMemberId: commit.authorMemberId
     });
+    this.emit("commit", { commit, document: cloneValue(this.document) });
+    return verified;
   }
 
-  async evaluateArtefact(source) {
+  evaluateArtefact(source) {
     return this.kernel.evaluate(source);
   }
 }
