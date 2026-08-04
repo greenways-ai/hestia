@@ -1,11 +1,13 @@
 ;; Hestia peer document room kernel. The browser owns WebRTC, cryptography and
-;; HCV1 projection; this module owns room lifecycle and deterministic OT order.
+;; HCV1 projection; this module owns room lifecycle and adapts browser-shaped
+;; operations to the canonical gw.ledger.document-ot policy.
 (ns hestia.document-room
-  (:require [std.foundation :refer [assoc conj get merge nth]]))
+  (:require [std.foundation :refer [assoc conj get merge nth]]
+            [gw.ledger.document-ot :as document-ot]))
 
 (def protocol "hestia-document-room/1")
 (def awareness-protocol "hestia-document-awareness/1")
-(def max-batch-operations 64)
+(def max-batch-operations document-ot/max-batch-operations)
 
 (defn command
   [capability action args]
@@ -128,155 +130,148 @@
       true
       (throw (ex-info "unknown document room event" {"type" kind})))))
 
-(defn noop
-  [operation reason]
-  (assoc (assoc operation "type" "operation.noop") "noopReason" reason))
-
-(defn inserted-length
+(defn canonical-common
   [operation]
-  (count (or (get operation "insert") "")))
+  {:id (get operation "id")
+   :type (get operation "type")
+   :base-revision (get operation "baseRevision")
+   :environment-sequence (get operation "environmentSequence")})
 
-(defn map-position
-  [position accepted association]
-  (let [start (get accepted "offset")
-        deleted (or (get accepted "deleteCount") 0)
-        inserted (inserted-length accepted)
-        end (+ start deleted)]
+(defn canonical-operation
+  [operation]
+  (let [kind (get operation "type")
+        common (canonical-common operation)]
     (cond
-      (= deleted 0)
-      (if (or (> position start)
-              (and (= position start) (> association 0)))
-        (+ position inserted)
-        position)
+      (= kind "operation.noop")
+      (merge common {:noop-reason (get operation "noopReason")})
 
-      (or (< position start)
-          (and (= position start) (< association 0)))
-      position
+      (= kind "text.splice")
+      (merge common
+             {:target-id (get operation "targetId")
+              :offset (get operation "offset")
+              :delete-count (or (get operation "deleteCount") 0)
+              :insert (or (get operation "insert") "")})
 
-      (or (> position end)
-          (and (= position end) (> association 0)))
-      (+ position (- inserted deleted))
+      (= kind "node.insert")
+      (merge common
+             {:parent-id (get operation "parentId")
+              :before-id (get operation "beforeId")
+              :after-id (get operation "afterId")
+              :node (get operation "node")})
+
+      (= kind "node.delete")
+      (merge common
+             {:target-id (get operation "targetId")
+              :expected-root (get operation "expectedRoot")})
+
+      (= kind "node.set-attrs")
+      (merge common
+             {:target-id (get operation "targetId")
+              :expected-attrs (get operation "expectedAttrs")
+              :attrs (get operation "attrs")})
+
+      (= kind "artefact.commit")
+      (merge common
+             {:artefact-id (get operation "artefactId")
+              :artefact-node-id (get operation "artefactNodeId")
+              :source-text-id (get operation "sourceTextId")
+              :source-root (get operation "sourceRoot")
+              :result-root (get operation "resultRoot")
+              :media-type (get operation "mediaType")
+              :display (get operation "display")})
 
       true
-      (+ start (if (> association 0) inserted 0)))))
+      (throw (ex-info "unsupported browser document operation"
+                      {"type" kind})))))
 
-(defn transform-text-splice
-  [incoming accepted]
-  (if (not (= (get incoming "targetId") (get accepted "targetId")))
-    incoming
-    (let [accepted-start (get accepted "offset")
-          accepted-delete (or (get accepted "deleteCount") 0)
-          accepted-end (+ accepted-start accepted-delete)
-          incoming-start (get incoming "offset")
-          incoming-delete (or (get incoming "deleteCount") 0)
-          incoming-end (+ incoming-start incoming-delete)
-          incoming-insert (inserted-length incoming)]
-      (cond
-        (and (> accepted-delete 0)
-             (> incoming-insert 0)
-             (= incoming-delete 0)
-             (> incoming-start accepted-start)
-             (< incoming-start accepted-end))
-        (throw (ex-info "insertion falls inside accepted deleted text"
-                        {"code" "text.insert-inside-deleted-range"}))
+(defn canonical-operations
+  [operations]
+  (reduce (fn [out operation]
+            (conj out (canonical-operation operation)))
+          []
+          operations))
 
-        (and (= accepted-delete 0)
-             (= incoming-delete 0)
-             (= incoming-start accepted-start))
-        (assoc incoming "offset"
-               (+ incoming-start (inserted-length accepted)))
+(defn project-common
+  [operation]
+  {"id" (get operation :id)
+   "type" (get operation :type)
+   "baseRevision" (get operation :base-revision)
+   "environmentSequence" (get operation :environment-sequence)})
 
-        true
-        (let [start (map-position incoming-start accepted 1)
-              end (map-position incoming-end accepted 1)
-              next (assoc (assoc incoming "offset" (min start end))
-                          "deleteCount" (max 0 (- end start)))]
-          (if (and (= (get next "deleteCount") 0)
-                   (= (inserted-length next) 0))
-            (noop next "overlapping deletion already accepted")
-            next))))))
+(defn project-operation
+  [operation]
+  (let [kind (get operation :type)
+        common (project-common operation)]
+    (cond
+      (= kind "operation.noop")
+      (merge common {"noopReason" (get operation :noop-reason)})
 
-(defn targets-deleted-node?
-  [operation deleted-id]
-  (or (= (get operation "targetId") deleted-id)
-      (= (get operation "parentId") deleted-id)
-      (= (get operation "artefactNodeId") deleted-id)))
+      (= kind "text.splice")
+      (merge common
+             {"targetId" (get operation :target-id)
+              "offset" (get operation :offset)
+              "deleteCount" (get operation :delete-count)
+              "insert" (get operation :insert)})
 
-(defn transform-node-operation
-  [incoming accepted]
-  (cond
-    (and (= (get accepted "type") "node.delete")
-         (= (get incoming "type") "node.delete")
-         (= (get incoming "targetId") (get accepted "targetId")))
-    (noop incoming "target already deleted")
+      (= kind "node.insert")
+      (merge common
+             {"parentId" (get operation :parent-id)
+              "beforeId" (get operation :before-id)
+              "afterId" (get operation :after-id)
+              "node" (get operation :node)})
 
-    (and (= (get accepted "type") "node.delete")
-         (targets-deleted-node? incoming (get accepted "targetId")))
-    (throw (ex-info "operation targets a deleted node"
-                    {"code" "node.target-deleted"}))
+      (= kind "node.delete")
+      (merge common
+             {"targetId" (get operation :target-id)
+              "expectedRoot" (get operation :expected-root)})
 
-    true incoming))
+      (= kind "node.set-attrs")
+      (merge common
+             {"targetId" (get operation :target-id)
+              "expectedAttrs" (get operation :expected-attrs)
+              "attrs" (get operation :attrs)})
 
-(defn transform-artefact-commit
-  [incoming accepted]
-  (cond
-    (and (= (get accepted "type") "node.delete")
-         (= (get incoming "artefactNodeId") (get accepted "targetId")))
-    (throw (ex-info "artefact was deleted before snapshot admission"
-                    {"code" "artefact.deleted"}))
+      (= kind "artefact.commit")
+      (merge common
+             {"artefactId" (get operation :artefact-id)
+              "artefactNodeId" (get operation :artefact-node-id)
+              "sourceTextId" (get operation :source-text-id)
+              "sourceRoot" (get operation :source-root)
+              "resultRoot" (get operation :result-root)
+              "mediaType" (get operation :media-type)
+              "display" (get operation :display)})
 
-    (and (= (get accepted "type") "text.splice")
-         (= (get incoming "sourceTextId") (get accepted "targetId")))
-    (throw (ex-info "artefact source changed after the batch base"
-                    {"code" "artefact.source-changed"}))
+      true
+      (throw (ex-info "unsupported canonical document operation"
+                      {:type kind})))))
 
-    (and (= (get accepted "type") "artefact.commit")
-         (= (get incoming "artefactId") (get accepted "artefactId"))
-         (= (get incoming "sourceRoot") (get accepted "sourceRoot"))
-         (= (get incoming "resultRoot") (get accepted "resultRoot")))
-    (noop incoming "identical artefact result already committed")
+(defn project-operations
+  [operations]
+  (reduce (fn [out operation]
+            (conj out (project-operation operation)))
+          []
+          operations))
 
-    (and (= (get accepted "type") "artefact.commit")
-         (= (get incoming "artefactId") (get accepted "artefactId")))
-    (throw (ex-info "competing artefact results"
-                    {"code" "artefact.result-conflict"}))
+(defn canonical-batch
+  [batch]
+  {:id (get batch "id")
+   :document-id (get batch "documentId")
+   :base-revision (get batch "baseRevision")
+   :operations (canonical-operations (get batch "operations"))})
 
-    true incoming))
-
-(defn transform-operation
-  [incoming accepted]
-  (cond
-    (= (get incoming "type") "operation.noop") incoming
-
-    (and (= (get incoming "type") "text.splice")
-         (= (get accepted "type") "text.splice"))
-    (transform-text-splice incoming accepted)
-
-    (= (get incoming "type") "artefact.commit")
-    (transform-artefact-commit incoming accepted)
-
-    true
-    (transform-node-operation incoming accepted)))
-
-(defn transform-through
-  [operation accepted]
-  (reduce (fn [next previous]
-            (transform-operation next previous))
-          operation
-          accepted))
+(defn project-batch
+  [batch]
+  {"id" (get batch :id)
+   "documentId" (get batch :document-id)
+   "baseRevision" (get batch :base-revision)
+   "operations" (project-operations (get batch :operations))})
 
 (defn transform-batch
-  "Maps a signed batch through accepted environment operations and earlier
-   transformed operations in its own atomic batch."
+  "Maps browser-shaped operations through the canonical Hara ledger policy and
+   projects the transformed batch back to the browser protocol shape."
   [batch accepted]
-  (let [operations (get batch "operations")
-        transformed
-        (reduce
-         (fn [out operation]
-           (conj out
-                 (transform-through
-                  (transform-through operation accepted)
-                  out)))
-         []
-         operations)]
-    (assoc batch "operations" transformed)))
+  (project-batch
+   (document-ot/transform-batch
+    count
+    (canonical-batch batch)
+    (canonical-operations accepted))))
