@@ -1,5 +1,6 @@
 (ns gw.ledger.document-ot
-  (:require [gw.ledger.document-protocol :as document]))
+  (:require [std.foundation :refer [assoc conj get max min reduce]]
+            [gw.ledger.document-protocol :as document]))
 
 (def protocol "greenways-document/1")
 (def rich-text-profile "greenways.rich-text/2")
