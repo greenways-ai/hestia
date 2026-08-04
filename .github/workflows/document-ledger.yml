@@ -12,6 +12,7 @@ on:
       - "services/agent-gateway/test-support/document-*.mjs"
       - "gwdb-ledger-hal/src/gw/ledger/document_ot.hal"
       - "migrations/*document_ot*.sql"
+      - "migrations/*document_pack*.sql"
       - "scripts/test-document-ledger-gateway"
       - "docs/document-protocol-v1.md"
   push:
@@ -26,6 +27,7 @@ on:
       - "services/agent-gateway/test-support/document-*.mjs"
       - "gwdb-ledger-hal/src/gw/ledger/document_ot.hal"
       - "migrations/*document_ot*.sql"
+      - "migrations/*document_pack*.sql"
       - "scripts/test-document-ledger-gateway"
       - "docs/document-protocol-v1.md"
 
@@ -55,3 +57,11 @@ jobs:
         working-directory: services/agent-gateway
       - name: Admit two signed document revisions through HTTP and PostgreSQL
         run: bash scripts/test-document-ledger-gateway
+      - name: Upload document-ledger failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: document-ledger-diagnostics
+          path: .hestia/document-ledger-diagnostics
+          if-no-files-found: warn
+          retention-days: 3
