@@ -110,8 +110,11 @@ The environment creates a separate `document/transformation` record committing:
 Replay MUST derive an intermediate AST root after each operation. Receipts retain
 each original root, transformed root or conflict, disposition and result.
 
-Initial HCP1 bounds remain 128 new cells and 1,000,000 bytes. Larger edits MUST
-split. Transport compression is outside canonical hashing.
+A document HCP1 pack is bounded to 512 canonical cells and 1,000,000 bytes;
+a batch remains bounded to 64 operations. Larger documents or edits MUST split.
+The higher cell allowance reflects the base/result AST trees and independently
+rooted operation vector carried by a document batch. Transport compression and
+future delta packs are outside canonical hashing.
 
 ## 6. Operations and transformation
 
