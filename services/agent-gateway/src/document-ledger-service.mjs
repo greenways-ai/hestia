@@ -20,6 +20,16 @@ function root(value, name) {
   return documentRootHex(value, name);
 }
 
+function packCellCount(pack) {
+  const match = /^HCP1:(0|[1-9][0-9]*):/.exec(String(pack || ""));
+  if (!match) throw new Error("document record has an invalid HCP1 pack");
+  const count = Number(match[1]);
+  if (!Number.isSafeInteger(count) || count < 1 || count > 128) {
+    throw new Error("document record cell count is outside the Hestia admission bound");
+  }
+  return count;
+}
+
 function canonicalOperation(operation) {
   const next = { ...operation };
   for (const field of ["sourceRoot", "resultRoot", "expectedRoot"]) {
@@ -77,6 +87,23 @@ function signPrepared(signer, prepared) {
   return signature;
 }
 
+async function verifyThroughLedger(transaction, environmentId, record, signer) {
+  const prepared = await transaction.prepareDocumentRecordVerification({
+    environmentId,
+    packBytes: Buffer.from(record.hcp1_pack, "utf8"),
+    cellCount: packCellCount(record.hcp1_pack),
+    recordRootHex: root(record, "document record"),
+    recordKind: record.type
+  });
+  const signature = signPrepared(signer, prepared);
+  const signedReceiptRootHex = await transaction.commitDocumentRecordVerification({
+    environmentId,
+    recordRootHex: root(record, "document record"),
+    signature
+  });
+  return Object.freeze({ ...prepared, signedReceiptRootHex });
+}
+
 function publicResult(prepared, committed, transformation) {
   return Object.freeze({
     ok: true,
@@ -122,10 +149,12 @@ export function createDocumentLedgerService({
       const projection = await canonicalProjection(bundle);
 
       return database.documentTransaction(async (transaction) => {
-        const verifiedBatch = await transaction.verifyDocumentRecord({
+        const verifiedBatch = await verifyThroughLedger(
+          transaction,
           environmentId,
-          record: bundle.record
-        });
+          bundle.record,
+          signer
+        );
         const head = await transaction.documentHead(bundle.documentId);
         const currentDocument = head?.ast ?? bundle.baseAst;
         const currentRevision = Number(head?.revision ?? 0);
@@ -167,11 +196,12 @@ export function createDocumentLedgerService({
             }
           }
         });
-        const verifiedTransformation = await transaction.verifyDocumentRecord({
+        const verifiedTransformation = await verifyThroughLedger(
+          transaction,
           environmentId,
-          record: transformation.record,
-          environment: true
-        });
+          transformation.record,
+          signer
+        );
         const prepared = await transaction.prepareDocumentRevision({
           environmentId,
           documentId: bundle.documentId,
