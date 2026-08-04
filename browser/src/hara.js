@@ -12,7 +12,8 @@ const resources = Object.freeze([
   ["std.crypto.shamir", assetUrl("../hara/shamir.hal")],
   ["hestia.ceremony", assetUrl("../hara/ceremony.hal")],
   ["hestia.workflow-v3", assetUrl("../hara/workflow_v3.hal")],
-  ["hestia.agent-room", assetUrl("../hara/agent_room.hal")]
+  ["hestia.agent-room", assetUrl("../hara/agent_room.hal")],
+  ["hestia.document-room", assetUrl("../hara/document_room.hal")]
 ]);
 
 let runtimePromise;
