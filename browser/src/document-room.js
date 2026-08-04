@@ -1,4 +1,4 @@
-import { applyBatch, cloneValue } from "../../protocol/document-ot.js";
+import { applyBatch, cloneValue, walkDocument } from "../../protocol/document-ot.js";
 import {
   documentReferenceVectorPlan,
   documentRootHex,
@@ -29,6 +29,37 @@ function sameRoot(left, right) {
 function sameJwk(left, right) {
   const keys = (value) => Object.keys(value || {}).sort().map((key) => [key, value[key]]);
   return JSON.stringify(keys(left)) === JSON.stringify(keys(right));
+}
+
+function canonicalOperation(operation) {
+  const next = { ...operation };
+  for (const field of ["sourceRoot", "resultRoot", "expectedRoot"]) {
+    if (next[field] && typeof next[field] === "object") next[field] = next[field].root;
+  }
+  return next;
+}
+
+async function sourceRootIndex(document) {
+  const sources = [];
+  walkDocument(document, (node) => {
+    if (node.type !== "hara-artefact") return;
+    const source = (node.children || []).find((child) => child.type === "text");
+    if (source) sources.push([node.attrs?.artefactId, source.id, source.text]);
+  });
+  const index = new Map();
+  for (const [artefactId, sourceId, source] of sources) {
+    index.set(`${artefactId}:${sourceId}`, (await documentValuePlan(source)).root);
+  }
+  return index;
+}
+
+function sourceRootOptions(index) {
+  return {
+    sourceRoot(artefact, _source) {
+      const sourceNode = (artefact.children || []).find((child) => child.type === "text");
+      return index.get(`${artefact.attrs?.artefactId}:${sourceNode?.id}`) || null;
+    }
+  };
 }
 
 function conflictFrom(error) {
@@ -207,19 +238,24 @@ export class DocumentRoom extends EventTarget {
     if (!this.genesis) throw new Error("document room is not active yet");
     if (!baseDocument) throw new Error(`document room has no snapshot for revision ${baseRevision}`);
     const member = this.localMember();
+    const signedOperations = operations.map((operation) => ({ ...operation, baseRevision }));
     const projected = {
       id: `batch:${crypto.randomUUID()}`,
       documentId: this.document.id,
       baseRevision,
-      operations: operations.map((operation) => ({ ...operation, baseRevision }))
+      operations: signedOperations.map(canonicalOperation)
     };
-    const expectedResultAst = applyBatch(baseDocument, projected);
+    const expectedResultAst = applyBatch(
+      baseDocument,
+      projected,
+      sourceRootOptions(await sourceRootIndex(baseDocument))
+    );
     return createDocumentBatchBundle({
       documentId: this.document.id,
       batchId: projected.id,
       baseRevision,
       baseAst: cloneValue(baseDocument),
-      operations: projected.operations,
+      operations: signedOperations,
       expectedResultAst,
       authorProfileRecord: member.profileRecord,
       delegationRecord: member.delegationRecord,
@@ -257,15 +293,15 @@ export class DocumentRoom extends EventTarget {
         id: bundle.batchId,
         documentId: bundle.documentId,
         baseRevision: bundle.baseRevision,
-        operations: bundle.operations
+        operations: bundle.operations.map(canonicalOperation)
       }, this.acceptedOperationsAfter(bundle.baseRevision));
-      transformedOperations = transformed.operations;
+      transformedOperations = transformed.operations.map(canonicalOperation);
       resultAst = applyBatch(previousDocument, {
         id: bundle.batchId,
         documentId: bundle.documentId,
         baseRevision: bundle.baseRevision,
         operations: transformedOperations
-      });
+      }, sourceRootOptions(await sourceRootIndex(previousDocument)));
     } catch (error) {
       outcome = "conflict";
       conflict = conflictFrom(error);
@@ -363,7 +399,7 @@ export class DocumentRoom extends EventTarget {
         documentId: this.document.id,
         baseRevision: commit.batch.baseRevision,
         operations: commit.transformedOperations
-      })
+      }, sourceRootOptions(await sourceRootIndex(this.document)))
       : cloneValue(this.document);
     const replayedPlan = await documentValuePlan(replayed);
     if (!sameRoot(replayedPlan, verified.resultAstPlan)) {
