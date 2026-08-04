@@ -26,6 +26,11 @@ function sameRoot(left, right) {
   return root(left) === root(right);
 }
 
+function sameJwk(left, right) {
+  const keys = (value) => Object.keys(value || {}).sort().map((key) => [key, value[key]]);
+  return JSON.stringify(keys(left)) === JSON.stringify(keys(right));
+}
+
 function conflictFrom(error) {
   return {
     code: error?.data?.code?.name
@@ -131,6 +136,12 @@ export class DocumentRoom extends EventTarget {
         || !member?.profileRecord?.root || !member?.delegationRecord?.root) {
       throw new Error("document room member is incomplete");
     }
+    if (this.genesis) {
+      const admitted = this.genesis.record.body.members.find((value) => value.member_id === member.memberId);
+      if (!admitted || !sameJwk(admitted.public_key_jwk, member.publicKeyJwk)) {
+        throw new Error("document room membership is fixed for the current epoch");
+      }
+    }
     this.members.set(member.memberId, { ...member });
     this.emit("member", { member: memberProjection(member) });
     return this.members.get(member.memberId);
@@ -144,6 +155,7 @@ export class DocumentRoom extends EventTarget {
 
   async issueGenesis() {
     if (this.role !== "sequencer") throw new Error("only the sequencer may issue room genesis");
+    if (this.members.size < 2) throw new Error("document room genesis waits for the invited peer");
     const genesis = await createDocumentRoomGenesis({
       roomId: this.roomId,
       documentId: this.document.id,
@@ -162,10 +174,16 @@ export class DocumentRoom extends EventTarget {
       roomId: this.roomId,
       documentId: this.document.id
     });
+    const localProjection = verified.body.members.find((value) => value.member_id === this.localMemberId);
+    if (!localProjection || !sameJwk(localProjection.public_key_jwk, this.localMember().publicKeyJwk)) {
+      throw new Error("local document key is not a member of this signed room epoch");
+    }
     this.genesis = genesis;
     this.document = cloneValue(verified.body.initial_ast);
     this.revision = 0;
     this.headRoot = null;
+    this.sequence = 0;
+    this.history = [];
     this.snapshots = new Map([[0, cloneValue(this.document)]]);
     for (const projection of verified.body.members) {
       const existing = this.members.get(projection.member_id);
@@ -186,6 +204,7 @@ export class DocumentRoom extends EventTarget {
     baseRevision = this.revision,
     baseDocument = this.snapshots.get(baseRevision)
   } = {}) {
+    if (!this.genesis) throw new Error("document room is not active yet");
     if (!baseDocument) throw new Error(`document room has no snapshot for revision ${baseRevision}`);
     const member = this.localMember();
     const projected = {
@@ -219,6 +238,7 @@ export class DocumentRoom extends EventTarget {
 
   async sequence(bundle, authorMemberId) {
     if (this.role !== "sequencer") throw new Error("only the room sequencer may sequence a batch");
+    if (!this.genesis) throw new Error("document room has no signed genesis");
     const member = this.member(authorMemberId);
     const baseDocument = this.snapshots.get(Number(bundle.baseRevision));
     if (!baseDocument) throw new Error(`batch base revision is not in this room: ${bundle.baseRevision}`);
@@ -282,6 +302,7 @@ export class DocumentRoom extends EventTarget {
         environmentKeyRoot
       })
       : null;
+    const nextSequence = this.sequence + 1;
     const receipt = await createRoomImportReceipt({
       documentId: this.document.id,
       batchRecord: bundle.record,
@@ -292,14 +313,14 @@ export class DocumentRoom extends EventTarget {
       revisionBundle,
       resultAstPlan: transformation.resultAstPlan,
       outcome,
-      sequence: ++this.sequence,
+      sequence: nextSequence,
       sequencerKey: this.documentKey
     });
     const commit = {
       protocol: "hestia-document-room-commit/1",
       roomId: this.roomId,
-      epoch: 1,
-      sequence: this.sequence,
+      epoch: this.genesis.record.body.epoch,
+      sequence: nextSequence,
       authorMemberId,
       previousRevision,
       previousRevisionRoot,
@@ -317,10 +338,21 @@ export class DocumentRoom extends EventTarget {
   }
 
   async applyCommit(commit) {
+    if (!this.genesis) throw new Error("document room cannot verify commits before genesis");
+    if (commit?.protocol !== "hestia-document-room-commit/1"
+        || commit.roomId !== this.roomId
+        || Number(commit.epoch) !== Number(this.genesis.record.body.epoch)) {
+      throw new Error("document room commit epoch mismatch");
+    }
+    if (Number(commit.sequence) !== this.sequence + 1) {
+      throw new Error("document room commit sequence is not contiguous");
+    }
     const member = this.member(commit.authorMemberId);
     const verified = await verifyRoomCommitBundle(commit, {
       contributorPublicKey: member.publicKeyJwk,
-      sequencerPublicKey: this.genesis?.record?.body?.sequencer_key || this.documentKey.publicJwk,
+      contributorProfileRecord: member.profileRecord,
+      contributorDelegationRecord: member.delegationRecord,
+      sequencerPublicKey: this.genesis.record.body.sequencer_key,
       expectedDocument: this.document,
       expectedRevision: this.revision,
       expectedRevisionRoot: this.headRoot
@@ -339,6 +371,13 @@ export class DocumentRoom extends EventTarget {
     }
 
     if (commit.outcome === "accepted") {
+      const sequencerPublicKey = await crypto.subtle.importKey(
+        "jwk",
+        this.genesis.record.body.sequencer_key,
+        { name: "Ed25519" },
+        true,
+        ["verify"]
+      );
       const recreatedRevision = await createRoomRevisionBundle({
         documentId: this.document.id,
         revision: this.revision + 1,
@@ -349,13 +388,7 @@ export class DocumentRoom extends EventTarget {
         transformedOperations: commit.transformedOperations,
         resultAst: replayed,
         authorProfileRecord: member.profileRecord,
-        environmentKeyRoot: await keyRootPlan({ publicKey: await crypto.subtle.importKey(
-          "jwk",
-          this.genesis.record.body.sequencer_key,
-          { name: "Ed25519" },
-          true,
-          ["verify"]
-        ) })
+        environmentKeyRoot: await keyRootPlan({ publicKey: sequencerPublicKey })
       });
       if (!commit.revision || !sameRoot(commit.revision, recreatedRevision)) {
         throw new Error("document room revision root mismatch");
@@ -364,17 +397,18 @@ export class DocumentRoom extends EventTarget {
       this.revision += 1;
       this.headRoot = commit.revision.root;
       this.snapshots.set(this.revision, cloneValue(this.document));
-    } else if (commit.revision) {
-      throw new Error("conflicted document room commit must not contain a revision");
+    } else if (commit.outcome === "conflict") {
+      if (commit.revision) throw new Error("conflicted document room commit must not contain a revision");
+    } else {
+      throw new Error("document room commit outcome is invalid");
     }
 
     const receiptBody = commit.receipt.record.body;
-    if (!sameRoot(receiptBody.batch_root, commit.batch.record)
-        || !sameRoot(receiptBody.transformation_root, commit.transformation.record)
-        || !sameRoot(receiptBody.transformed_operations_root, verified.operationVector)
-        || !sameRoot(receiptBody.result_ast_root, verified.resultAstPlan)
-        || (commit.outcome === "accepted" && !sameRoot(receiptBody.result_revision_root, commit.revision))) {
-      throw new Error("document room receipt binding mismatch");
+    if (commit.outcome === "accepted" && !sameRoot(receiptBody.result_revision_root, commit.revision)) {
+      throw new Error("document room receipt revision mismatch");
+    }
+    if (commit.outcome === "conflict" && receiptBody.result_revision_root != null) {
+      throw new Error("conflict receipt must not reference a revision");
     }
 
     const historyEntry = {
@@ -387,9 +421,10 @@ export class DocumentRoom extends EventTarget {
       transformationRoot: commit.transformation.record.root,
       receiptRoot: commit.receipt.record.root,
       transformedOperations: cloneValue(commit.transformedOperations),
-      conflict: commit.conflict || null
+      conflict: commit.conflict || null,
+      commit
     };
-    this.sequence = Math.max(this.sequence, Number(commit.sequence));
+    this.sequence = Number(commit.sequence);
     this.history.push(historyEntry);
     this.emit("commit", { commit, historyEntry, document: cloneValue(this.document) });
     return historyEntry;
