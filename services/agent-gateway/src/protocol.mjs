@@ -12,7 +12,9 @@ export const ADMISSIBLE_RECORD_KINDS = Object.freeze(new Set([
   "profile/version",
   "room/version",
   "room/invitation",
-  "room/admission-proof"
+  "room/admission-proof",
+  "room/document-attachment",
+  "room/message-intent"
 ]));
 
 export class AgentGatewayInputError extends Error {
