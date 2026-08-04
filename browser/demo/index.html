@@ -1,28 +1,46 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light" data-theme-preference="auto">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#f4f2ec">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
-  <title>Hestia — Identity recovery demo</title>
+  <title>Hestia Recovery — Optional identity recovery extension</title>
+  <meta name="description" content="A guided preview of the optional Hestia Recovery extension, built on personal keys and signed state without a service master key.">
+  <link rel="icon" href="../shared/hestia-sigil.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="../shared/hestia-shell.css">
+  <script type="module" src="../shared/hestia-shell.js"></script>
 </head>
 <body>
-  <header class="masthead">
-    <a class="brand" href="./" aria-label="Hestia demo home">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="7" cy="8" r="3"></circle><circle cx="25" cy="8" r="3"></circle><circle cx="16" cy="24" r="3"></circle><path d="M9.5 9.8 14.2 21M22.5 9.8 17.8 21M10 8h12"></path></svg>
-      <span>Hestia</span>
+  <header class="hestia-app-header">
+    <a class="hestia-app-brand" href="../" aria-label="Hestia core home">
+      <img src="../shared/hestia-sigil.svg" width="48" height="48" alt="">
+      <span class="hestia-app-brand__text"><strong>Hestia</strong><small>Recovery extension</small></span>
     </a>
-    <span class="demo-badge">Demo</span>
+    <nav class="hestia-app-nav" aria-label="Hestia Recovery navigation">
+      <a href="../">Hestia core</a>
+      <a href="../rooms/">Agent Rooms</a>
+      <a href="https://github.com/greenways-ai/hestia">GitHub ↗</a>
+    </nav>
+    <button class="hestia-theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark theme" title="Toggle light or dark. Shift-click to follow the system theme.">
+      <span class="hestia-theme-toggle__moon" aria-hidden="true">◐</span>
+      <span class="hestia-theme-toggle__sun" aria-hidden="true">☀</span>
+    </button>
   </header>
+
+  <aside class="hestia-extension-note" aria-label="Hestia Recovery product context">
+    <strong>Optional extension</strong>
+    <p>Recovery is built on Hestia's personal keystore and signed state chain. Greenways may provide ceremony coordination as a service, but participant keys and recovery authority remain outside any Greenways master key. <a href="../">Understand Hestia core</a>.</p>
+  </aside>
 
   <main>
     <section class="hero" aria-labelledby="mechanism-title">
       <header class="hero-copy">
-        <p class="eyebrow">A recovery story</p>
+        <p class="eyebrow">Hestia Recovery · guided extension preview</p>
         <h1 id="mechanism-title">Two of three,<br>plus you.</h1>
-        <p>Follow Mabel the wombat as two independent helpers and her own safely held token restore access.</p>
+        <p>Follow Mabel the wombat through an optional recovery ceremony. Independent helpers coordinate around identity keys that remain anchored to the owner's Hestia state.</p>
       </header>
 
       <div class="story" role="list" aria-label="Five stages of identity recovery">
@@ -36,8 +54,8 @@
 
     <section class="demo-workspace" aria-labelledby="demo-title">
       <header class="workspace-head">
-        <div><p class="eyebrow">Guided demo</p><h2 id="demo-title">Help Mabel recover</h2></div>
-        <p>The wombat story is fictional. The real cryptography still runs locally in this browser.</p>
+        <div><p class="eyebrow">Local cryptographic demo</p><h2 id="demo-title">Help Mabel recover</h2></div>
+        <p>The wombat story is fictional. The cryptography still runs locally in this browser, and no hosted coordinator receives the plaintext recovery material.</p>
       </header>
       <nav class="progress" aria-label="Recovery progress">
         <span class="active">1 <b>Set up</b></span><span>2 <b>Protect</b></span><span>3 <b>Lose access</b></span><span>4 <b>Approve</b></span><span>5 <b>Restore</b></span>
@@ -55,7 +73,7 @@
     </details>
   </main>
 
-  <footer><span>Hestia recovery demo</span><span>Fictional people and records · Local browser processing</span></footer>
+  <footer><span>GREENWAYS / HESTIA RECOVERY</span><span>Optional extension preview · Fictional people and records · Local browser processing</span></footer>
   <script type="module" src="./app.js"></script>
 </body>
 </html>

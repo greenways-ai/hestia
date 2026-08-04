@@ -5,7 +5,7 @@ import "@fontsource/manrope/600.css";
 import "@fontsource/manrope/700.css";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@greenways-ai/visual-language/theme.css";
-import SharedHeader from "@greenways-ai/visual-language/SharedHeader.astro";
+import HestiaHeader from "../components/HestiaHeader.astro";
 import "../styles/global.css";
 
 type Props = {
@@ -15,8 +15,9 @@ type Props = {
 
 const { title, description } = Astro.props;
 const base = `${import.meta.env.BASE_URL.replace(/\/+$/, "")}/`;
-const canonical = new URL("/", Astro.site ?? "https://hestia.greenways.ai");
-const image = new URL(`${base}assets/og-hestia.jpg`, canonical);
+const site = Astro.site ?? new URL("https://opensource.greenways.ai");
+const canonical = new URL(base, site);
+const image = new URL(`${base}assets/og-hestia.jpg`, site);
 const structuredData = {
   "@context": "https://schema.org",
   "@type": "SoftwareSourceCode",
@@ -34,8 +35,8 @@ const structuredData = {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#f2ebdd" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0b1513" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f4f2ec" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#050a08" media="(prefers-color-scheme: dark)" />
     <link rel="canonical" href={canonical} />
     <link rel="icon" href={`${base}sigil.svg`} type="image/svg+xml" />
     <meta property="og:title" content={title} />
@@ -59,14 +60,13 @@ const structuredData = {
   </head>
   <body>
     <a class="skip-link" href="#content">Skip to content</a>
-    <SharedHeader project="hestia" title="Hestia" homeHref={base} searchBase={base.replace(/\/$/, "")} nav={[{label:"Purpose",href:`${base}#purpose`},{label:"Trust",href:`${base}#trust`},{label:"Architecture",href:`${base}#architecture`},{label:"Agent rooms",href:`${base}rooms/`}]} githubHref="https://github.com/greenways-ai/hestia" cta={{label:"Open agent rooms ↗",href:`${base}rooms/`}} />
+    <HestiaHeader homeHref={base} />
     <main id="content"><slot /></main>
     <footer class="site-footer">
-      <div><span class="wordmark-text">GREENWAYS / HESTIA</span><p>A sovereign hearth for digital identity.</p></div>
+      <div><span class="wordmark-text">GREENWAYS / HESTIA</span><p>Personal keys and signed Hara state, kept close to home.</p></div>
       <nav aria-label="Footer navigation">
-        <a href="https://greenways.ai/opensource/hestia/">Greenways project</a>
-        <a href={`${base}rooms/`}>Private agent rooms ↗</a>
-        <a href="https://hestia-demo.greenways.ai/recovery/">Recovery demo ↗</a>
+        <a href={`${base}#extensions`}>Extensions</a>
+        <a href="https://opensource.greenways.ai/">Greenways projects</a>
         <a href="https://github.com/greenways-ai/hestia">GitHub ↗</a>
         <a href="mailto:hello@greenways.ai">hello@greenways.ai</a>
       </nav>
