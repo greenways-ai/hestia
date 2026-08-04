@@ -6,12 +6,14 @@ test("document OT ledger hardening migrations apply after the base schema", asyn
   const files = (await readdir(new URL("../../../migrations/", import.meta.url)))
     .filter((file) => file.includes("document_ot_ledger")
       || file.includes("document_ot_commit_hardening")
-      || file.includes("document_pack_bound"))
+      || file.includes("document_pack_bound")
+      || file.includes("document_prepare_qualification"))
     .sort();
   assert.deepEqual(files, [
     "20260804050000_document_ot_ledger.sql",
     "20260804051000_document_ot_ledger_constraints.sql",
     "20260804052000_document_ot_commit_hardening.sql",
-    "20260804053000_document_pack_bound.sql"
+    "20260804053000_document_pack_bound.sql",
+    "20260804054000_document_prepare_qualification.sql"
   ]);
 });
