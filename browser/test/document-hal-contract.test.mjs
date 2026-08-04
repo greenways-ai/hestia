@@ -22,6 +22,19 @@ test("portable ledger module stays in the gw namespace and defines signed record
   }
 });
 
+test("portable ledger module imports only real foundation Vars", async () => {
+  const value = await source();
+  assert.match(
+    value,
+    /\[std\.foundation :refer \[assoc conj get reduce\]\]/
+  );
+  assert.doesNotMatch(value, /:refer \[[^\]]*\b(?:max|min)\b/);
+  assert.match(value, /\(defn lower-number/);
+  assert.match(value, /\(defn upper-number/);
+  assert.match(value, /lower-number start end/);
+  assert.match(value, /upper-number 0 \(- end start\)/);
+});
+
 test("portable ledger module owns the deterministic OT path", async () => {
   const value = await source();
   for (const fn of [
