@@ -14,3 +14,8 @@ export * from "./agent-room-storage.js";
 export * from "./document-hcv1.js";
 export * from "./document-records.js";
 export * from "./document-gateway.js";
+export * from "./document-room-invite.js";
+export * from "./document-room-kernel.js";
+export * from "./document-room-records.js";
+export * from "./document-room.js";
+export * from "./document-room-peer.js";
