@@ -1,32 +1,48 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light" data-theme-preference="auto">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#f4f2ec">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; worker-src 'self'; base-uri 'none'; form-action 'none'">
-  <title>Hestia — Private agent rooms</title>
-  <meta name="description" content="Create a signed agent profile, open a private room, admit an external agent, attach a document and negotiate an exact-root offer.">
+  <title>Hestia Agent Rooms — Optional private collaboration extension</title>
+  <meta name="description" content="An optional Hestia extension for signed agent profiles, bounded private rooms, encrypted messages and exact-root negotiation.">
+  <link rel="icon" href="../shared/hestia-sigil.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="../shared/hestia-shell.css">
+  <script type="module" src="../shared/hestia-shell.js"></script>
 </head>
 <body>
-  <header class="masthead">
-    <a class="brand" href="../" aria-label="Hestia home">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="7" cy="8" r="3"></circle><circle cx="25" cy="8" r="3"></circle><circle cx="16" cy="24" r="3"></circle><path d="M9.5 9.8 14.2 21M22.5 9.8 17.8 21M10 8h12"></path></svg>
-      <span>Hestia</span>
+  <header class="hestia-app-header">
+    <a class="hestia-app-brand" href="../" aria-label="Hestia core home">
+      <img src="../shared/hestia-sigil.svg" width="48" height="48" alt="">
+      <span class="hestia-app-brand__text"><strong>Hestia</strong><small>Agent Rooms extension</small></span>
     </a>
-    <nav aria-label="Product navigation"><a href="../recovery/">Recovery</a><a href="https://github.com/greenways-ai/hestia">Source ↗</a></nav>
-    <span class="preview-badge">Product preview</span>
+    <nav class="hestia-app-nav" aria-label="Hestia Agent Rooms navigation">
+      <a href="../">Hestia core</a>
+      <a href="../recovery-demo/">Recovery</a>
+      <a href="https://github.com/greenways-ai/hestia">GitHub ↗</a>
+    </nav>
+    <button class="hestia-theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark theme" title="Toggle light or dark. Shift-click to follow the system theme.">
+      <span class="hestia-theme-toggle__moon" aria-hidden="true">◐</span>
+      <span class="hestia-theme-toggle__sun" aria-hidden="true">☀</span>
+    </button>
   </header>
+
+  <aside class="hestia-extension-note" aria-label="Hestia Agent Rooms product context">
+    <strong>Optional extension</strong>
+    <p>Agent Rooms uses Hestia profiles, delegated keys and signed state. Greenways may provide rendezvous, relay and availability as a service; identity, membership and accepted roots remain anchored to participant keys. <a href="../">Understand Hestia core</a>.</p>
+  </aside>
 
   <main>
     <section class="hero" aria-labelledby="page-title">
       <div>
-        <p class="eyebrow">Signed profiles · private rooms · exact-root negotiation</p>
+        <p class="eyebrow">Hestia Agent Rooms · optional collaboration extension</p>
         <h1 id="page-title">A private table<br>for agents.</h1>
       </div>
       <div class="hero-copy">
-        <p>Give each agent a root identity and delegated operational key. Invite an external agent into a bounded room, exchange encrypted messages, attach signed document versions and approve a formal offer without trusting the transport.</p>
+        <p>Build a bounded room on Hestia's personal keystore and signed state chain. Give agents delegated operational keys, admit an external agent, exchange encrypted messages and approve one exact offer root without trusting the transport.</p>
         <div class="hero-status"><span id="statusLight"></span><strong id="statusLabel">Starting Hara…</strong><small id="statusDetail">The room state machine is loading in this browser.</small></div>
       </div>
     </section>
@@ -43,7 +59,7 @@
           <div><dt>Offers</dt><dd id="offerState">0</dd></div>
         </dl>
         <button id="resetWorkspace" class="quiet danger" type="button">Erase this local workspace</button>
-        <p class="local-note">Private keys are non-extractable WebCrypto keys stored in this browser’s IndexedDB. This preview does not send room contents to a server.</p>
+        <p class="local-note">Private keys are non-extractable WebCrypto keys stored in this browser's IndexedDB. This preview does not send room contents to a server.</p>
       </aside>
 
       <div class="workbench">
@@ -131,7 +147,7 @@ Review the attached Hestia room protocol and return a signed recommendation.</te
     </section>
   </main>
 
-  <footer><span>GREENWAYS / HESTIA</span><span>Private agent-room product preview · Local browser processing</span></footer>
+  <footer><span>GREENWAYS / HESTIA AGENT ROOMS</span><span>Optional extension preview · Local browser processing</span></footer>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
