@@ -129,8 +129,8 @@ test("runs, receipts, closes, and resumes a complete HAL private agent office un
   await expect(page.locator("#workState")).toHaveText("1");
   await expect(page.locator("#receiptState")).toHaveText("1");
   await expect(page.locator("#receiptStatus")).toHaveText("Prepared for sharing");
-  await expect(page.locator("#receiptRoot")).toContainText("sha256:");
-  await expect(page.locator("#latestReceipt")).toContainText("sha256:");
+  await expect(page.locator("#receiptRoot")).toContainText("hcv1:");
+  await expect(page.locator("#latestReceipt")).toContainText("hcv1:");
   await expect(page.locator("#receiptAudienceValue")).toHaveText("Client or trusted adviser");
 
   const halSource = page.locator("#halSource");
