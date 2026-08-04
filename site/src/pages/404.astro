@@ -1,0 +1,16 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const base = `${import.meta.env.BASE_URL.replace(/\/+$/, "")}/`;
+---
+<BaseLayout
+  title="Page not found · Hestia"
+  description="The requested Hestia page could not be found."
+>
+  <section class="home-section" aria-labelledby="not-found-title">
+    <p class="technical-kicker"><i></i> 404 · Hestia</p>
+    <h1 id="not-found-title">Page not found.</h1>
+    <p>The address may have moved into the canonical Greenways open-source site.</p>
+    <a class="action action--ember" href={base}>Return to Hestia</a>
+  </section>
+</BaseLayout>

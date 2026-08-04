@@ -23,6 +23,8 @@ jobs:
           cp -R .pages/hestia-browser site/dist/hestia-browser
           cp -R .pages/hara-runtime site/dist/hara-runtime
           cp -R .pages/hara site/dist/hara
+      - name: Add legacy-host redirects to browser products
+        run: node site/scripts/inject-legacy-host-redirect.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with: { path: site/dist }
