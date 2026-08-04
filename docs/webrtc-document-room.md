@@ -19,8 +19,25 @@ contributor intent or invent a result:
   transformed operations before accepting the head.
 
 The room genesis uses a separate `GWRM1` domain. It fixes the room ID, document
-ID, epoch, sequencer key, initial AST and member document keys. A commit from a
-different room, epoch or non-contiguous sequence is rejected.
+ID, epoch, sequencer key, initial AST and member document keys. Before accepting
+genesis, each kernel verifies the member profile root signature, active
+operational key, `document.edit` delegation and the profile/delegation roots
+committed by genesis. A commit from a different room, epoch or non-contiguous
+sequence is rejected.
+
+## One OT policy
+
+The room does not maintain an independent browser-only transformation
+implementation. `hestia.document-room` adapts browser string/camel-case operation
+maps to `gw.ledger.document-ot`, invokes the same portable Hara function used by
+the durable ledger path, and projects the result back to the browser protocol
+shape.
+
+The Pages build publishes the canonical `document_protocol.hal` and
+`document_ot.hal` files directly from `gwdb-ledger-hal`. The browser kernel loads
+them as Hara resources before creating a room session. PostgreSQL-backed
+admission and peer-to-peer rooms therefore share one transformation policy
+source.
 
 ## Channels
 
@@ -52,11 +69,13 @@ updates use the second and never enter the revision graph.
    profile granting `document.edit`.
 3. The peers authenticate the WebRTC transport using the existing signed/HMAC
    envelope protocol.
-4. The sequencer signs room genesis after receiving the invited member key.
+4. The sequencer signs room genesis after verifying the invited profile,
+   operational key and delegation.
 5. A participant edits optimistically and asks its Hara kernel to create a
    signed batch from a known revision.
-6. The sequencer kernel transforms the batch through all accepted operations
-   after that base and through earlier operations in the same batch.
+6. The sequencer kernel maps the batch through `gw.ledger.document-ot`, including
+   all accepted operations after the base and earlier operations in the same
+   atomic batch.
 7. The sequencer signs the transformation, revision and receipt, then broadcasts
    one commit bundle.
 8. The participant verifies the contributor signature, sequencer signature,
@@ -76,9 +95,9 @@ competing result conflicts rather than silently replacing the artefact.
 
 ## Demo
 
-The Pages build publishes `/documents/room/`.
+The Pages build publishes `/documents/room/` and a `/documents/` landing page.
 
-1. Open the page in the owner browser.
+1. Open the room page in the owner browser.
 2. Copy the private invite into a second browser or profile.
 3. Wait for both pages to show **Document room active**.
 4. Commit `Bright ` at offset zero in one page.
