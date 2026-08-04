@@ -643,7 +643,7 @@ async function counterSignedOffer() {
     terms,
     offeredBy: workspace.guest.record.body.profile_id,
     signingKey: workspace.guest.operationalKey,
-    supersedes: previous.record.body.offer_id
+    supersedes: previous.record.root
   });
   await verifyAgentRecord(
     offer.record,
