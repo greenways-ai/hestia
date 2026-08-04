@@ -7,18 +7,43 @@ cd "$repo_root"
 
 project="hestia-document-ledger-ci"
 endpoint="http://127.0.0.1:58787"
+diagnostics_dir=".hestia/document-ledger-diagnostics"
 compose=(docker compose --project-name "$project" --env-file .hestia/env -f compose.yaml)
 
+capture_diagnostics() {
+  mkdir -p "$diagnostics_dir"
+  if [[ -f /tmp/hestia-document-ledger-client.err ]]; then
+    cp /tmp/hestia-document-ledger-client.err "$diagnostics_dir/client-error.txt"
+  fi
+  if [[ -f /tmp/hestia-document-ledger-result.json ]]; then
+    cp /tmp/hestia-document-ledger-result.json "$diagnostics_dir/client-result.json"
+  fi
+  "${compose[@]}" logs --no-color --tail=600 agent-gateway postgres \
+    >"$diagnostics_dir/compose.log" 2>&1 || true
+  {
+    printf 'project=%s\n' "$project"
+    printf 'endpoint=%s\n' "$endpoint"
+    printf 'head=%s\n' "$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+  } >"$diagnostics_dir/context.txt"
+}
+
 cleanup() {
+  local status=$?
+  if [[ $status -ne 0 && -f .hestia/env ]]; then
+    capture_diagnostics
+  fi
   if [[ -f .hestia/env ]]; then
     "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
   fi
+  return "$status"
 }
 trap cleanup EXIT
 
 scripts/hestia init >/dev/null
 # shellcheck disable=SC1091
 source .hestia/env
+rm -rf "$diagnostics_dir"
+rm -f /tmp/hestia-document-ledger-client.err /tmp/hestia-document-ledger-result.json
 
 "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
 "${compose[@]}" up --detach --build postgres
@@ -36,8 +61,8 @@ for _ in $(seq 1 120); do
   sleep 1
 done
 if [[ "$postgres_ready" != true ]]; then
-  "${compose[@]}" logs postgres >&2
-  echo "Hestia PostgreSQL did not complete document-ledger initialization" >&2
+  echo "Hestia PostgreSQL did not complete document-ledger initialization" \
+    >/tmp/hestia-document-ledger-client.err
   exit 1
 fi
 
@@ -58,12 +83,18 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 if [[ "$gateway_ready" != true ]]; then
-  "${compose[@]}" logs agent-gateway postgres >&2
-  echo "Hestia document gateway did not become ready" >&2
+  echo "Hestia document gateway did not become ready" \
+    >/tmp/hestia-document-ledger-client.err
   exit 1
 fi
 
-result="$(node services/agent-gateway/test-support/document-ledger-http.mjs "$endpoint")"
+if ! node services/agent-gateway/test-support/document-ledger-http.mjs "$endpoint" \
+  >/tmp/hestia-document-ledger-result.json \
+  2>/tmp/hestia-document-ledger-client.err; then
+  cat /tmp/hestia-document-ledger-client.err >&2
+  exit 1
+fi
+result="$(cat /tmp/hestia-document-ledger-result.json)"
 document_id="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.document_id)' "$result")"
 expected_text="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.expected_text)' "$result")"
 
@@ -98,16 +129,18 @@ SQL
 
 expected="2|${expected_text}|2|2|2|4"
 if [[ "$state" != "$expected" ]]; then
-  echo "unexpected signed document ledger state: $state" >&2
-  "${compose[@]}" logs agent-gateway postgres >&2 || true
+  printf 'unexpected signed document ledger state: %s\nexpected: %s\n' \
+    "$state" "$expected" >/tmp/hestia-document-ledger-client.err
   exit 1
 fi
 
 if app_psql --command="UPDATE hestia.document_revision SET revision = 99;" \
   >/dev/null 2>&1; then
-  echo "hestia_app mutated append-only document history" >&2
+  echo "hestia_app mutated append-only document history" \
+    >/tmp/hestia-document-ledger-client.err
   exit 1
 fi
 
+rm -rf "$diagnostics_dir"
 printf 'admitted signed document %s through two OT revisions: %s\n' \
   "$document_id" "$expected_text"
