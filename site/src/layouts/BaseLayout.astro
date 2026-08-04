@@ -20,8 +20,10 @@ const canonical = new URL(base, site);
 const image = new URL(`${base}assets/og-hestia.jpg`, site);
 const structuredData = {
   "@context": "https://schema.org",
-  "@type": "SoftwareSourceCode",
+  "@type": "SoftwareApplication",
   name: "Hestia",
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web, macOS, Linux",
   description,
   url: canonical.href,
   codeRepository: "https://github.com/greenways-ai/hestia",
@@ -63,9 +65,10 @@ const structuredData = {
     <HestiaHeader homeHref={base} />
     <main id="content"><slot /></main>
     <footer class="site-footer">
-      <div><span class="wordmark-text">GREENWAYS / HESTIA</span><p>Personal keys and signed Hara state, kept close to home.</p></div>
+      <div><span class="wordmark-text">GREENWAYS / HESTIA</span><p>A private office for the agents who work on your behalf.</p></div>
       <nav aria-label="Footer navigation">
-        <a href={`${base}#extensions`}>Extensions</a>
+        <a href={`${base}rooms/`}>Private Agent Office</a>
+        <a href={`${base}recovery-demo/`}>Continuity</a>
         <a href="https://opensource.greenways.ai/">Greenways projects</a>
         <a href="https://github.com/greenways-ai/hestia">GitHub ↗</a>
         <a href="mailto:hello@greenways.ai">hello@greenways.ai</a>
