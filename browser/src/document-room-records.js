@@ -1,9 +1,9 @@
 import { base64UrlToBytes, bytesToBase64Url, concatBytes, textEncoder } from "./encoding.js";
+import { keyFingerprint } from "./agent-protocol.js";
 import {
   documentHcp1Pack,
   documentReferenceVectorPlan,
   documentRootHex,
-  documentSigningBytes,
   documentValuePlan,
   encodeDocumentRecordBody,
   mergeDocumentCells,
@@ -15,8 +15,8 @@ import { createDocumentOperationPlan } from "./document-records.js";
 export const DOCUMENT_ROOM_RECORD_PROTOCOL = "hestia-document-room-record/1";
 export const DOCUMENT_ROOM_SIGNING_DOMAIN = "GWRM1";
 
-function rawRoot(root) {
-  const hex = documentRootHex(root);
+function rawRoot(value) {
+  const hex = documentRootHex(value);
   return Uint8Array.from(hex.match(/.{2}/g), (pair) => Number.parseInt(pair, 16));
 }
 
@@ -45,11 +45,25 @@ function serializableCells(cells) {
   }));
 }
 
-async function rawPublicKey(keyOrJwk) {
-  const key = keyOrJwk?.type === "public"
-    ? keyOrJwk
-    : await crypto.subtle.importKey("jwk", keyOrJwk, { name: "Ed25519" }, true, ["verify"]);
-  return new Uint8Array(await crypto.subtle.exportKey("raw", key));
+function sameRoot(left, right) {
+  return documentRootHex(left) === documentRootHex(right);
+}
+
+function sameOptionalRoot(left, right) {
+  if (left == null || right == null) return left == null && right == null;
+  return sameRoot(left, right);
+}
+
+async function importPublicKey(publicKeyOrJwk) {
+  return publicKeyOrJwk?.type === "public"
+    ? publicKeyOrJwk
+    : crypto.subtle.importKey(
+      "jwk",
+      publicKeyOrJwk,
+      { name: "Ed25519" },
+      true,
+      ["verify"]
+    );
 }
 
 export async function createDocumentRoomRecord(type, body, signingKey) {
@@ -105,9 +119,7 @@ export async function verifyDocumentRoomRecord(record, expectedType = record?.ty
   });
   if (record.body_root !== bodyPlan.root) throw new Error("document room body root mismatch");
   const publicJwk = expectedPublicKey ?? record.signer_public_jwk;
-  const publicKey = publicJwk?.type === "public"
-    ? publicJwk
-    : await crypto.subtle.importKey("jwk", publicJwk, { name: "Ed25519" }, true, ["verify"]);
+  const publicKey = await importPublicKey(publicJwk);
   const valid = await crypto.subtle.verify(
     { name: "Ed25519" },
     publicKey,
@@ -115,9 +127,10 @@ export async function verifyDocumentRoomRecord(record, expectedType = record?.ty
     roomSigningBytes(record.type, record.body_root)
   );
   if (!valid) throw new Error("invalid GWRM1 document room signature");
-  const publicBytes = await rawPublicKey(publicKey);
-  const keyPlan = await documentValuePlan(publicBytes);
-  if (record.signer_key !== `sha256:${documentRootHex(keyPlan)}` && record.signer_key !== record.signer_key) {
+  const exportedJwk = publicJwk?.type === "public"
+    ? await crypto.subtle.exportKey("jwk", publicKey)
+    : publicJwk;
+  if (record.signer_key !== await keyFingerprint(exportedJwk)) {
     throw new Error("document room signer identity mismatch");
   }
   const recordPlan = await documentValuePlan({
@@ -142,6 +155,12 @@ export async function createDocumentRoomGenesis({
 }) {
   if (!roomId || !documentId || !Array.isArray(members) || members.length < 1) {
     throw new Error("document room genesis requires room, document and members");
+  }
+  if (!Number.isSafeInteger(epoch) || epoch < 1) throw new Error("document room epoch must be positive");
+  const ids = new Set();
+  for (const member of members) {
+    if (!member?.member_id || ids.has(member.member_id)) throw new Error("document room members require unique ids");
+    ids.add(member.member_id);
   }
   const initialAstPlan = await documentValuePlan(initialAst);
   const membersPlan = await documentValuePlan(members);
@@ -172,6 +191,7 @@ export async function verifyDocumentRoomGenesis(record, {
   );
   if (roomId && body.room_id !== roomId) throw new Error("document room genesis room mismatch");
   if (documentId && body.document_id !== documentId) throw new Error("document room genesis document mismatch");
+  if (body.sequencer_key_id !== record.signer_key) throw new Error("document room genesis sequencer mismatch");
   const [initialAstPlan, membersPlan] = await Promise.all([
     documentValuePlan(body.initial_ast),
     documentValuePlan(body.members)
@@ -274,6 +294,8 @@ export async function createRoomImportReceipt({
 
 export async function verifyRoomCommitBundle(commit, {
   contributorPublicKey,
+  contributorProfileRecord,
+  contributorDelegationRecord,
   sequencerPublicKey,
   expectedDocument,
   expectedRevision,
@@ -290,23 +312,64 @@ export async function verifyRoomCommitBundle(commit, {
     throw new Error("document room commit document mismatch");
   }
   if (commit.previousRevision !== expectedRevision
-      || (commit.previousRevisionRoot ?? null) !== (expectedRevisionRoot ?? null)) {
+      || !sameOptionalRoot(commit.previousRevisionRoot, expectedRevisionRoot)) {
     throw new Error("document room commit does not extend the local head");
   }
-  const [previousAstPlan, resultAstPlan, operationPlans] = await Promise.all([
+  const [batchBasePlan, batchExpectedPlan, previousAstPlan, resultAstPlan, operationPlans] = await Promise.all([
+    documentValuePlan(commit.batch.baseAst),
+    documentValuePlan(commit.batch.expectedResultAst),
     documentValuePlan(expectedDocument),
     documentValuePlan(commit.resultAst),
     Promise.all(commit.transformedOperations.map((operation) =>
       createDocumentOperationPlan(expectedDocument.id, operation, commit.batch.baseRevision)))
   ]);
-  const operationVector = await documentReferenceVectorPlan(operationPlans);
+  const originalOperationPlans = await Promise.all(commit.batch.operations.map((operation) =>
+    createDocumentOperationPlan(expectedDocument.id, operation, commit.batch.baseRevision)));
+  const [operationVector, originalOperationVector] = await Promise.all([
+    documentReferenceVectorPlan(operationPlans),
+    documentReferenceVectorPlan(originalOperationPlans)
+  ]);
+  const batchBody = commit.batch.record.body;
+  if (!sameRoot(batchBody.base_ast_root, batchBasePlan)
+      || !sameRoot(batchBody.operations_root, originalOperationVector)
+      || !sameRoot(batchBody.expected_result_root, batchExpectedPlan)
+      || (contributorProfileRecord && !sameRoot(batchBody.author_profile_root, contributorProfileRecord))
+      || (contributorDelegationRecord && !sameRoot(batchBody.delegation_root, contributorDelegationRecord))) {
+    throw new Error("document room batch root binding mismatch");
+  }
   const transformationBody = commit.transformation.record.body;
-  if (documentRootHex(transformationBody.batch_root) !== documentRootHex(commit.batch.record)
-      || documentRootHex(transformationBody.previous_ast_root) !== documentRootHex(previousAstPlan)
-      || documentRootHex(transformationBody.transformed_operations_root) !== documentRootHex(operationVector)
-      || documentRootHex(transformationBody.result_ast_root) !== documentRootHex(resultAstPlan)
+  if (!sameRoot(transformationBody.batch_root, commit.batch.record)
+      || !sameOptionalRoot(transformationBody.previous_revision_root, expectedRevisionRoot)
+      || !sameRoot(transformationBody.previous_ast_root, previousAstPlan)
+      || !sameRoot(transformationBody.transformed_operations_root, operationVector)
+      || !sameRoot(transformationBody.result_ast_root, resultAstPlan)
       || transformationBody.outcome !== commit.outcome) {
     throw new Error("document room transformation root binding mismatch");
   }
-  return Object.freeze({ previousAstPlan, resultAstPlan, operationPlans, operationVector });
+  const [outcomePlan, sequencePlan] = await Promise.all([
+    documentValuePlan(commit.outcome),
+    documentValuePlan(commit.sequence)
+  ]);
+  const receiptBody = commit.receipt.record.body;
+  if (!sameRoot(receiptBody.batch_root, commit.batch.record)
+      || !sameRoot(receiptBody.transformation_root, commit.transformation.record)
+      || !sameOptionalRoot(receiptBody.previous_revision_root, expectedRevisionRoot)
+      || !sameRoot(receiptBody.transformed_operations_root, operationVector)
+      || !sameRoot(receiptBody.result_ast_root, resultAstPlan)
+      || !sameRoot(receiptBody.outcome_root, outcomePlan)
+      || !sameRoot(receiptBody.sequence_root, sequencePlan)) {
+    throw new Error("document room receipt root binding mismatch");
+  }
+  return Object.freeze({
+    batchBasePlan,
+    batchExpectedPlan,
+    previousAstPlan,
+    resultAstPlan,
+    originalOperationPlans,
+    originalOperationVector,
+    operationPlans,
+    operationVector,
+    outcomePlan,
+    sequencePlan
+  });
 }
