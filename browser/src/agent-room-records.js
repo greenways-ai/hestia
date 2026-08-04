@@ -7,6 +7,7 @@ import {
 import {
   createAdmissionProof,
   createRoomInvite,
+  sealRoomMessage,
   signAgentRecord
 } from "./agent-protocol.js";
 import { randomId } from "./protocol.js";
@@ -15,6 +16,8 @@ export const DEFAULT_PROFILE_POLICY = "hestia.agent-profile/policy-v1";
 export const DEFAULT_PROFILE_KERNEL = "hestia.agent-profile/kernel-v1";
 export const DEFAULT_ROOM_POLICY = "hestia.agent-room/policy-v1";
 export const DEFAULT_ROOM_KERNEL = "hestia.agent-room/kernel-v1";
+export const DEFAULT_DOCUMENT_POLICY = "hestia.document/room-attachment-policy-v1";
+export const DEFAULT_MESSAGE_DELIVERY_POLICY = "hestia.room/message-delivery-policy-v1";
 
 const CAPABILITY_DOMAIN = textEncoder.encode("HESTIA-ROOM-CAPABILITY/1\0");
 const ADMISSION_DOMAIN = textEncoder.encode("HESTIA-ROOM-ADMISSION/1\0");
@@ -26,7 +29,7 @@ function requireRoot(record, name) {
 
 function companionCells(value) {
   if (Array.isArray(value)) return value;
-  return value?.hcv1_cells ?? [];
+  return value?.hcv1_cells ?? value?.admission?.hcv1Cells ?? [];
 }
 
 export function mergeHcv1Cells(...values) {
@@ -93,6 +96,29 @@ async function policyRoots(policy, kernel) {
     kernelRoot: kernelPlan.root,
     policyPlan,
     kernelPlan,
+    bootstrap: Object.freeze({
+      hcv1Cells,
+      hcp1Pack: hcp1Pack(hcv1Cells)
+    })
+  });
+}
+
+export async function roomActivityPolicyRoots({
+  documentPolicy = DEFAULT_DOCUMENT_POLICY,
+  messageDeliveryPolicy = DEFAULT_MESSAGE_DELIVERY_POLICY
+} = {}) {
+  const [documentPolicyPlan, messageDeliveryPolicyPlan] = await Promise.all([
+    hcv1ValueRoot(documentPolicy),
+    hcv1ValueRoot(messageDeliveryPolicy)
+  ]);
+  const hcv1Cells = mergeHcv1Cells(documentPolicyPlan, messageDeliveryPolicyPlan);
+  return Object.freeze({
+    documentPolicy,
+    messageDeliveryPolicy,
+    documentPolicyRoot: documentPolicyPlan.root,
+    messageDeliveryPolicyRoot: messageDeliveryPolicyPlan.root,
+    documentPolicyPlan,
+    messageDeliveryPolicyPlan,
     bootstrap: Object.freeze({
       hcv1Cells,
       hcp1Pack: hcp1Pack(hcv1Cells)
@@ -213,5 +239,124 @@ export async function createAdmissionProofBundle(options) {
     record,
     proofPlan,
     admission: agentAdmissionBundle(record, proofPlan)
+  });
+}
+
+export async function createDocumentVersionBundle({
+  documentId = `document:${randomId()}`,
+  content,
+  authorProfileId,
+  signingKey,
+  previousVersionRecord = null,
+  version = previousVersionRecord ? previousVersionRecord.body.version + 1 : 1,
+  mediaType = "text/plain; charset=utf-8",
+  createdAt = new Date().toISOString()
+}) {
+  if (!documentId || !authorProfileId || content === undefined || content === null) {
+    throw new Error("document id, content, and author profile are required");
+  }
+  if (!Number.isSafeInteger(version) || version < 1) {
+    throw new Error("document version must be a positive safe integer");
+  }
+  const contentPlan = await hcv1ValueRoot({ type: "document/content", value: content });
+  const body = {
+    document_id: documentId,
+    version,
+    previous_version_root: previousVersionRecord?.root ?? null,
+    content_root: contentPlan.root,
+    media_type: mediaType,
+    author_profile_id: authorProfileId,
+    created_at: createdAt
+  };
+  const record = await signAgentRecord("document/version", body, signingKey);
+  return Object.freeze({
+    record,
+    content,
+    contentPlan,
+    contentRoot: contentPlan.root,
+    admission: agentAdmissionBundle(record, contentPlan)
+  });
+}
+
+export async function createDocumentAttachmentBundle({
+  roomRecord,
+  documentVersion,
+  attachedByProfileRecord,
+  signingKey,
+  documentPolicy = DEFAULT_DOCUMENT_POLICY
+}) {
+  const documentRecord = documentVersion?.record ?? documentVersion;
+  requireRoot(roomRecord, "room record");
+  requireRoot(documentRecord, "document version record");
+  requireRoot(attachedByProfileRecord, "attaching profile record");
+  const documentPolicyPlan = await hcv1ValueRoot(documentPolicy);
+  const body = {
+    room_root: roomRecord.root,
+    document_root: documentRecord.root,
+    document_policy_root: documentPolicyPlan.root,
+    attached_by_profile_root: attachedByProfileRecord.root
+  };
+  const record = await signAgentRecord("room/document-attachment", body, signingKey);
+  return Object.freeze({
+    record,
+    documentRecord,
+    documentPolicyPlan,
+    admission: agentAdmissionBundle(
+      record,
+      documentVersion,
+      documentPolicyPlan
+    )
+  });
+}
+
+export async function sealRoomMessageBundle(options) {
+  const record = await sealRoomMessage(options);
+  const ciphertextPlan = await hcv1ValueRoot({
+    type: "room/ciphertext",
+    value: record.body.ciphertext
+  });
+  if (record.body.ciphertext_root !== ciphertextPlan.root) {
+    throw new Error("room message ciphertext root does not match its ciphertext");
+  }
+  return Object.freeze({
+    record,
+    ciphertextPlan,
+    admission: agentAdmissionBundle(record, ciphertextPlan)
+  });
+}
+
+export async function createMessageIntentBundle({
+  roomRecord,
+  message,
+  senderProfileRecord,
+  signingKey,
+  deliveryPolicy = DEFAULT_MESSAGE_DELIVERY_POLICY
+}) {
+  const messageRecord = message?.record ?? message;
+  requireRoot(roomRecord, "room record");
+  requireRoot(messageRecord, "signed room message");
+  requireRoot(senderProfileRecord, "sender profile record");
+  if (messageRecord.type !== "room/message") {
+    throw new Error("message intent requires a signed room message");
+  }
+  const deliveryPolicyPlan = await hcv1ValueRoot(deliveryPolicy);
+  const body = {
+    room_root: roomRecord.root,
+    membership_epoch: messageRecord.body.membership_epoch,
+    sender_profile_root: senderProfileRecord.root,
+    envelope_root: messageRecord.root,
+    ciphertext_root: messageRecord.body.ciphertext_root,
+    delivery_policy_root: deliveryPolicyPlan.root
+  };
+  const record = await signAgentRecord("room/message-intent", body, signingKey);
+  return Object.freeze({
+    record,
+    messageRecord,
+    deliveryPolicyPlan,
+    admission: agentAdmissionBundle(
+      record,
+      message,
+      deliveryPolicyPlan
+    )
   });
 }
