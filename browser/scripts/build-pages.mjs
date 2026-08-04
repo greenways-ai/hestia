@@ -21,6 +21,7 @@ await cp(resolve(repository, "browser/documents"), resolve(output, "documents"),
 await cp(resolve(repository, "browser/src"), resolve(output, "hestia-browser"), { recursive: true });
 await cp(resolve(repository, "browser/vendor/hara"), resolve(output, "hara-runtime"), { recursive: true });
 await cp(resolve(repository, "browser/hara"), resolve(output, "hara"), { recursive: true });
+await cp(resolve(repository, "protocol"), resolve(output, "protocol"), { recursive: true });
 await mkdir(ledgerOutput, { recursive: true });
 await cp(
   resolve(repository, "gwdb-ledger-hal/src/gw/ledger/document_protocol.hal"),
