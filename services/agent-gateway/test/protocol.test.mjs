@@ -29,6 +29,14 @@ test("normalizes one bounded signed-record admission request", () => {
   assert.equal(normalized.capability, null);
 });
 
+test("accepts canonical document and message activity records without capabilities", () => {
+  for (const kind of ["room/document-attachment", "room/message-intent"]) {
+    const normalized = normalizeAdmissionRequest(request(kind));
+    assert.equal(normalized.recordKind, kind);
+    assert.equal(normalized.capability, null);
+  }
+});
+
 test("requires a canonical 32-byte capability only for guest admission", () => {
   const capability = Buffer.alloc(32, 19).toString("base64url");
   const normalized = normalizeAdmissionRequest(
@@ -39,10 +47,16 @@ test("requires a canonical 32-byte capability only for guest admission", () => {
     () => normalizeAdmissionRequest(request("room/admission-proof")),
     /requires its private capability/
   );
-  assert.throws(
-    () => normalizeAdmissionRequest(request("room/version", { capability })),
-    /valid only for room admission proof/
-  );
+  for (const kind of [
+    "room/version",
+    "room/document-attachment",
+    "room/message-intent"
+  ]) {
+    assert.throws(
+      () => normalizeAdmissionRequest(request(kind, { capability })),
+      /valid only for room admission proof/
+    );
+  }
   assert.throws(() => decodeCapability("AA"), /exactly 32 bytes/);
 });
 
