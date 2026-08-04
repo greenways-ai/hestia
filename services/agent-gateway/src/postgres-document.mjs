@@ -118,13 +118,18 @@ function adapter(sql) {
 
     async documentOperationsAfter({ documentId, revision }) {
       const rows = await sql`
-        SELECT operation_projection
+        SELECT
+          encode(operation_root, 'hex') AS operation_root_hex,
+          operation_projection
         FROM hestia.document_operation_projection
         WHERE document_id = ${documentId}
           AND revision > ${revision}::bigint
         ORDER BY revision, operation_index
       `;
-      return rows.map((row) => row.operation_projection);
+      return rows.map((row) => Object.freeze({
+        root: `sha256:${row.operation_root_hex}`,
+        operation: row.operation_projection
+      }));
     },
 
     async prepareDocumentRevision({
