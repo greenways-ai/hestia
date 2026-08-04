@@ -1,4 +1,8 @@
-import { admitBatch, walkDocument } from "../../../protocol/document-ot.js";
+import {
+  admitBatch,
+  applyBatch,
+  walkDocument
+} from "../../../protocol/document-ot.js";
 import {
   documentReferenceVectorPlan,
   documentRootHex,
@@ -30,35 +34,15 @@ function packCellCount(pack) {
   return count;
 }
 
-function canonicalOperation(operation) {
+function canonicalOperation(operation, fallbackBaseRevision = null) {
   const next = { ...operation };
   for (const field of ["sourceRoot", "resultRoot", "expectedRoot"]) {
     if (next[field] && typeof next[field] === "object") next[field] = next[field].root;
   }
-  return next;
-}
-
-async function canonicalProjection(bundle) {
-  const operations = (bundle.operations || []).map(canonicalOperation);
-  const [baseAstPlan, expectedResultPlan, operationPlans] = await Promise.all([
-    documentValuePlan(bundle.baseAst),
-    documentValuePlan(bundle.expectedResultAst),
-    Promise.all(operations.map((operation) =>
-      createDocumentOperationPlan(bundle.documentId, operation, bundle.baseRevision)))
-  ]);
-  const operationVector = await documentReferenceVectorPlan(operationPlans);
-  const body = bundle.record?.body || {};
-  const checks = [
-    [body.document_id, bundle.documentId, "document id"],
-    [Number(body.base_revision), Number(bundle.baseRevision), "base revision"],
-    [root(body.base_ast_root, "signed base AST"), root(baseAstPlan, "base AST"), "base AST root"],
-    [root(body.operations_root, "signed operation vector"), root(operationVector, "operation vector"), "operation vector root"],
-    [root(body.expected_result_root, "signed expected result"), root(expectedResultPlan, "expected result"), "expected result root"]
-  ];
-  for (const [actual, expected, name] of checks) {
-    if (actual !== expected) throw new Error(`document batch ${name} does not match its signed HCV1 record`);
+  if (next.baseRevision == null && fallbackBaseRevision != null) {
+    next.baseRevision = Number(fallbackBaseRevision);
   }
-  return { operations, baseAstPlan, expectedResultPlan, operationPlans, operationVector };
+  return next;
 }
 
 async function artefactSourceRoots(document) {
@@ -74,6 +58,80 @@ async function artefactSourceRoots(document) {
     roots.set(`${artefactId}:${sourceId}`, plan.root);
   }
   return roots;
+}
+
+function sourceRootResolver(roots) {
+  return (artefact) => {
+    const sourceNode = (artefact.children || []).find((child) => child.type === "text");
+    return roots.get(`${artefact.attrs?.artefactId}:${sourceNode?.id}`) || null;
+  };
+}
+
+async function canonicalProjection(bundle) {
+  const baseRevision = Number(bundle.baseRevision);
+  const operations = (bundle.operations || []).map((operation) =>
+    canonicalOperation(operation, baseRevision));
+  const [baseAstPlan, expectedResultPlan, operationPlans] = await Promise.all([
+    documentValuePlan(bundle.baseAst),
+    documentValuePlan(bundle.expectedResultAst),
+    Promise.all(operations.map((operation) =>
+      createDocumentOperationPlan(bundle.documentId, operation, baseRevision)))
+  ]);
+  const operationVector = await documentReferenceVectorPlan(operationPlans);
+  const body = bundle.record?.body || {};
+  const checks = [
+    [body.document_id, bundle.documentId, "document id"],
+    [Number(body.base_revision), baseRevision, "base revision"],
+    [root(body.base_ast_root, "signed base AST"), root(baseAstPlan, "base AST"), "base AST root"],
+    [root(body.operations_root, "signed operation vector"), root(operationVector, "operation vector"), "operation vector root"],
+    [root(body.expected_result_root, "signed expected result"), root(expectedResultPlan, "expected result"), "expected result root"]
+  ];
+  for (const [actual, expected, name] of checks) {
+    if (actual !== expected) throw new Error(`document batch ${name} does not match its signed HCV1 record`);
+  }
+
+  const baseSourceRoots = await artefactSourceRoots(bundle.baseAst);
+  const replayed = applyBatch(
+    bundle.baseAst,
+    { id: bundle.batchId, documentId: bundle.documentId, baseRevision, operations },
+    { sourceRoot: sourceRootResolver(baseSourceRoots) }
+  );
+  const replayedPlan = await documentValuePlan(replayed);
+  if (root(replayedPlan, "replayed local result") !== root(expectedResultPlan, "expected local result")) {
+    throw new Error("document batch expected result does not match replay of its signed operations");
+  }
+
+  return {
+    operations,
+    baseAstPlan,
+    expectedResultPlan,
+    replayedPlan,
+    operationPlans,
+    operationVector
+  };
+}
+
+async function verifiedAcceptedOperations(entries, documentId) {
+  const operations = [];
+  for (const entry of entries || []) {
+    if (!entry?.root || !entry?.operation) {
+      throw new Error("Hara ledger returned an incomplete accepted operation projection");
+    }
+    const operation = canonicalOperation(entry.operation);
+    if (!Number.isSafeInteger(Number(operation.baseRevision)) || Number(operation.baseRevision) < 0) {
+      throw new Error("accepted operation projection is missing its signed base revision");
+    }
+    const plan = await createDocumentOperationPlan(
+      documentId,
+      operation,
+      Number(operation.baseRevision)
+    );
+    if (root(plan, "accepted operation") !== root(entry.root, "stored accepted operation")) {
+      throw new Error("accepted operation projection does not match its Hara ledger root");
+    }
+    operations.push(operation);
+  }
+  return operations;
 }
 
 function signPrepared(signer, prepared) {
@@ -159,10 +217,14 @@ export function createDocumentLedgerService({
         const currentDocument = head?.ast ?? bundle.baseAst;
         const currentRevision = Number(head?.revision ?? 0);
         const currentRevisionRoot = head?.revisionRoot ?? null;
-        const acceptedOperations = await transaction.documentOperationsAfter({
+        const acceptedEntries = await transaction.documentOperationsAfter({
           documentId: bundle.documentId,
           revision: Number(bundle.baseRevision)
         });
+        const acceptedOperations = await verifiedAcceptedOperations(
+          acceptedEntries,
+          bundle.documentId
+        );
         const sourceRoots = await artefactSourceRoots(currentDocument);
         const batch = {
           id: bundle.batchId || bundle.record.body.batch_id,
@@ -171,13 +233,12 @@ export function createDocumentLedgerService({
           operations: projection.operations
         };
         const admission = admitBatch(currentDocument, batch, acceptedOperations, {
-          sourceRoot(artefact, _source) {
-            const sourceNode = (artefact.children || []).find((child) => child.type === "text");
-            return sourceRoots.get(`${artefact.attrs?.artefactId}:${sourceNode?.id}`) || null;
-          }
+          sourceRoot: sourceRootResolver(sourceRoots)
         });
         const transformedOperations = admission.accepted
-          ? admission.batch.operations.map(canonicalOperation)
+          ? admission.batch.operations
+            .filter((operation) => operation.type !== "operation.noop")
+            .map((operation) => canonicalOperation(operation, bundle.baseRevision))
           : [];
         const transformation = await createDocumentTransformationBundle({
           documentId: bundle.documentId,
