@@ -29,14 +29,14 @@ function fixture(text = "Hello world", revision = 0) {
   };
 }
 
-async function batchFixture() {
+async function batchFixture({ expectedText = "Hello Hara" } = {}) {
   const key = await generateAgentKey();
   const [profile, delegation] = await Promise.all([
     documentValuePlan({ profile_id: "profile:writer", sequence: 1 }),
     documentValuePlan({ purpose: "document.edit", document_id: "document:service" })
   ]);
   const baseAst = fixture();
-  const expectedResultAst = fixture("Hello Hara", 1);
+  const expectedResultAst = fixture(expectedText, 1);
   const bundle = await createDocumentBatchBundle({
     documentId: baseAst.id,
     batchId: "batch:service",
@@ -153,9 +153,8 @@ test("verifies batch and transformation, then signs only ledger-prepared receipt
   assert.equal(database.preparedRevision.resultAst.revision, 1);
 });
 
-test("rejects an expected result that is signed but not produced by replay", async () => {
-  const { bundle } = await batchFixture();
-  bundle.expectedResultAst.children[0].children[0].text = "Forged result";
+test("rejects a signed expected result that is not produced by operation replay", async () => {
+  const { bundle } = await batchFixture({ expectedText: "Forged result" });
   await assert.rejects(
     () => createDocumentLedgerService({
       database: fakeDatabase(),
@@ -163,6 +162,19 @@ test("rejects an expected result that is signed but not produced by replay", asy
       environmentId: "hestia-test"
     }).admit({ batch: bundle }),
     /expected result does not match replay/
+  );
+});
+
+test("rejects an expected-result projection altered after the batch was signed", async () => {
+  const { bundle } = await batchFixture();
+  bundle.expectedResultAst.children[0].children[0].text = "Altered after signing";
+  await assert.rejects(
+    () => createDocumentLedgerService({
+      database: fakeDatabase(),
+      signer: environmentSigner(),
+      environmentId: "hestia-test"
+    }).admit({ batch: bundle }),
+    /signed HCV1 record/
   );
 });
 
@@ -238,15 +250,13 @@ test("rejects a corrupted accepted-operation projection before using it for OT",
   );
 });
 
-test("creates a signed conflict receipt without advancing the document result", async () => {
+test("rejects a batch projection changed after its operation vector was signed", async () => {
   const { bundle } = await batchFixture();
   bundle.operations.push({
     id: "operation:missing",
     type: "node.delete",
     targetId: "missing-node"
   });
-  // Re-signing is deliberately impossible here: the projection no longer
-  // matches the signed operation vector and must be rejected before OT.
   const database = fakeDatabase();
   await assert.rejects(
     () => createDocumentLedgerService({
