@@ -22,6 +22,17 @@ test("portable ledger module stays in the gw namespace and defines signed record
   }
 });
 
+test("portable ledger module explicitly imports every non-core OT function", async () => {
+  const value = await source();
+  assert.match(
+    value,
+    /\[std\.foundation :refer \[assoc conj get max min reduce\]\]/
+  );
+  for (const symbol of ["assoc", "conj", "get", "max", "min", "reduce"]) {
+    assert.ok(value.includes(symbol), `missing explicit ${symbol} import`);
+  }
+});
+
 test("portable ledger module owns the deterministic OT path", async () => {
   const value = await source();
   for (const fn of [
