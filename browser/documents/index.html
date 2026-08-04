@@ -10,22 +10,7 @@
   <meta name="description" content="Signed Hara documents, embedded artefacts and private kernel-to-kernel collaboration.">
   <link rel="icon" href="../hestia-browser/app-shell/hestia-sigil.svg" type="image/svg+xml">
   <link rel="stylesheet" href="../hestia-browser/app-shell/hestia-shell.css">
-  <style>
-    body { margin: 0; background: var(--hestia-page, #f4f2ec); color: var(--hestia-ink, #17191d); }
-    main { width: min(1120px, calc(100% - 40px)); margin: 0 auto; padding: clamp(64px, 10vw, 140px) 0; }
-    .eyebrow { margin: 0 0 18px; font: 700 .72rem/1.2 ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; opacity: .62; }
-    h1 { max-width: 900px; margin: 0; font-size: clamp(3.2rem, 9vw, 7.5rem); font-weight: 430; line-height: .91; letter-spacing: -.065em; }
-    .lead { max-width: 720px; margin: 34px 0 0; font-size: clamp(1rem, 1.5vw, 1.22rem); line-height: 1.65; opacity: .72; }
-    .experiences { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-top: 72px; background: color-mix(in srgb, currentColor 14%, transparent); }
-    article { min-height: 320px; display: flex; flex-direction: column; padding: clamp(26px, 4vw, 46px); background: var(--hestia-surface, #fff); }
-    article span { font: 700 .7rem/1 ui-monospace, monospace; color: #8b4e32; }
-    article h2 { margin: 48px 0 14px; font-size: clamp(1.8rem, 4vw, 3rem); font-weight: 470; letter-spacing: -.04em; }
-    article p { margin: 0; line-height: 1.6; opacity: .7; }
-    article a { margin-top: auto; padding-top: 34px; color: inherit; font-weight: 700; text-decoration: none; }
-    article a:hover { color: #8b4e32; }
-    footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent); font: .7rem/1.5 ui-monospace, monospace; opacity: .58; }
-    @media (max-width: 720px) { .experiences { grid-template-columns: 1fr; } article { min-height: 280px; } }
-  </style>
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <header class="hestia-app-header">
@@ -56,7 +41,7 @@
         <a href="../rooms/">Open the private agent office →</a>
       </article>
     </section>
-    <footer>Live collaboration is peer-to-peer. Signalling and TURN may move encrypted packets, but they do not hold document keys or sequence the signed ledger.</footer>
+    <footer class="documents-footer">Live collaboration is peer-to-peer. Signalling and TURN may move encrypted packets, but they do not hold document keys or sequence the signed ledger.</footer>
   </main>
 </body>
 </html>
