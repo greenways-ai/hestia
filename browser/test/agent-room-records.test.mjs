@@ -2,14 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createAgentProfile,
+  createRoomEpochKey,
   generateAgentKey
 } from "../src/agent-protocol.js";
 import {
   createAdmissionProofBundle,
+  createDocumentAttachmentBundle,
+  createDocumentVersionBundle,
+  createMessageIntentBundle,
   createRoomInviteBundle,
   createRoomVersion,
+  roomActivityPolicyRoots,
   roomAdmissionProofPlan,
   roomCapabilityPlan,
+  sealRoomMessageBundle,
   verifyRoomVersion
 } from "../src/agent-room-records.js";
 
@@ -93,6 +99,79 @@ test("invitation and member proof bundles carry transient commitment cells", asy
     })).root,
     proof.proofPlan.root
   );
+});
+
+test("document attachment bundles the nested signed version and content graph", async () => {
+  const host = await profile("profile:document-host", "Document host");
+  const room = await createRoomVersion({
+    roomId: "room:documents",
+    hostProfileRecord: host.record,
+    signingKey: host.operationalKey
+  });
+  const document = await createDocumentVersionBundle({
+    documentId: "document:brief",
+    content: "Review this signed brief.",
+    authorProfileId: host.record.body.profile_id,
+    signingKey: host.operationalKey,
+    createdAt: "2026-08-04T00:00:00.000Z"
+  });
+  const attachment = await createDocumentAttachmentBundle({
+    roomRecord: room.record,
+    documentVersion: document,
+    attachedByProfileRecord: host.record,
+    signingKey: host.operationalKey
+  });
+  const activityPolicies = await roomActivityPolicyRoots();
+  const packed = roots(attachment.admission);
+
+  assert.equal(attachment.record.body.room_root, room.record.root);
+  assert.equal(attachment.record.body.document_root, document.record.root);
+  assert.equal(attachment.record.body.document_policy_root, activityPolicies.documentPolicyRoot);
+  assert.equal(attachment.record.body.attached_by_profile_root, host.record.root);
+  assert.ok(packed.has(document.record.root));
+  assert.ok(packed.has(document.contentRoot));
+  assert.ok(packed.has(activityPolicies.documentPolicyRoot));
+});
+
+test("message intent bundles a signed ciphertext envelope and delivery policy", async () => {
+  const host = await profile("profile:message-host", "Message host");
+  const room = await createRoomVersion({
+    roomId: "room:messages",
+    hostProfileRecord: host.record,
+    signingKey: host.operationalKey
+  });
+  const epochKey = await createRoomEpochKey();
+  const message = await sealRoomMessageBundle({
+    roomId: room.record.body.room_id,
+    epoch: 1,
+    senderProfileId: host.record.body.profile_id,
+    plaintext: "The signed room message is ready.",
+    epochKey,
+    signingKey: host.operationalKey,
+    sentAt: "2026-08-04T00:01:00.000Z",
+    messageId: "message:one"
+  });
+  const intent = await createMessageIntentBundle({
+    roomRecord: room.record,
+    message,
+    senderProfileRecord: host.record,
+    signingKey: host.operationalKey
+  });
+  const activityPolicies = await roomActivityPolicyRoots();
+  const packed = roots(intent.admission);
+
+  assert.equal(intent.record.body.room_root, room.record.root);
+  assert.equal(intent.record.body.membership_epoch, 1);
+  assert.equal(intent.record.body.sender_profile_root, host.record.root);
+  assert.equal(intent.record.body.envelope_root, message.record.root);
+  assert.equal(intent.record.body.ciphertext_root, message.ciphertextPlan.root);
+  assert.equal(
+    intent.record.body.delivery_policy_root,
+    activityPolicies.messageDeliveryPolicyRoot
+  );
+  assert.ok(packed.has(message.record.root));
+  assert.ok(packed.has(message.ciphertextPlan.root));
+  assert.ok(packed.has(activityPolicies.messageDeliveryPolicyRoot));
 });
 
 test("room capability plans reject malformed secrets", async () => {
