@@ -39,11 +39,12 @@
                   (get (nth profile-refs 5) :role)
                   (get (nth profile-refs 7) :role)]
                  ["profile-id" "root-key" "delegation"])
-     (test/check "defines canonical profile and room projection schemas"
+     (test/check "defines canonical profile, governance, and activity schemas"
                  [(agent-room/field-names "profile/state")
                   (agent-room/field-names "room/member-state")
                   (agent-room/field-names "room/invitation-state")
-                  (agent-room/field-names "room/state")]
+                  (agent-room/field-names "room/state")
+                  (agent-room/field-names "room/activity-state")]
                  [["profile-id" "sequence" "profile-version" "root-key"
                    "operational-key" "delegation" "status"]
                   ["room" "member-profile" "role" "purposes" "status"
@@ -52,7 +53,9 @@
                    "consumed-record"]
                   ["room-id" "room-version" "host-profile" "membership-epoch"
                    "members" "invitations" "policy" "kernel"
-                   "acceptance-mode" "status"]])
+                   "acceptance-mode" "status"]
+                  ["room-state" "previous-activity" "event" "activity-kind"
+                   "actor-profile" "membership-epoch" "sequence"]])
      (test/check "constructs an HCV1 record through explicit capabilities"
                  (get profile-cell :root)
                  (str "sha(HCV1:14:" (count profile-payload) ":00)"))
