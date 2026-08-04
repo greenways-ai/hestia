@@ -160,6 +160,9 @@ test("tampering with only the advertised revision root is rejected", async () =>
   }]);
   const commit = await host.sequenceBatch(batch, hostMember.descriptor.memberId);
   const tampered = structuredClone(commit);
+  tampered.receipt.record.body.result_revision_root = structuredClone(
+    tampered.receipt.record.body.result_revision_root
+  );
   tampered.revision.root = `sha256:${"0".repeat(64)}`;
   await assert.rejects(
     () => guest.applyCommit(tampered),
