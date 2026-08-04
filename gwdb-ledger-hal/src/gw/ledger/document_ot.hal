@@ -1,0 +1,284 @@
+(ns gw.ledger.document-ot
+  (:require [gw.ledger.document-protocol :as document]))
+
+(def protocol "greenways-document/1")
+(def rich-text-profile "greenways.rich-text/2")
+(def max-batch-operations 64)
+
+(defn record-fields
+  "Returns the canonical HCV1 role order for signed document records."
+  [kind]
+  (cond
+    (= kind "document/text-splice")
+    ["operation-id" "document-id" "target" "offset" "delete-count" "insert"
+     "base-revision"]
+
+    (= kind "document/node-insert")
+    ["operation-id" "document-id" "parent" "before" "after" "node"
+     "base-revision"]
+
+    (= kind "document/node-delete")
+    ["operation-id" "document-id" "target" "expected" "base-revision"]
+
+    (= kind "document/node-set-attrs")
+    ["operation-id" "document-id" "target" "expected-attrs" "attrs"
+     "base-revision"]
+
+    (= kind "document/artefact-commit")
+    ["operation-id" "document-id" "artefact-id" "artefact-node" "source-text"
+     "source" "result" "media-type" "display" "base-revision"]
+
+    (= kind "document/batch")
+    ["batch-id" "document-id" "base-revision" "base-ast" "operations"
+     "expected-result" "author-profile" "delegation"]
+
+    (= kind "document/transformation")
+    ["transformation-id" "document-id" "batch" "base-revision"
+     "previous-revision" "previous-ast" "transformed-operations" "result-ast"
+     "outcome" "conflict"]
+
+    (= kind "document/revision")
+    ["document-id" "revision" "previous-revision" "previous-ast" "batch"
+     "transformation" "transformed-operations" "result-ast" "author-profile"
+     "environment-key"]
+
+    (= kind "document/import-receipt")
+    ["document-id" "batch" "transformation" "base-revision"
+     "previous-revision" "transformed-operations" "result-revision"
+     "result-ast" "outcome" "sequence"]
+
+    (= kind "document/verification-receipt")
+    ["record" "body" "signer-key" "environment-key" "outcome" "sequence"]
+
+    (= kind "document/signed-record")
+    ["body" "signer-key" "signature"]
+
+    true
+    (throw (ex-info "unknown document ledger record kind" {"kind" kind}))))
+
+(defn signing-frame
+  "Describes the normative signing frame. The host encodes the two text fields
+   as UTF-8, includes NUL separators, and appends the raw 32-byte HCV1 body root."
+  [record-type body-root]
+  {:domain "GWDP1"
+   :record-type record-type
+   :body-root body-root})
+
+(defn noop
+  [operation reason]
+  (assoc (assoc operation :type "operation.noop") :noop-reason reason))
+
+(defn inserted-length
+  [scalar-count operation]
+  (scalar-count (get operation :insert)))
+
+(defn map-position
+  "Maps one Unicode-scalar offset through one accepted splice. scalar-count is
+   explicit because UTF-16 host string length is not the protocol unit."
+  [scalar-count position accepted association]
+  (let [start (get accepted :offset)
+        deleted (get accepted :delete-count)
+        inserted (inserted-length scalar-count accepted)
+        end (+ start deleted)]
+    (cond
+      (= deleted 0)
+      (if (or (> position start)
+              (and (= position start) (> association 0)))
+        (+ position inserted)
+        position)
+
+      (or (< position start)
+          (and (= position start) (< association 0)))
+      position
+
+      (or (> position end)
+          (and (= position end) (> association 0)))
+      (+ position (- inserted deleted))
+
+      true
+      (+ start (if (> association 0) inserted 0)))))
+
+(defn transform-text-splice
+  [scalar-count incoming accepted]
+  (if (not (= (get incoming :target-id) (get accepted :target-id)))
+    incoming
+    (let [accepted-start (get accepted :offset)
+          accepted-delete (get accepted :delete-count)
+          accepted-end (+ accepted-start accepted-delete)
+          incoming-start (get incoming :offset)
+          incoming-delete (get incoming :delete-count)
+          incoming-end (+ incoming-start incoming-delete)
+          incoming-insert (inserted-length scalar-count incoming)]
+      (cond
+        (and (> accepted-delete 0)
+             (> incoming-insert 0)
+             (= incoming-delete 0)
+             (> incoming-start accepted-start)
+             (< incoming-start accepted-end))
+        (throw (ex-info "insertion falls inside accepted deleted text"
+                        {:code :text.insert-inside-deleted-range
+                         :incoming incoming
+                         :accepted accepted}))
+
+        (and (= accepted-delete 0)
+             (= incoming-delete 0)
+             (= incoming-start accepted-start))
+        (assoc incoming :offset
+               (+ incoming-start (inserted-length scalar-count accepted)))
+
+        true
+        (let [start (map-position scalar-count incoming-start accepted 1)
+              end (map-position scalar-count incoming-end accepted 1)
+              next (assoc (assoc incoming :offset (min start end))
+                          :delete-count (max 0 (- end start)))]
+          (if (and (= (get next :delete-count) 0)
+                   (= (inserted-length scalar-count next) 0))
+            (noop next "overlapping deletion already accepted")
+            next))))))
+
+(defn targets-deleted-node?
+  [operation deleted-id]
+  (or (= (get operation :target-id) deleted-id)
+      (= (get operation :parent-id) deleted-id)
+      (= (get operation :artefact-node-id) deleted-id)))
+
+(defn transform-node-operation
+  [incoming accepted]
+  (cond
+    (and (= (get accepted :type) "node.delete")
+         (= (get incoming :type) "node.delete")
+         (= (get incoming :target-id) (get accepted :target-id)))
+    (noop incoming "target already deleted")
+
+    (and (= (get accepted :type) "node.delete")
+         (targets-deleted-node? incoming (get accepted :target-id)))
+    (throw (ex-info "operation targets a deleted node"
+                    {:code :node.target-deleted
+                     :incoming incoming
+                     :accepted accepted}))
+
+    true incoming))
+
+(defn transform-artefact-commit
+  [incoming accepted]
+  (cond
+    (and (= (get accepted :type) "node.delete")
+         (= (get incoming :artefact-node-id) (get accepted :target-id)))
+    (throw (ex-info "artefact was deleted before snapshot admission"
+                    {:code :artefact.deleted}))
+
+    (and (= (get accepted :type) "text.splice")
+         (= (get incoming :source-text-id) (get accepted :target-id)))
+    (throw (ex-info "artefact source changed after the batch base"
+                    {:code :artefact.source-changed}))
+
+    (and (= (get accepted :type) "artefact.commit")
+         (= (get incoming :artefact-id) (get accepted :artefact-id))
+         (= (get incoming :source-root) (get accepted :source-root))
+         (= (get incoming :result-root) (get accepted :result-root)))
+    (noop incoming "identical artefact result already committed")
+
+    (and (= (get accepted :type) "artefact.commit")
+         (= (get incoming :artefact-id) (get accepted :artefact-id)))
+    (throw (ex-info "competing artefact results"
+                    {:code :artefact.result-conflict}))
+
+    true incoming))
+
+(defn transform-operation
+  [scalar-count incoming accepted]
+  (cond
+    (= (get incoming :type) "operation.noop") incoming
+
+    (and (= (get incoming :type) "text.splice")
+         (= (get accepted :type) "text.splice"))
+    (transform-text-splice scalar-count incoming accepted)
+
+    (= (get incoming :type) "artefact.commit")
+    (transform-artefact-commit incoming accepted)
+
+    true
+    (transform-node-operation incoming accepted)))
+
+(defn transform-through
+  [scalar-count operation accepted]
+  (reduce (fn [next previous]
+            (transform-operation scalar-count next previous))
+          operation
+          accepted))
+
+(defn transform-batch
+  "Maps every original operation through accepted environment operations and
+   then through earlier transformed operations in the same atomic batch."
+  [scalar-count batch accepted]
+  (let [operations (get batch :operations)
+        transformed
+        (reduce
+         (fn [out operation]
+           (conj out
+                 (transform-through
+                  scalar-count
+                  (transform-through scalar-count operation accepted)
+                  out)))
+         []
+         operations)]
+    (assoc batch :operations transformed)))
+
+(defn transformation-plan
+  [transformation-id document-id batch-root base-revision previous-revision-root
+   previous-ast-root transformed-operations-root result-ast-root outcome
+   conflict-root]
+  {:protocol protocol
+   :type :document/transformation
+   :id transformation-id
+   :document-id document-id
+   :batch-root batch-root
+   :base-revision base-revision
+   :previous-revision-root previous-revision-root
+   :previous-ast-root previous-ast-root
+   :transformed-operations-root transformed-operations-root
+   :result-ast-root result-ast-root
+   :outcome outcome
+   :conflict-root conflict-root})
+
+(defn revision-plan
+  [document-id revision previous-revision-root previous-ast-root batch-root
+   transformation-root transformed-operations-root result-ast-root
+   author-profile-root environment-key-root]
+  {:protocol protocol
+   :type :document/revision
+   :document-id document-id
+   :revision revision
+   :previous-revision-root previous-revision-root
+   :previous-ast-root previous-ast-root
+   :batch-root batch-root
+   :transformation-root transformation-root
+   :transformed-operations-root transformed-operations-root
+   :result-ast-root result-ast-root
+   :author-profile-root author-profile-root
+   :environment-key-root environment-key-root})
+
+(defn receipt-plan
+  [document-id batch-root transformation-root base-revision
+   previous-revision-root transformed-operations-root result-revision-root
+   result-ast-root outcome-root sequence-root]
+  {:protocol protocol
+   :type :document/import-receipt
+   :document-id document-id
+   :batch-root batch-root
+   :transformation-root transformation-root
+   :base-revision base-revision
+   :previous-revision-root previous-revision-root
+   :transformed-operations-root transformed-operations-root
+   :result-revision-root result-revision-root
+   :result-ast-root result-ast-root
+   :outcome-root outcome-root
+   :sequence-root sequence-root})
+
+(defn admission-valid?
+  "A signing boundary is valid only when replay and transformation agree on the
+   exact result root. Hestia signs the receipt only after this predicate and the
+   current ledger head are rechecked in one transaction."
+  [expected-result-root replay-result-root transformation-result-root]
+  (and (= expected-result-root replay-result-root)
+       (= replay-result-root transformation-result-root)))
