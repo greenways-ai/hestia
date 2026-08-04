@@ -23,6 +23,7 @@
     "./document-gateway": "./src/document-gateway.js",
     "./document-room-invite": "./src/document-room-invite.js",
     "./document-room-kernel": "./src/document-room-kernel.js",
+    "./document-room-member": "./src/document-room-member.js",
     "./document-room-records": "./src/document-room-records.js",
     "./document-room": "./src/document-room.js",
     "./document-room-peer": "./src/document-room-peer.js"
