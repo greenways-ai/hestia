@@ -1,0 +1,131 @@
+{:migration/id ignatius-from-hestia-v1
+ :migration/source "greenways-ai/hestia"
+ :migration/target "greenways-ai/ignatius"
+ :migration/decision
+ "Ignatius owns the generic Hara-compatible chain, PostgreSQL chain adapter,
+ portable HAL server/client semantics, and host chain clients. Hestia owns
+ agent authority, rooms, documents, continuity, application projections,
+ services, and product experiences."
+
+ :migration/move
+ [{:source "gwdb-ledger/"
+   :target "db/"
+   :mode :history-preserving
+   :owner ignatius}
+  {:source "web-components/gw-ledger-sha/"
+   :target "extensions/sha/"
+   :mode :history-preserving
+   :owner ignatius}
+  {:source "web-components/gw-ledger-noir/"
+   :target "extensions/noir/"
+   :mode :history-preserving
+   :owner ignatius}
+  {:source "gwdb-ledger-hal/src/gw/ledger/codec.hal"
+   :target "hal/src/ignatius/codec.hal"
+   :mode :history-preserving
+   :compatibility-namespace gw.ledger.codec
+   :owner ignatius}
+  {:source "gwdb-ledger-hal/src/gw/ledger/runtime.hal"
+   :target "hal/src/ignatius/runtime.hal"
+   :mode :history-preserving
+   :compatibility-namespace gw.ledger.runtime
+   :owner ignatius}
+  {:source "gwdb-ledger-hal/src/gw/ledger/transaction.hal"
+   :target "hal/src/ignatius/transaction.hal"
+   :mode :history-preserving
+   :compatibility-namespace gw.ledger.transaction
+   :owner ignatius}
+  {:source "gwdb-ledger-hal/src/gw/ledger/offline.hal"
+   :target "hal/src/ignatius/client/outbox.hal"
+   :mode :history-preserving
+   :compatibility-namespace gw.ledger.offline
+   :owner ignatius}
+  {:source "gwdb-ledger-hal/test/gw/ledger/offline_test.hal"
+   :target "hal/test/ignatius/client/outbox_test.hal"
+   :mode :history-preserving
+   :owner ignatius}]
+
+ :migration/split
+ [{:source "services/agent-gateway/"
+   :ignatius-owns
+   [:canonical-pack-transport
+    :generic-transaction-admission
+    :chain-prepare-commit
+    :chain-receipt-lookup
+    :chain-sync
+    :postgres-chain-adapter
+    :node-health-and-limits]
+   :hestia-owns
+   [:hestia-record-kinds
+    :agent-and-room-proofs
+    :document-transformation
+    :hestia-environment-policy
+    :application-receipt-presentation
+    :application-http-resources]}
+  {:source "browser/"
+   :ignatius-package "@greenways/ignatius-client"
+   :ignatius-owns
+   [:canonical-encoding
+    :transaction-construction
+    :chain-signing-payloads
+    :outbox
+    :receipt-validation
+    :chain-http-client]
+   :hestia-package "@greenways/hestia-client"
+   :hestia-owns
+   [:agent-records
+    :rooms
+    :documents
+    :continuity
+    :application-storage]}]
+
+ :migration/stay-in-hestia
+ ["gwdb-ledger-hal/src/gw/ledger/agent_room.hal"
+  "gwdb-ledger-hal/src/gw/ledger/document_ot.hal"
+  "gwdb-ledger-hal/src/gw/ledger/document_protocol.hal"
+  "protocol/document-ot.js"
+  "migrations/20260802000100_hestia_core.sql"
+  "migrations/20260804010000_agent_record_verification.sql"
+  "migrations/20260804020000_agent_profile_admission.sql"
+  "migrations/20260804025000_agent_profile_admission_variable_conflict.sql"
+  "migrations/20260804030000_agent_room_membership_admission.sql"
+  "migrations/20260804035000_agent_room_admission_variable_conflict.sql"
+  "migrations/20260804040000_agent_room_activity_admission.sql"
+  "migrations/20260804041000_agent_room_activity_constraints.sql"
+  "migrations/20260804050000_document_ot_ledger.sql"
+  "migrations/20260804051000_document_ot_ledger_constraints.sql"
+  "migrations/20260804052000_document_ot_commit_hardening.sql"
+  "migrations/20260804053000_document_pack_bound.sql"
+  "migrations/20260804054000_document_prepare_qualification.sql"
+  "browser/rooms/"
+  "browser/documents/"
+  "browser/demo/"
+  "site/"
+  "services/signaling/"
+  "scripts/hestia"]
+
+ :migration/separate-later
+ [{:source "gw-fabric/"
+   :reason "Hara runtime coordination is neither the Ignatius chain nor a Hestia application."}]
+
+ :migration/generated-dependency
+ {:source "migrations/20260801112956_ledger_schema.sql"
+  :owner ignatius
+  :hestia-action :replace-with-pinned-install
+  :rule "Hestia must not retain or edit a copied generic chain schema after the Ignatius SQL artefact is published."}
+
+ :migration/stages
+ [:create-target-repository
+  :freeze-canonical-fixtures
+  :extract-complete-components
+  :split-portable-hal
+  :publish-ignatius-packages
+  :switch-hestia-to-pinned-dependency
+  :remove-compatibility-copies]
+
+ :migration/invariants
+ ["Ignatius imports no Hestia namespace."
+  "Hestia writes canonical state only through the Ignatius public node interface."
+  "Hestia projections are rebuildable from Ignatius records and receipts."
+  "Portable HAL and PostgreSQL agree on frozen canonical fixtures."
+  "Documents, rooms and continuity version independently of Ignatius."]}
