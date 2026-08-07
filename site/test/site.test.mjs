@@ -24,8 +24,8 @@ test("the microsite has the canonical Hestia identity and primary journeys", asy
   assert.match(home, /https:\/\/github\.com\/greenways-ai\/hestia/);
 });
 
-test("the new Netlify site remains separate from the recovery Pages artifact", async () => {
-  const [netlify, pagesBuild, demoRoot] = await Promise.all([
+test("the new microsite remains separate from the browser Pages products", async () => {
+  const [netlify, pagesBuild, browserRoot] = await Promise.all([
     readFile(new URL("netlify.toml", repository), "utf8"),
     readFile(new URL("browser/scripts/build-pages.mjs", repository), "utf8"),
     readFile(new URL("browser/site/index.html", repository), "utf8")
@@ -33,7 +33,8 @@ test("the new Netlify site remains separate from the recovery Pages artifact", a
   assert.match(netlify, /base = "site"/);
   assert.match(netlify, /publish = "dist"/);
   assert.match(pagesBuild, /browser\/site/);
-  assert.match(demoRoot, /url=\/recovery\//);
+  assert.match(browserRoot, /url=\.\/rooms\//);
+  assert.match(browserRoot, /Hestia Private Agent Office/);
   assert.doesNotMatch(netlify, /hestia-demo/);
 });
 
