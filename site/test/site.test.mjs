@@ -15,10 +15,10 @@ test("the microsite has the canonical Hestia identity and primary journeys", asy
   assert.match(config, /site: "https:\/\/oss\.greenways\.ai"/);
   assert.match(config, /base: "\/hestia"/);
   assert.match(layout, /GREENWAYS/);
-  assert.match(layout, /SoftwareSourceCode/);
-  assert.match(home, /Identity that remains/);
-  assert.match(home, /No single keeper/);
-  assert.match(home, /Every boundary/);
+  assert.match(layout, /SoftwareApplication/);
+  assert.match(home, /A private office/);
+  assert.match(home, /Named agents/);
+  assert.match(home, /Human approvals/);
   assert.match(home, /scripts\/hestia init/);
   assert.match(home, /recovery-demo/);
   assert.match(home, /https:\/\/github\.com\/greenways-ai\/hestia/);
@@ -37,7 +37,7 @@ test("the new Netlify site remains separate from the recovery Pages artifact", a
   assert.doesNotMatch(netlify, /hestia-demo/);
 });
 
-test("generated editorial artwork and social card are optimized and present", async () => {
+test("generated editorial artwork and the deployment-owned social card are optimized and present", async () => {
   for (const name of [
     "hestia-sanctuary.webp",
     "hestia-sanctuary-mobile.webp",
@@ -54,11 +54,13 @@ test("generated editorial artwork and social card are optimized and present", as
   }
 });
 
-test("metadata declares the 1200 by 630 Hestia social image", async () => {
+test("metadata declares the same-origin 1200 by 630 Hestia social image", async () => {
   const layout = await source("src/layouts/BaseLayout.astro");
   assert.match(layout, /\$\{base\}assets\/og-hestia\.jpg/);
   assert.match(layout, /og:image:secure_url/);
+  assert.match(layout, /og:image:type" content="image\/jpeg"/);
   assert.match(layout, /og:image:width" content="1200"/);
   assert.match(layout, /og:image:height" content="630"/);
   assert.match(layout, /twitter:image:alt/);
+  assert.doesNotMatch(layout, /visual-language\/assets\/og-hestia/);
 });
