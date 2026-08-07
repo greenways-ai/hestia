@@ -13,3 +13,6 @@
 /site/.astro/
 /site/.netlify/
 /.netlify/
+
+# macOS
+.DS_Store
