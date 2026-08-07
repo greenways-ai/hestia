@@ -12,8 +12,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: npm, cache-dependency-path: site/package-lock.json }
-      - run: npm ci && npm run build
+      - run: npm ci && npm test && npm run build
         working-directory: site
+      - name: Verify the deploy-owned social preview
+        run: |
+          test -s site/dist/assets/og-hestia.jpg
+          grep -q 'https://oss.greenways.ai/hestia/assets/og-hestia.jpg' site/dist/index.html
+          ! grep -q 'visual-language/assets/og-hestia' site/dist/index.html
       - run: node browser/scripts/build-pages.mjs
       - name: Add browser products to the site artifact
         run: |
