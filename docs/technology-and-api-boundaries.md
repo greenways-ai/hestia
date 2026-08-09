@@ -5,7 +5,7 @@ Status: proposed 0.2.0
 This document replaces the earlier attempt to divide Hestia into several peer
 technologies. The simpler and more useful boundary is:
 
-> **Ignatius is the reusable Hara-compatible chain and client technology.**
+> **Ignatius is the authoritative PostgreSQL blockchain and its HAL client.**
 > **Hestia is an application suite built on Ignatius plus ordinary application
 > database projections.**
 
@@ -72,7 +72,7 @@ Ignatius owns:
 No Ignatius namespace may import a Hestia agent, room, document, recovery,
 negotiation or product namespace.
 
-### 2.2 PostgreSQL chain adapter
+### 2.2 PostgreSQL chain
 
 Ignatius owns the PostgreSQL implementation of the chain:
 
@@ -84,15 +84,16 @@ Ignatius owns the PostgreSQL implementation of the chain:
 - snapshot import and export; and
 - chain repair and verification functions.
 
-PostgreSQL is an Ignatius adapter, not the semantic definition of the chain.
-The same canonical fixtures must be executable by the portable Hara
-implementation.
+PostgreSQL is the authoritative Ignatius chain. The same canonical fixtures
+must be executable by the portable Hara implementation, but portable execution
+is a client-side evaluator and conformance oracle rather than a replacement for
+transaction ordering and block commitment in `gw_ledger`.
 
-### 2.3 Portable HAL server and client
+### 2.3 Portable HAL client and workflow manager
 
-Ignatius owns the generic HAL code used on both sides of the boundary.
-
-The portable server side owns:
+Ignatius owns generic HAL code for transaction preparation, local evaluation,
+signing, submission, synchronization, receipt verification and workflow
+management. Its local evaluation side owns:
 
 - canonical transaction validation;
 - deterministic execution and result planning;
@@ -101,7 +102,7 @@ The portable server side owns:
 - synchronization and replay semantics; and
 - explicit host capability calls for hashing, signatures and persistence.
 
-The portable client side owns:
+The client side owns:
 
 - canonical record and transaction construction;
 - signing-payload construction;
@@ -121,7 +122,7 @@ Ignatius also owns:
 - generated TypeScript or other host contracts for the chain API;
 - browser and CLI chain clients;
 - IndexedDB or filesystem outbox adapters;
-- PostgreSQL and HTTP node adapters; and
+- the direct `postgres.core` host contract; and
 - cryptographic extensions that exist to implement chain primitives.
 
 Host clients are projections of the HAL contract. Their conformance fixtures
@@ -140,22 +141,22 @@ ignatius.transaction/build
 ignatius.transaction/signing-payload
 ignatius.transaction/verify
 
+ignatius.client/postgres
 ignatius.client/open
 ignatius.client/queue
 ignatius.client/submit
 ignatius.client/sync
 ignatius.client/receipt
 
-ignatius.server/prepare
-ignatius.server/commit
-ignatius.server/replay
+postgres.core/ignatius-submit
+postgres.core/ignatius-head
+postgres.core/ignatius-receipt
 ```
 
-Adapters should live below explicit implementation namespaces such as:
+Host integrations should live below explicit implementation namespaces such as:
 
 ```text
-ignatius.adapter.postgres.*
-ignatius.adapter.http.*
+ignatius.postgres.*
 ignatius.adapter.browser.*
 ignatius.internal.*
 ```
@@ -334,7 +335,7 @@ beside Hestia application modules. Split it into:
   transaction construction
   chain signing payloads
   outbox and receipt state
-  chain HTTP client
+  postgres.core call descriptors and receipt verification
 
 @greenways/hestia-client
   agent authority records
@@ -347,19 +348,16 @@ beside Hestia application modules. Split it into:
 Hestia client packages depend on `@greenways/ignatius-client`. They must not
 copy its canonical encoding or transaction code.
 
-### 5.4 Split the gateway
+### 5.4 Reduce the gateway to Hestia application concerns
 
-The current agent gateway should become two layers.
+The current gateway must not become an Ignatius HTTP node. Generic chain calls
+move behind the Ignatius HAL client and the direct `postgres.core` capability:
 
-Ignatius node layer:
-
-- bounded canonical pack transport;
-- generic transaction admission;
-- prepare/sign/commit hooks;
-- chain receipt lookup;
-- synchronization;
-- PostgreSQL chain adapter; and
-- generic node limits and health.
+- bounded canonical pack import;
+- generic signed transaction submission;
+- chain receipt lookup and verification;
+- head, state and snapshot synchronization; and
+- chain schema/protocol compatibility checks.
 
 Hestia application layer:
 
@@ -370,9 +368,9 @@ Hestia application layer:
 - application receipt presentation; and
 - Hestia-specific HTTP resources.
 
-The Hestia service may run in the same process as the Ignatius node initially,
-but it must call a stable node interface rather than importing internal
-PostgreSQL chain functions.
+The Hestia controller calls the stable Ignatius-generated `postgres.core`
+surface. It does not import internal `gwdb.ledger.*` functions, carry database
+credentials in HAL values, or communicate through an intermediate HTTP node.
 
 ### 5.5 Keep in Hestia
 
@@ -394,21 +392,26 @@ remain independently versioned and move to its own repository separately.
 
 ## 6. API boundary
 
-### 6.1 Ignatius node API
+### 6.1 Ignatius PostgreSQL capability
 
-Ignatius should expose chain operations, not Hestia resource names. The first
-HTTP projection can remain narrow:
+Ignatius exposes generic chain operations, not Hestia resource names, through
+the `postgres.core` capability:
 
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/v1/network` | Network identity, protocols and limits |
-| `GET` | `/v1/head` | Current chain head projection |
-| `POST` | `/v1/transactions` | Submit one canonical signed transaction |
-| `GET` | `/v1/receipts/{root}` | Fetch an authorized receipt projection |
-| `GET` | `/v1/sync?from={position}` | Read accepted chain records after a cursor |
+| Operation | Purpose |
+|---|---|
+| `ignatius/network-bootstrap` | Network identity, versions and limits |
+| `ignatius/head` | Current canonical head |
+| `ignatius/account-register` | Register an account/controller |
+| `ignatius/account-sequence` | Read the next accepted sequence |
+| `ignatius/pack-import` | Import a bounded HCP1 pack |
+| `ignatius/submit` | Atomically verify, execute and commit one signed transaction |
+| `ignatius/transaction-receipt` | Read a transaction receipt |
+| `ignatius/block-receipt` | Read block commitment evidence |
+| `ignatius/state-sync` | Synchronize canonical state or snapshots |
+| `ignatius/integrity-check` | Verify roots and rebuildable projections |
 
-HTTP is only an adapter. The normative transaction, signing and receipt
-contracts live in Ignatius HAL packages and canonical fixtures.
+Database handles and credentials remain inside the host capability. HAL values
+contain only explicit generic calls and results.
 
 ### 6.2 Hestia application API
 
@@ -431,19 +434,19 @@ receipt. Query routes normally read Hestia projections.
 ```text
 Hestia command
   -> construct Hestia canonical record
-  -> construct and sign Ignatius transaction
-  -> Ignatius verifies and commits chain transition
-  -> Hestia policy validates the domain event
-  -> canonical receipts are committed
+  -> construct, locally evaluate and sign Ignatius transaction
+  -> call postgres.core ignatius/submit
+  -> gw_ledger validates, executes and commits one block
+  -> verify transaction, result, state, block and receipt roots
   -> Hestia projections update
   -> application response is rendered
 ```
 
-The exact transaction boundary may execute the installed Hestia policy inside
-the Ignatius prepare/commit lifecycle. Regardless of process layout, chain
-commit and authoritative application receipt must be atomic. External effects
-such as message delivery remain outbox operations acknowledged by later
-receipts.
+Hestia reducers are published as ordinary operation packs. The general
+submission call atomically imports the pack, validates manifests, verifies the
+signature and sequence, executes the operation, advances the block and returns
+the canonical receipt. External effects such as message delivery remain outbox
+operations acknowledged by later transactions.
 
 ## 7. Database installation model
 
@@ -514,7 +517,7 @@ Change Hestia to:
 - install Ignatius rather than build `gwdb-ledger/`;
 - import Ignatius HAL packages;
 - depend on the Ignatius browser client;
-- call the Ignatius node interface; and
+- call the Ignatius `postgres.core` interface directly; and
 - retain only Hestia migrations and policies.
 
 ### Stage 6 — remove compatibility copies

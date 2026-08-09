@@ -51,7 +51,7 @@
     :receipt/evidence-sequence 1}
    root-of))
 
-(def evidence-pending
+(def ledger-ready
   (controller/commit-evidence
    (get queued :state)
    "chat/share-1"
@@ -59,22 +59,37 @@
     (get prepared-evidence :value)
     {:evidence/signature "environment-signature"})))
 
+(def expected-receipt
+  {:transaction-root "sha256:transaction"
+   :result-root "sha256:ledger-result"
+   :state-root "sha256:state"
+   :block-root "sha256:block"
+   :receipt-root "sha256:ledger-receipt"})
+
+(def ledger-pending
+  (controller/submit-evidence
+   (get ledger-ready :state)
+   "chat/share-1"
+   {:evidence-root
+    (get-in ledger-ready [:value :proposal/evidence :evidence/root])
+    :submission
+    {:transaction-root "sha256:transaction"
+     :signature "account-signature"}
+    :expected-receipt expected-receipt}))
+
 (def completed
   (controller/accept-evidence
-   (get evidence-pending :state)
+   (get ledger-pending :state)
    "chat/share-1"
-   {:evidence/root
-    (get-in evidence-pending
-            [:value :proposal/evidence :evidence/root])
-    :evidence/status :applied}))
+   (assoc expected-receipt :status :applied)))
 
 (test/print-results
  [(test/check
-   "semantic, work, evidence, signing and effect ports are closed"
+   "semantic, work, ledger, signing and effect ports are closed"
    [controller/port-services]
    [{:semantic "tahto.semantic"
      :work "std.work"
-     :evidence "ignatius.evidence"
+     :ledger "postgres.core"
      :signing "greenways.keyring"
      :effect "greenways.connector"}])
 
@@ -107,11 +122,22 @@
    ["std.work" "start" "chat/share-1"])
 
   (test/check
-   "signed work evidence is appended once through Ignatius"
+   "signed work evidence is committed once through the Ignatius ledger"
    [(get-in prepared-evidence [:call :service])
-    (get-in evidence-pending [:call :service])
-    (get-in evidence-pending [:call :operation])
+    (get-in ledger-pending [:call :service])
+    (get-in ledger-pending [:call :operation])
     (get-in completed [:value :proposal/status])
-    (get-in evidence-pending
-            [:call :arguments 0 :envelope :evidence/sequence])]
-   ["greenways.keyring" "ignatius.evidence" "append" :completed 1])])
+    (get-in ledger-pending
+            [:call :arguments 0 :transaction-root])]
+   ["greenways.keyring" "postgres.core" "ignatius/submit" :completed
+    "sha256:transaction"])
+
+  (test/check
+   "a mismatched canonical receipt cannot complete the proposal"
+   (get
+    (controller/accept-evidence
+     (get ledger-pending :state)
+     "chat/share-1"
+     (assoc expected-receipt :status :applied :block-root "other"))
+    :error)
+   :hestia/evidence-result-invalid)])

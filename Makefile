@@ -1,6 +1,6 @@
 HESTIA := scripts/hestia
 
-.PHONY: help doctor up bootstrap-agent down status client-env backup restore controller-check controller-test
+.PHONY: help doctor up bootstrap-agent down status client-env backup restore boundary-check controller-check controller-test
 
 help:
 	@echo 'make doctor                         Check local prerequisites'
@@ -11,6 +11,7 @@ help:
 	@echo 'make client-env                     Print browser-safe connection values'
 	@echo 'make backup                         Back up Auth, ledger data, and the environment signer'
 	@echo 'make restore DIR=... CONFIRM=restore Restore a backup'
+	@echo 'make boundary-check                  Enforce the Hestia/Ignatius boundary'
 	@echo 'make controller-check               Check the portable Hestia controller'
 	@echo 'make controller-test                Test the portable Hestia controller'
 
@@ -39,6 +40,9 @@ restore:
 	@test -n "$(DIR)" || { echo "Usage: make restore DIR=path/to/backup CONFIRM=restore" >&2; exit 1; }
 	@test "$(CONFIRM)" = "restore" || { echo "Restore replaces local state; rerun with CONFIRM=restore" >&2; exit 1; }
 	@$(HESTIA) restore "$(DIR)" --confirm
+
+boundary-check:
+	bash scripts/check-architecture-boundaries
 
 controller-check:
 	hara --project hal check

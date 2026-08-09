@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+fail=0
+
+if grep -R -n -F 'ignatius.evidence' hal/src --include='*.hal'; then
+  echo 'Hestia must commit through the Ignatius postgres.core ledger contract.' >&2
+  fail=1
+fi
+
+if grep -R -n -E '\[gwdb\.ledger\.|\[ignatius\.db\.' \
+    hal/src --include='*.hal'; then
+  echo 'Portable Hestia code must not import Ignatius database internals.' >&2
+  fail=1
+fi
+
+if grep -R -n -E '(postgres(ql)?://|PGPASSWORD|DATABASE_URL)' \
+    hal/src --include='*.hal'; then
+  echo 'Portable Hestia values must not contain database credentials.' >&2
+  fail=1
+fi
+
+exit "$fail"

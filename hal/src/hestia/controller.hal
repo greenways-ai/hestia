@@ -9,7 +9,7 @@
 (def port-services
   {:semantic "tahto.semantic"
    :work "std.work"
-   :evidence "ignatius.evidence"
+   :ledger "postgres.core"
    :signing "greenways.keyring"
    :effect "greenways.connector"})
 
@@ -224,42 +224,73 @@
        :error :hestia/evidence-invalid}
       (let [next
             (assoc
-             (assoc item :proposal/status :evidence-pending)
+             (assoc item :proposal/status :ledger-ready)
              :proposal/evidence signed)]
         {:ok true
          :state (assoc-in state [:controller/proposals proposal-id] next)
-         :value next
-         :call
-         (host-call
-          (get port-services :evidence)
-          "append"
-          [{:idempotency-key (get signed :evidence/root)
-            :envelope
-            {:evidence/domain (get signed :evidence/domain)
-             :evidence/root (get signed :evidence/root)
-             :evidence/body (get signed :evidence/body)
-             :evidence/signer (get signed :evidence/signer)
-             :evidence/key-id (get signed :evidence/key-id)
-             :evidence/sequence (get signed :evidence/sequence)
-             :evidence/signature
-             (get signed :evidence/signature)}}])}))))
+         :value next}))))
 
-(defn evidence-status?
+(defn ledger-status?
   [status]
   (if (= :applied status)
     true
     (= :replayed status)))
 
+(defn canonical-receipt-matches?
+  [expected result]
+  (= [(get expected :transaction-root)
+      (get expected :result-root)
+      (get expected :state-root)
+      (get expected :block-root)
+      (get expected :receipt-root)]
+     [(get result :transaction-root)
+      (get result :result-root)
+      (get result :state-root)
+      (get result :block-root)
+      (get result :receipt-root)]))
+
+(defn submit-evidence
+  [state proposal-id prepared]
+  (let [item (get-in state [:controller/proposals proposal-id])
+        expected-evidence (get-in item [:proposal/evidence :evidence/root])
+        submission (get prepared :submission)
+        expected-receipt (get prepared :expected-receipt)
+        valid
+        (every?
+         (fn [entry] entry)
+         [(= :ledger-ready (get item :proposal/status))
+          (= expected-evidence (get prepared :evidence-root))
+          (= (get submission :transaction-root)
+             (get expected-receipt :transaction-root))
+          (required-value? (get submission :signature))
+          (required-value? (get expected-receipt :receipt-root))])]
+    (if (not valid)
+      {:ok false
+       :state state
+       :error :hestia/ledger-submission-invalid}
+      (let [next
+            (assoc
+             (assoc item :proposal/status :ledger-pending)
+             :proposal/ledger prepared)]
+        {:ok true
+         :state (assoc-in state [:controller/proposals proposal-id] next)
+         :value next
+         :call
+         (host-call
+          (get port-services :ledger)
+          "ignatius/submit"
+          [submission])}))))
+
 (defn accept-evidence
   [state proposal-id result]
   (let [item (get-in state [:controller/proposals proposal-id])
-        expected (get-in item [:proposal/evidence :evidence/root])]
+        expected (get-in item [:proposal/ledger :expected-receipt])]
     (if
      (every?
       (fn [entry] entry)
-      [(= :evidence-pending (get item :proposal/status))
-       (= expected (get result :evidence/root))
-       (evidence-status? (get result :evidence/status))])
+      [(= :ledger-pending (get item :proposal/status))
+       (canonical-receipt-matches? expected result)
+       (ledger-status? (get result :status))])
       (let [next (assoc item :proposal/status :completed)]
         {:ok true
          :state (assoc-in state [:controller/proposals proposal-id] next)

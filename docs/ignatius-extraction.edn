@@ -2,8 +2,9 @@
  :migration/source "greenways-ai/hestia"
  :migration/target "greenways-ai/ignatius"
  :migration/decision
- "Ignatius owns the generic Hara-compatible chain, PostgreSQL chain adapter,
- portable HAL server/client semantics, and host chain clients. Hestia owns
+ "Ignatius owns the authoritative PostgreSQL blockchain and its portable HAL
+ client, local evaluator, generic workflow manager, and postgres.core host
+ contracts. Hestia owns
  agent authority, rooms, documents, continuity, application projections,
  services, and product experiences."
 
@@ -50,11 +51,10 @@
    :ignatius-owns
    [:canonical-pack-transport
     :generic-transaction-admission
-    :chain-prepare-commit
+    :chain-transaction-inputs
     :chain-receipt-lookup
     :chain-sync
-    :postgres-chain-adapter
-    :node-health-and-limits]
+    :postgres-core-integration]
    :hestia-owns
    [:hestia-record-kinds
     :agent-and-room-proofs
@@ -70,7 +70,7 @@
     :chain-signing-payloads
     :outbox
     :receipt-validation
-    :chain-http-client]
+    :postgres-core-client]
    :hestia-package "@greenways/hestia-client"
    :hestia-owns
    [:agent-records
@@ -115,17 +115,25 @@
   :rule "Hestia must not retain or edit a copied generic chain schema after the Ignatius SQL artefact is published."}
 
  :migration/stages
- [:create-target-repository
-  :freeze-canonical-fixtures
-  :extract-complete-components
-  :split-portable-hal
-  :publish-ignatius-packages
-  :switch-hestia-to-pinned-dependency
-  :remove-compatibility-copies]
+ [{:stage :create-target-repository :status :complete}
+  {:stage :freeze-canonical-fixtures :status :in-progress}
+  {:stage :extract-complete-components :status :complete}
+  {:stage :port-ledger-conformance-to-hal :status :in-progress}
+  {:stage :publish-chain-dependency :status :pending
+   :issue "greenways-ai/ignatius#76"}
+  {:stage :switch-hestia-to-pinned-dependency :status :pending
+   :issue "greenways-ai/hestia#28"}
+  {:stage :migrate-existing-canonical-data :status :pending
+   :issue "greenways-ai/hestia#28"}
+  {:stage :remove-compatibility-copies :status :pending
+   :requires [:backup-restore :replay :rollback :integrity-verification]}]
 
  :migration/invariants
  ["Ignatius imports no Hestia namespace."
-  "Hestia writes canonical state only through the Ignatius public node interface."
+  "Hestia writes canonical state only through the Ignatius HAL client and postgres.core capability."
+  "Ignatius PostgreSQL execution and block commitment are authoritative."
+  "Portable execution is local evaluation and conformance, not a replacement chain."
+  "No HTTP node or separate PostgreSQL provider sits between Hestia and Ignatius."
   "Hestia projections are rebuildable from Ignatius records and receipts."
   "Portable HAL and PostgreSQL agree on frozen canonical fixtures."
   "Documents, rooms and continuity version independently of Ignatius."]}

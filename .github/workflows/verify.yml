@@ -16,6 +16,8 @@ jobs:
             echo 'HAL namespace declarations must use gw.*' >&2
             exit 1
           fi
+      - name: Enforce the Hestia/Ignatius boundary
+        run: make boundary-check
       - uses: actions/setup-node@v4
         with:
           node-version: 24
