@@ -1,0 +1,34 @@
+(ns hestia.controller.work
+  (:require [std.foundation :refer :all]
+            [hestia.controller :as controller]))
+
+(def work-receipt-protocol "hara.work.receipt/1")
+
+(defn completed-receipt?
+  [proposal-id envelope]
+  (every?
+   (fn [valid] valid)
+   [(= work-receipt-protocol (get envelope :receipt/protocol))
+    (= :work/run-completed (get envelope :receipt/kind))
+    (= proposal-id (get envelope :receipt/run-id))
+    (not (nil? (get envelope :receipt/payload-root)))]))
+
+(defn canonical-work-receipt
+  [envelope root-of evidence-binding]
+  {:receipt/root (root-of envelope)
+   :receipt/result-root (get envelope :receipt/payload-root)
+   :receipt/signer (get evidence-binding :signer)
+   :receipt/key-id (get evidence-binding :key-id)
+   :receipt/evidence-sequence (get evidence-binding :sequence)})
+
+(defn prepare-work-evidence
+  [state proposal-id envelope root-of evidence-binding]
+  (if (completed-receipt? proposal-id envelope)
+    (controller/prepare-evidence
+     state
+     proposal-id
+     (canonical-work-receipt envelope root-of evidence-binding)
+     root-of)
+    {:ok false
+     :state state
+     :error :hestia/work-receipt-not-completed}))

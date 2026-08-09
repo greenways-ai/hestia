@@ -1,9 +1,21 @@
 # Hestia
 
-Hestia is a private office for the agents who work on your behalf. It gives each
+Hestia is the controller for consequential operations performed by applications
+and agents. It gives each
 agent a lasting identity, a bounded daily key and a signed mandate; keeps their
 work, proposals and approvals in one owner-controlled history; and prepares a
 selective receipt when a client, partner or adviser asks what happened.
+
+Applications use the closed `hestia.control` interface:
+
+```text
+propose · approve · execute · cancel · status · receipt
+```
+
+Hestia owns intent, exact-root approval and workflow policy. It delegates
+execution and recovery to `std.work`, records generic signed evidence through
+Ignatius, and reaches native effects only through Greenways OS connectors.
+Ordinary application reads and edits go to `tahto.semantic`, not Hestia.
 
 The everyday experience is deliberately calm:
 

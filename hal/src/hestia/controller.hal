@@ -1,0 +1,269 @@
+(ns hestia.controller
+  (:require [std.foundation :refer :all]))
+
+(def controller-protocol "hestia.controller/1")
+(def intent-protocol "hestia.control-intent/1")
+(def approval-protocol "hestia.control-approval/1")
+(def evidence-protocol "hestia.control-evidence/1")
+
+(def port-services
+  {:semantic "tahto.semantic"
+   :work "std.work"
+   :evidence "ignatius.evidence"
+   :signing "greenways.keyring"
+   :effect "greenways.connector"})
+
+(defn required-value?
+  [value]
+  (not (nil? value)))
+
+(defn intent?
+  [value]
+  (every?
+   (fn [valid] valid)
+   [(map? value)
+    (= intent-protocol (get value :intent/protocol))
+    (required-value? (get value :intent/id))
+    (required-value? (get value :intent/application))
+    (required-value? (get value :intent/action))
+    (required-value? (get value :intent/subject-root))
+    (vector? (get value :intent/capabilities))
+    (map? (get value :intent/arguments))]))
+
+(defn initial-state
+  []
+  {:controller/protocol controller-protocol
+   :controller/proposals {}
+   :controller/evidence {}})
+
+(defn host-call
+  [service operation arguments]
+  {:service service
+   :operation operation
+   :arguments arguments})
+
+(defn signing-payload
+  [kind root]
+  (str "HST1:" kind ":1:" root))
+
+(defn evidence-signing-payload
+  [domain root signer key-id sequence]
+  (str "IGE1:" domain ":" root ":" signer ":" key-id ":" sequence))
+
+(defn proposal
+  [intent root]
+  {:proposal/id (get intent :intent/id)
+   :proposal/root root
+   :proposal/status :proposed
+   :proposal/intent intent
+   :proposal/approval nil
+   :proposal/work-receipt nil
+   :proposal/evidence nil})
+
+(defn propose
+  [state intent root-of]
+  (if (not (intent? intent))
+    {:ok false
+     :state state
+     :error :hestia/intent-invalid}
+    (let [root (root-of intent)
+          proposal-id (get intent :intent/id)
+          current (get-in state [:controller/proposals proposal-id])
+          next (proposal intent root)]
+      (if (nil? current)
+        {:ok true
+         :state (assoc-in state [:controller/proposals proposal-id] next)
+         :value next}
+        (if (= current next)
+          {:ok true
+           :state state
+           :value current
+           :replayed true}
+          {:ok false
+           :state state
+           :error :hestia/intent-id-collision})))))
+
+(defn approval-body
+  [proposal approver key-id]
+  {:approval/protocol approval-protocol
+   :approval/proposal-root (get proposal :proposal/root)
+   :approval/approver approver
+   :approval/key-id key-id})
+
+(defn prepare-approval
+  [state proposal-id approver key-id root-of]
+  (let [item (get-in state [:controller/proposals proposal-id])]
+    (if (not (= :proposed (get item :proposal/status)))
+      {:ok false
+       :state state
+       :error :hestia/proposal-not-approvable}
+      (let [body (approval-body item approver key-id)
+            root (root-of body)]
+        {:ok true
+         :state state
+         :value {:approval/body body
+                 :approval/root root}
+         :call
+         (host-call
+          (get port-services :signing)
+          "sign"
+          [{:domain "hestia.control-approval/1"
+            :key-id key-id
+            :payload (signing-payload "approval" root)}])}))))
+
+(defn commit-approval
+  [state proposal-id signed]
+  (let [item (get-in state [:controller/proposals proposal-id])
+        body (get signed :approval/body)
+        valid
+        (every?
+         (fn [entry] entry)
+         [(= :proposed (get item :proposal/status))
+          (= (get item :proposal/root)
+             (get body :approval/proposal-root))
+          (required-value? (get signed :approval/root))
+          (required-value? (get signed :approval/signature))])]
+    (if valid
+      (let [approval (assoc signed :approval/status :accepted)
+            next
+            (assoc
+             (assoc item :proposal/status :approved)
+             :proposal/approval approval)]
+        {:ok true
+         :state (assoc-in state [:controller/proposals proposal-id] next)
+         :value next})
+      {:ok false
+       :state state
+       :error :hestia/approval-invalid})))
+
+(defn queue-execution
+  [state proposal-id]
+  (let [item (get-in state [:controller/proposals proposal-id])]
+    (if (not (= :approved (get item :proposal/status)))
+      {:ok false
+       :state state
+       :error :hestia/proposal-not-executable}
+      (let [next (assoc item :proposal/status :queued)]
+        {:ok true
+         :state (assoc-in state [:controller/proposals proposal-id] next)
+         :value next
+         :call
+         (host-call
+          (get port-services :work)
+          "start"
+          [{:idempotency-key proposal-id
+            :proposal-root (get item :proposal/root)
+            :approval-root
+            (get-in item [:proposal/approval :approval/root])
+            :intent (get item :proposal/intent)}])}))))
+
+(defn prepare-evidence
+  [state proposal-id receipt root-of]
+  (let [item (get-in state [:controller/proposals proposal-id])]
+    (if (not (= :queued (get item :proposal/status)))
+      {:ok false
+       :state state
+       :error :hestia/work-receipt-unexpected}
+      (let [body
+            {:evidence/protocol evidence-protocol
+             :evidence/proposal-root (get item :proposal/root)
+             :evidence/approval-root
+             (get-in item [:proposal/approval :approval/root])
+             :evidence/work-receipt-root
+             (get receipt :receipt/root)
+             :evidence/result-root
+             (get receipt :receipt/result-root)}
+            root (root-of body)
+            signer (get receipt :receipt/signer)
+            key-id (get receipt :receipt/key-id)
+            sequence (get receipt :receipt/evidence-sequence)]
+        (if
+         (or
+          (nil? (get body :evidence/work-receipt-root))
+          (nil? signer)
+          (nil? key-id)
+          (nil? sequence))
+          {:ok false
+           :state state
+           :error :hestia/work-receipt-evidence-binding-missing}
+          {:ok true
+           :state state
+           :value {:evidence/body body
+                   :evidence/domain evidence-protocol
+                   :evidence/root root
+                   :evidence/signer signer
+                   :evidence/key-id key-id
+                   :evidence/sequence sequence}
+           :call
+           (host-call
+            (get port-services :signing)
+            "sign"
+            [{:domain "hestia.control-evidence/1"
+              :key-id key-id
+              :payload
+              (evidence-signing-payload
+               evidence-protocol root signer key-id sequence)}])})))))
+
+(defn commit-evidence
+  [state proposal-id signed]
+  (let [item (get-in state [:controller/proposals proposal-id])
+        body (get signed :evidence/body)
+        valid
+        (every?
+         (fn [entry] entry)
+         [(= :queued (get item :proposal/status))
+          (= (get item :proposal/root)
+             (get body :evidence/proposal-root))
+          (= (get-in item [:proposal/approval :approval/root])
+             (get body :evidence/approval-root))
+          (required-value? (get signed :evidence/root))
+          (required-value? (get signed :evidence/signature))])]
+    (if (not valid)
+      {:ok false
+       :state state
+       :error :hestia/evidence-invalid}
+      (let [next
+            (assoc
+             (assoc item :proposal/status :evidence-pending)
+             :proposal/evidence signed)]
+        {:ok true
+         :state (assoc-in state [:controller/proposals proposal-id] next)
+         :value next
+         :call
+         (host-call
+          (get port-services :evidence)
+          "append"
+          [{:idempotency-key (get signed :evidence/root)
+            :envelope
+            {:evidence/domain (get signed :evidence/domain)
+             :evidence/root (get signed :evidence/root)
+             :evidence/body (get signed :evidence/body)
+             :evidence/signer (get signed :evidence/signer)
+             :evidence/key-id (get signed :evidence/key-id)
+             :evidence/sequence (get signed :evidence/sequence)
+             :evidence/signature
+             (get signed :evidence/signature)}}])}))))
+
+(defn evidence-status?
+  [status]
+  (if (= :applied status)
+    true
+    (= :replayed status)))
+
+(defn accept-evidence
+  [state proposal-id result]
+  (let [item (get-in state [:controller/proposals proposal-id])
+        expected (get-in item [:proposal/evidence :evidence/root])]
+    (if
+     (every?
+      (fn [entry] entry)
+      [(= :evidence-pending (get item :proposal/status))
+       (= expected (get result :evidence/root))
+       (evidence-status? (get result :evidence/status))])
+      (let [next (assoc item :proposal/status :completed)]
+        {:ok true
+         :state (assoc-in state [:controller/proposals proposal-id] next)
+         :value next})
+      {:ok false
+       :state state
+       :error :hestia/evidence-result-invalid})))

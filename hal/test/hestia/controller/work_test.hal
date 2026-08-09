@@ -1,0 +1,59 @@
+(ns hestia.controller.work-test
+  (:require [std.foundation :refer :all]
+            [std.lib.test :as test]
+            [hestia.controller :as controller]
+            [hestia.controller.work :as work]))
+
+(defn root-of
+  [value]
+  "sha256:fixture")
+
+(def queued-state
+  {:controller/protocol controller/controller-protocol
+   :controller/evidence {}
+   :controller/proposals
+   {"proposal-1"
+    {:proposal/id "proposal-1"
+     :proposal/root "sha256:proposal"
+     :proposal/status :queued
+     :proposal/intent {}
+     :proposal/approval {:approval/root "sha256:approval"}
+     :proposal/work-receipt nil
+     :proposal/evidence nil}}})
+
+(def completed-envelope
+  {:receipt/protocol work/work-receipt-protocol
+   :receipt/id ["hara.work.receipt/1" "proposal-1" 3
+                :work/run-completed :run-completed]
+   :receipt/kind :work/run-completed
+   :receipt/run-id "proposal-1"
+   :receipt/run-revision 3
+   :receipt/payload-root "sha256:result"})
+
+(def prepared
+  (work/prepare-work-evidence
+   queued-state
+   "proposal-1"
+   completed-envelope
+   root-of
+   {:signer "worker/environment"
+    :key-id "key/environment"
+    :sequence 1}))
+
+(test/print-results
+ [(test/check
+   "only the exact completed receipt for the proposal enters evidence"
+   [(work/completed-receipt? "proposal-1" completed-envelope)
+    (work/completed-receipt?
+     "proposal-1"
+     (assoc completed-envelope :receipt/kind :work/checkpoint))
+    (work/completed-receipt? "proposal-2" completed-envelope)]
+   [true false false])
+
+  (test/check
+   "Hestia converts completion into a signed evidence preparation"
+   [(get prepared :ok)
+    (get-in prepared [:value :evidence/body :evidence/result-root])
+    (get-in prepared [:call :service])
+    (get-in prepared [:call :operation])]
+   [true "sha256:result" "greenways.keyring" "sign"])])

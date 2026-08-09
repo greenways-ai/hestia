@@ -1,0 +1,9 @@
+{:hara/type :project
+ :hara/version "1.0.0"
+ :project/id greenways/hestia-controller
+ :project/version "0.1.0-dev"
+ :project/source-paths ["src"]
+ :project/test-paths ["test"]
+ :project/extension-paths []
+ :project/capabilities #{}
+ :project/main hestia.controller}

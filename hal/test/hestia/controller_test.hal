@@ -1,0 +1,117 @@
+(ns hestia.controller-test
+  (:require [std.foundation :refer :all]
+            [std.lib.test :as test]
+            [hestia.controller :as controller]))
+
+(defn root-of
+  [value]
+  "sha256:fixture")
+
+(def intent
+  {:intent/protocol controller/intent-protocol
+   :intent/id "chat/share-1"
+   :intent/application "chats"
+   :intent/action :chat/share
+   :intent/subject-root "sha256:chat"
+   :intent/capabilities [:network/share]
+   :intent/arguments {}})
+
+(def proposed
+  (controller/propose (controller/initial-state) intent root-of))
+
+(def prepared-approval
+  (controller/prepare-approval
+   (get proposed :state)
+   "chat/share-1"
+   "person/alice"
+   "key/alice"
+   root-of))
+
+(def approved
+  (controller/commit-approval
+   (get proposed :state)
+   "chat/share-1"
+   (merge
+    (get prepared-approval :value)
+    {:approval/signature "signature"})))
+
+(def queued
+  (controller/queue-execution
+   (get approved :state)
+   "chat/share-1"))
+
+(def prepared-evidence
+  (controller/prepare-evidence
+   (get queued :state)
+   "chat/share-1"
+   {:receipt/root "sha256:receipt"
+    :receipt/result-root "sha256:result"
+    :receipt/signer "worker/environment"
+    :receipt/key-id "key/environment"
+    :receipt/evidence-sequence 1}
+   root-of))
+
+(def evidence-pending
+  (controller/commit-evidence
+   (get queued :state)
+   "chat/share-1"
+   (merge
+    (get prepared-evidence :value)
+    {:evidence/signature "environment-signature"})))
+
+(def completed
+  (controller/accept-evidence
+   (get evidence-pending :state)
+   "chat/share-1"
+   {:evidence/root
+    (get-in evidence-pending
+            [:value :proposal/evidence :evidence/root])
+    :evidence/status :applied}))
+
+(test/print-results
+ [(test/check
+   "semantic, work, evidence, signing and effect ports are closed"
+   [controller/port-services]
+   [{:semantic "tahto.semantic"
+     :work "std.work"
+     :evidence "ignatius.evidence"
+     :signing "greenways.keyring"
+     :effect "greenways.connector"}])
+
+  (test/check
+   "an exact intent is proposed idempotently"
+   [(get proposed :ok)
+    (get
+     (controller/propose (get proposed :state) intent root-of)
+     :replayed)
+    (get
+     (controller/propose
+      (get proposed :state)
+      (assoc intent :intent/action :chat/delete)
+      root-of)
+     :error)]
+   [true true :hestia/intent-id-collision])
+
+  (test/check
+   "approval binds the exact proposal and uses the OS keyring"
+   [(get-in prepared-approval [:call :service])
+    (get-in prepared-approval [:call :operation])
+    (get-in approved [:value :proposal/status])]
+   ["greenways.keyring" "sign" :approved])
+
+  (test/check
+   "approved work is queued through std.work"
+   [(get-in queued [:call :service])
+    (get-in queued [:call :operation])
+    (get-in queued [:call :arguments 0 :idempotency-key])]
+   ["std.work" "start" "chat/share-1"])
+
+  (test/check
+   "signed work evidence is appended once through Ignatius"
+   [(get-in prepared-evidence [:call :service])
+    (get-in evidence-pending [:call :service])
+    (get-in evidence-pending [:call :operation])
+    (get-in completed [:value :proposal/status])
+    (get-in evidence-pending
+            [:call :arguments 0 :envelope :evidence/sequence])]
+   ["greenways.keyring" "ignatius.evidence" "append" :completed 1])])
