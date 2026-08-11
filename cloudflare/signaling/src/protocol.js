@@ -18,7 +18,7 @@ export function validateConnection(url, origin, allowedOrigins) {
 
 export function validateEnvelope(value, ceremony, peer) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid-envelope");
-  if (value.version !== 1 || value.protocol !== "hestia-signal/1") throw new Error("invalid-protocol");
+  if (value.version !== 1 || value.protocol !== "hestia-signal/0-alpha") throw new Error("invalid-protocol");
   if (value.ceremony_id !== ceremony) throw new Error("ceremony-mismatch");
   if (value.from !== peer || !peerPattern.test(value.from)) throw new Error("sender-mismatch");
   if (value.to !== null && value.to !== undefined && !peerPattern.test(value.to)) {

@@ -13,5 +13,5 @@ test("gateway reconstructs base, operation and result roots before OT", async ()
   assert.match(source, /documentValuePlan\(bundle\.expectedResultAst\)/);
   assert.match(source, /createDocumentOperationPlan/);
   assert.match(source, /documentReferenceVectorPlan/);
-  assert.match(source, /does not match its signed HCV1 record/);
+  assert.match(source, /does not match its signed HCV0 record/);
 });

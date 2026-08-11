@@ -1,4 +1,4 @@
-//! Native CLI adapter for portable HSS1 snapshots.
+//! Native CLI adapter for portable HSS0 snapshots.
 
 use crate::core;
 use crate::kernel::{self, Form};
@@ -78,7 +78,7 @@ fn inspect(args: &[String]) -> Result<(), String> {
         .first()
         .ok_or("usage: hara snapshot inspect FILE.hss")?;
     let artifact = read_artifact(Path::new(path))?;
-    println!("format: HSS1");
+    println!("format: HSS0");
     println!(
         "artifact: {}",
         snapshot::hex(&snapshot::artifact_digest(&fs::read(path).map_err(io)?))

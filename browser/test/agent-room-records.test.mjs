@@ -53,7 +53,7 @@ test("room genesis bundles its pinned policy and kernel cells", async () => {
   assert.equal(body.acceptance_mode, "human-required");
   assert.ok(roots(room.admission).has(room.policyRoot));
   assert.ok(roots(room.admission).has(room.kernelRoot));
-  assert.match(room.admission.hcp1Pack, /^HCP1:\d+:/);
+  assert.match(room.admission.hcp1Pack, /^HCP0:\d+:/);
 });
 
 test("invitation and member proof bundles carry transient commitment cells", async () => {

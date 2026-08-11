@@ -320,7 +320,7 @@ pub fn sync_lock(project: &Project, mode: LockMode) -> Result<PathBuf, String> {
         }
         LockMode::Locked | LockMode::Frozen => validate_empty_lock(&lock)?,
         LockMode::Default | LockMode::Offline => {
-            fs::write(&lock, "{:lock/format 1 :packages {}}\n")
+            fs::write(&lock, "{:lock/format \"0.0.0-alpha\" :packages {}}\n")
                 .map_err(|error| format!("cannot write {}: {error}", lock.display()))?;
         }
     }
@@ -366,7 +366,7 @@ fn validate_empty_lock(path: &Path) -> Result<(), String> {
         .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
     let form = parse(&source).map_err(|error| format!("{}: {error}", path.display()))?;
     let entries = map(&form, "project.lock.edn must be an EDN map")?;
-    if matches!(lookup(entries, "lock/format"), Some(Form::Number(1)))
+    if matches!(lookup(entries, "lock/format"), Some(Form::String(version)) if version == "0.0.0-alpha")
         && matches!(lookup(entries, "packages"), Some(Form::Map(entries)) if entries.is_empty())
     {
         Ok(())
@@ -546,7 +546,7 @@ mod tests {
         let lock = sync_lock(&project, LockMode::Default).unwrap();
         assert_eq!(
             fs::read_to_string(&lock).unwrap(),
-            "{:lock/format 1 :packages {}}\n"
+            "{:lock/format \"0.0.0-alpha\" :packages {}}\n"
         );
         sync_lock(&project, LockMode::Frozen).unwrap();
         fs::remove_dir_all(root).unwrap();

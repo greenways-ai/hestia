@@ -1,13 +1,13 @@
 (ns gw.ledger.document-protocol)
 
-(def protocol "greenways.document/1")
-(def rich-text-profile "greenways.rich-text/1")
+(def protocol "greenways.document/0-alpha")
+(def rich-text-profile "greenways.rich-text/0-alpha")
 (def max-batch-operations 64)
 
 (defn signing-payload
   "Builds domain-separated document protocol signing bytes."
   [record-type body-root]
-  (str "GWDP1" \0 record-type \0 body-root))
+  (str "GWDP0" \0 record-type \0 body-root))
 
 (defn batch-valid?
   [operations]

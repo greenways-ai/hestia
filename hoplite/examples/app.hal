@@ -6,7 +6,7 @@
    :headers {"content-type" "application/json; charset=utf-8"
              "cache-control" "no-store"
              "x-hoplite" "hestia"}
-   :body "{\"ok\":true,\"protocol\":\"hestia/1\",\"origin\":\"hoplite\"}\n"})
+   :body "{\"ok\":true,\"protocol\":\"hestia/0-alpha\",\"origin\":\"hoplite\"}\n"})
 
 (defn inspect
   [request]

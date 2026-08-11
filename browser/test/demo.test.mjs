@@ -37,7 +37,7 @@ test("authenticates and signs ceremony envelopes", async () => {
   const capability = crypto.getRandomValues(new Uint8Array(32));
   const capabilityKey = await importCapabilityKey(capability);
   const envelope = await signEnvelope({
-    protocol: "hestia-ceremony/1",
+    protocol: "hestia-ceremony/0-alpha",
     type: "peer/state",
     ceremony_id: "ceremony",
     from: "peer-a",

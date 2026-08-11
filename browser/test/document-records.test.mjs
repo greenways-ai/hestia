@@ -30,7 +30,7 @@ async function fixtureBatch() {
     documentValuePlan(42)
   ]);
   const baseAst = {
-    profile: "greenways.rich-text/2",
+    profile: "greenways.rich-text/0-alpha",
     id: "document:plan",
     revision: 0,
     children: [{
@@ -83,11 +83,11 @@ async function fixtureBatch() {
   return { bundle, signingKey, baseAst, expectedResultAst, operations };
 }
 
-test("GWDP1 signs raw body roots in a document-only domain", async () => {
+test("GWDP0 signs raw body roots in a document-only domain", async () => {
   const bytes = documentSigningBytes("document/batch", `sha256:${"ab".repeat(32)}`);
-  const prefix = new TextDecoder().decode(bytes.slice(0, "GWDP1\0document/batch\0".length));
-  assert.equal(prefix, "GWDP1\0document/batch\0");
-  assert.equal(bytes.length, "GWDP1\0document/batch\0".length + 32);
+  const prefix = new TextDecoder().decode(bytes.slice(0, "GWDP0\0document/batch\0".length));
+  assert.equal(prefix, "GWDP0\0document/batch\0");
+  assert.equal(bytes.length, "GWDP0\0document/batch\0".length + 32);
 });
 
 test("builds and verifies a signed document batch with individually rooted operations", async () => {
@@ -99,7 +99,7 @@ test("builds and verifies a signed document batch with individually rooted opera
   assert.match(bundle.operationPlans[0].root, /^sha256:[0-9a-f]{64}$/);
   assert.match(bundle.operationVector.root, /^sha256:[0-9a-f]{64}$/);
   assert.match(bundle.record.root, /^sha256:[0-9a-f]{64}$/);
-  assert.match(bundle.record.hcp1_pack, /^HCP1:[1-9][0-9]*:/);
+  assert.match(bundle.record.hcp1_pack, /^HCP0:[1-9][0-9]*:/);
   assert.ok(bundle.record.hcv1_cells.some((cell) => cell.type_tag === 14));
 
   const tampered = structuredClone(bundle.record);

@@ -23,7 +23,7 @@
 
 (def completed-envelope
   {:receipt/protocol work/work-receipt-protocol
-   :receipt/id ["hara.work.receipt/1" "proposal-1" 3
+   :receipt/id ["hara.work.receipt/0-alpha" "proposal-1" 3
                 :work/run-completed :run-completed]
    :receipt/kind :work/run-completed
    :receipt/run-id "proposal-1"

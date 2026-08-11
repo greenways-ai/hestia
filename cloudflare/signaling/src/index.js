@@ -19,7 +19,7 @@ export default {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/health") {
       return Response.json(
-        { ok: true, protocol: "hestia-signal/1" },
+        { ok: true, protocol: "hestia-signal/0-alpha" },
         { headers: { "cache-control": "no-store" } }
       );
     }

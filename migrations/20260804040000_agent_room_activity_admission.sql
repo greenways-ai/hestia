@@ -245,7 +245,7 @@ BEGIN
   IF p_document_policy_root IS NULL OR p_message_delivery_policy_root IS NULL
      OR octet_length(p_document_policy_root) <> 32
      OR octet_length(p_message_delivery_policy_root) <> 32 THEN
-    RAISE EXCEPTION 'room activity policies must be HCV1 roots';
+    RAISE EXCEPTION 'room activity policies must be HCV0 roots';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM gw_ledger."Cell" WHERE hash = p_document_policy_root)
      OR NOT EXISTS (
@@ -353,7 +353,7 @@ BEGIN
     result_activity_root := v_existing.activity_root;
     admission_receipt_root := v_existing.admission_receipt_root;
     receipt_signing_payload := convert_to(
-      'GWAR1:ledger/admission-receipt:'
+      'GWAR0:ledger/admission-receipt:'
       || encode(v_existing.admission_receipt_root, 'hex'),
       'UTF8'
     );
@@ -722,7 +722,7 @@ BEGIN
   result_activity_root := v_activity_root;
   admission_receipt_root := v_admission_receipt_root;
   receipt_signing_payload := convert_to(
-    'GWAR1:ledger/admission-receipt:' || encode(v_admission_receipt_root, 'hex'),
+    'GWAR0:ledger/admission-receipt:' || encode(v_admission_receipt_root, 'hex'),
     'UTF8'
   );
   RETURN NEXT;

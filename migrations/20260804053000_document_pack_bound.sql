@@ -32,7 +32,7 @@ BEGIN
   -- operations, but need a larger cell allowance than compact agent records.
   IF p_pack IS NULL OR octet_length(p_pack) > 1000000
      OR p_cell_count IS NULL OR p_cell_count < 1 OR p_cell_count > 512 THEN
-    RAISE EXCEPTION 'HCP1 document pack is outside the admission bound';
+    RAISE EXCEPTION 'HCP0 document pack is outside the admission bound';
   END IF;
   IF NOT hestia.document_record_submittable(p_record_kind) THEN
     RAISE EXCEPTION 'unsupported submitted document record kind: %', p_record_kind;
@@ -66,7 +66,7 @@ BEGIN
     RETURN;
   END IF;
   IF NOT gw_ledger.snapshot_pack_import(p_pack, p_cell_count) THEN
-    RAISE EXCEPTION 'HCP1 document pack import failed';
+    RAISE EXCEPTION 'HCP0 document pack import failed';
   END IF;
   SELECT *
     INTO v_body_root, v_signer_key_root, v_signature_root
@@ -115,4 +115,4 @@ GRANT EXECUTE ON FUNCTION hestia.document_record_verify_prepare(
 COMMENT ON FUNCTION hestia.document_record_verify_prepare(
   text, bytea, bigint, bytea, text
 ) IS
-  'Imports and verifies a bounded document record pack. Document HCP1 packs permit at most 512 canonical cells and 1 MB; batches remain limited to 64 operations.';
+  'Imports and verifies a bounded document record pack. Document HCP0 packs permit at most 512 canonical cells and 1 MB; batches remain limited to 64 operations.';

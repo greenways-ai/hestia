@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-export const AGENT_HTTP_PROTOCOL = "hestia-agent-http/1";
+export const AGENT_HTTP_PROTOCOL = "hestia-agent-http/0-alpha";
 export const MAX_PACK_BYTES = 1_000_000;
 export const MAX_PACK_CELLS = 128;
 
@@ -52,17 +52,17 @@ export function prefixedRoot(value, name) {
 
 export function parseHcp1Pack(value) {
   if (typeof value !== "string") {
-    throw new AgentGatewayInputError("record HCP1 pack must be text");
+    throw new AgentGatewayInputError("record HCP0 pack must be text");
   }
   const byteLength = Buffer.byteLength(value, "utf8");
   if (byteLength > MAX_PACK_BYTES) {
-    throw new AgentGatewayInputError("record HCP1 pack is outside the admission bound");
+    throw new AgentGatewayInputError("record HCP0 pack is outside the admission bound");
   }
-  const match = /^HCP1:(0|[1-9][0-9]*):/.exec(value);
-  if (!match) throw new AgentGatewayInputError("record HCP1 pack has an invalid header");
+  const match = /^HCP0:(0|[1-9][0-9]*):/.exec(value);
+  if (!match) throw new AgentGatewayInputError("record HCP0 pack has an invalid header");
   const cellCount = Number(match[1]);
   if (!Number.isSafeInteger(cellCount) || cellCount < 1 || cellCount > MAX_PACK_CELLS) {
-    throw new AgentGatewayInputError("record HCP1 cell count is outside the admission bound");
+    throw new AgentGatewayInputError("record HCP0 cell count is outside the admission bound");
   }
   return Object.freeze({
     value,

@@ -96,7 +96,7 @@ BEGIN
      AND verification.environment_id = p_environment_id
      AND verification.status = 'verified';
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'document batch requires a verified GWDP1 receipt';
+    RAISE EXCEPTION 'document batch requires a verified GWDP0 receipt';
   END IF;
 
   SELECT verification.* INTO v_transform_verification
@@ -106,7 +106,7 @@ BEGIN
      AND verification.environment_id = p_environment_id
      AND verification.status = 'verified';
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'document transformation requires a verified GWDP1 receipt';
+    RAISE EXCEPTION 'document transformation requires a verified GWDP0 receipt';
   END IF;
 
   SELECT environment.* INTO STRICT v_environment
@@ -184,7 +184,7 @@ BEGIN
      OR jsonb_array_length(
        gw_ledger.cell_ref_entries(v_transformed_operations_root)
      ) <> jsonb_array_length(p_transformed_operations_projection) THEN
-    RAISE EXCEPTION 'document transformed operation projection does not match its HCV1 vector';
+    RAISE EXCEPTION 'document transformed operation projection does not match its HCV0 vector';
   END IF;
   IF p_result_ast_projection IS NULL THEN
     RAISE EXCEPTION 'document result AST projection is required';

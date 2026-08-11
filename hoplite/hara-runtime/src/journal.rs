@@ -6,7 +6,7 @@
 
 use std::fmt;
 
-pub const SCHEMA: &str = "hal.evaluation-journal/v1";
+pub const SCHEMA: &str = "hal.evaluation-journal/0-alpha";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct JournalId(pub u64);

@@ -8,7 +8,7 @@ import {
 import { randomId } from "./protocol.js";
 import {
   AGENT_RECORD_SCHEMAS,
-  HCV1_AGENT_PROTOCOL,
+  HCV0_AGENT_PROTOCOL,
   hcv1KeyFingerprint,
   hcv1ValueRoot,
   signHcv1AgentRecord,
@@ -16,7 +16,7 @@ import {
   verifyHcv1AgentRecord
 } from "./agent-hcv1.js";
 
-export const AGENT_PROTOCOL = HCV1_AGENT_PROTOCOL;
+export const AGENT_PROTOCOL = HCV0_AGENT_PROTOCOL;
 const CAPABILITY_DOMAIN = textEncoder.encode("HESTIA-ROOM-CAPABILITY/1\0");
 const PROOF_DOMAIN = textEncoder.encode("HESTIA-ROOM-ADMISSION/1\0");
 

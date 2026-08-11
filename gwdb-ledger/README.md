@@ -25,7 +25,7 @@ descriptors:
   ordered transaction link in an atomic block commit path;
 - integrity checks plus targeted account and module-export projection rebuilds
   derived from canonical roots;
-- deterministic HCP1 snapshot packs containing every reachable cell and ordered
+- deterministic HCP0 snapshot packs containing every reachable cell and ordered
   `CellRef` envelope, with two-pass cell/reference import and pack/count
   verification at creation and read time;
 - emitter tests that inspect generated PostgreSQL rather than hand-written SQL.
@@ -34,7 +34,7 @@ descriptors:
   the detached signature is deliberately excluded from them.
 
 The remaining major work is a complete compiler-facing operation validator,
-full iterator transformations, multi-transaction block replay, parsing an HCP1
+full iterator transformations, multi-transaction block replay, parsing an HCP0
 pack into a separately provisioned clean database test, and complete projection
 rebuild/repair coverage.
 The current payload constructors accept already-canonical `bytea` components
@@ -92,7 +92,7 @@ lein contracts
 ```
 
 The canonical browser contract is generated at
-`contracts/ledger-client/generated.ts`. The `greenways-ai/v2` repository owns
+`contracts/ledger-client/generated.ts`. The `greenways-ai/0-alpha` repository owns
 the consuming Next application and explicitly synchronizes this file into its
 ledger-client package.
 
@@ -167,7 +167,7 @@ API. The CLI REPL accepts the same v1 forms as the browser console.
 ## Offline signed documents
 
 The browser can create and replace syntax-text documents without a network
-connection. It builds canonical HCV1 cells, an HCP1 pack, and the exact
+connection. It builds canonical HCV0 cells, an HCP0 pack, and the exact
 document signing payload locally; the Ed25519 private key remains in IndexedDB.
 Pending operations stay in the IndexedDB outbox until **Sync outbox** is used.
 
@@ -183,7 +183,7 @@ Portable framing and outbox semantics live in the sibling
 make ledger-hal-test
 ```
 
-Browser/PostgreSQL end-to-end targets remain in `greenways-ai/v2`, which owns
+Browser/PostgreSQL end-to-end targets remain in `greenways-ai/0-alpha`, which owns
 the browser application:
 
 ```bash
@@ -195,7 +195,7 @@ The IndexedDB database contains separate content-addressed `cells`, signed
 its transaction, receipt, result, state, block, and cost data. Sequence and
 document-head conflicts remain in the outbox with a visible conflict status.
 
-General transaction admission imports the HCP1 pack, rebuilds and verifies
+General transaction admission imports the HCP0 pack, rebuilds and verifies
 every closed primitive and operation projection, verifies the Ed25519
 signature, executes the operation, and commits its receipt and block in one
 PostgreSQL transaction.
@@ -211,5 +211,5 @@ Offline document authoring currently supports syntax-wrapped text creation and
 replacement. List/vector insert, delete, and move authoring remain later UI
 work.
 
-Extracted from `greenways-ai/v2` at
+Extracted from `greenways-ai/0-alpha` at
 `045660a34b46556fe10e7cab783e4a34756f83bd`.

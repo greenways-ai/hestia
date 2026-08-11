@@ -216,7 +216,7 @@ export class DocumentRoom extends EventTarget {
 
   snapshot() {
     return Object.freeze({
-      protocol: "hestia-document-room-snapshot/1",
+      protocol: "hestia-document-room-snapshot/0-alpha",
       roomId: this.roomId,
       epoch: this.genesis?.record?.body?.epoch || this.epoch,
       sequence: this.sequence,
@@ -413,7 +413,7 @@ export class DocumentRoom extends EventTarget {
       sequencerKey: this.documentKey
     });
     const commit = {
-      protocol: "hestia-document-room-commit/1",
+      protocol: "hestia-document-room-commit/0-alpha",
       roomId: this.roomId,
       epoch: this.genesis.record.body.epoch,
       sequence: nextSequence,
@@ -435,7 +435,7 @@ export class DocumentRoom extends EventTarget {
 
   async applyCommit(commit) {
     if (!this.genesis) throw new Error("document room cannot verify commits before genesis");
-    if (commit?.protocol !== "hestia-document-room-commit/1"
+    if (commit?.protocol !== "hestia-document-room-commit/0-alpha"
         || commit.roomId !== this.roomId
         || Number(commit.epoch) !== Number(this.genesis.record.body.epoch)) {
       throw new Error("document room commit identity mismatch");

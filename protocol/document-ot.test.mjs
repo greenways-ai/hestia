@@ -11,7 +11,7 @@ import {
 
 function fixture() {
   return {
-    profile: "greenways.rich-text/2",
+    profile: "greenways.rich-text/0-alpha",
     id: "document-1",
     revision: 0,
     children: [

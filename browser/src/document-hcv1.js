@@ -4,9 +4,9 @@ import {
   textEncoder
 } from "./encoding.js";
 
-export const DOCUMENT_HCV1_PROTOCOL = "greenways-document-hcv1/1";
-export const DOCUMENT_RECORD_PROTOCOL = "greenways-document/1";
-export const DOCUMENT_SIGNING_DOMAIN = "GWDP1";
+export const DOCUMENT_HCV0_PROTOCOL = "greenways-document-hcv1/0-alpha";
+export const DOCUMENT_RECORD_PROTOCOL = "greenways-document/0-alpha";
+export const DOCUMENT_SIGNING_DOMAIN = "GWDP0";
 
 const TYPE = Object.freeze({
   nil: 0,
@@ -161,7 +161,7 @@ async function digestHex(bytes) {
 }
 
 function envelopeBytes(typeTag, payload) {
-  return textEncoder.encode(`HCV1:${typeTag}:${payload.length}:${bytesToHex(payload)}`);
+  return textEncoder.encode(`HCV0:${typeTag}:${payload.length}:${bytesToHex(payload)}`);
 }
 
 function roleRef(position, role, childRoot) {
@@ -188,7 +188,7 @@ export function mergeDocumentCells(...groups) {
   return [...byRoot.values()];
 }
 
-export function documentRootHex(value, name = "HCV1 root") {
+export function documentRootHex(value, name = "HCV0 root") {
   const root = typeof value === "string"
     ? value
     : value?.root ?? value?.body_root ?? value?.hcv1?.root;
@@ -278,7 +278,7 @@ export async function encodeDocumentValue(value) {
     cell = await createCell(TYPE.boolean, new Uint8Array([value ? 1 : 0]));
   } else if (typeof value === "number" || typeof value === "bigint") {
     if (typeof value === "number" && (!Number.isSafeInteger(value) || !Number.isFinite(value))) {
-      throw new Error("HCV1 document values require safe integers");
+      throw new Error("HCV0 document values require safe integers");
     }
     cell = await createCell(TYPE.integer, textEncoder.encode(String(value)));
   } else if (typeof value === "string") {
@@ -290,7 +290,7 @@ export async function encodeDocumentValue(value) {
   } else if (typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
     return encodeMap(value);
   } else {
-    throw new Error(`unsupported HCV1 document value: ${Object.prototype.toString.call(value)}`);
+    throw new Error(`unsupported HCV0 document value: ${Object.prototype.toString.call(value)}`);
   }
   return { root: cell.root, cell, cells: [cell], envelope: cell.envelope };
 }
@@ -307,7 +307,7 @@ function recordPayload(kind, roots) {
 
 async function createRecordCell(kind, encodedFields) {
   const schema = DOCUMENT_RECORD_SCHEMAS[kind];
-  if (!schema) throw new Error(`unknown HCV1 document record kind: ${kind}`);
+  if (!schema) throw new Error(`unknown HCV0 document record kind: ${kind}`);
   if (schema.length !== encodedFields.length) throw new Error(`invalid ${kind} field count`);
   const roots = encodedFields.map(({ root }) => root);
   const cell = await createCell(
@@ -325,7 +325,7 @@ async function createRecordCell(kind, encodedFields) {
 
 export async function encodeDocumentRecordBody(kind, body) {
   const schema = DOCUMENT_RECORD_SCHEMAS[kind];
-  if (!schema) throw new Error(`unknown HCV1 document record kind: ${kind}`);
+  if (!schema) throw new Error(`unknown HCV0 document record kind: ${kind}`);
   const fields = [];
   for (const [, property, mode] of schema) {
     const value = body?.[property] ?? null;
@@ -353,7 +353,7 @@ function serializableCell(cell) {
 
 export function documentHcp1Pack(cells) {
   const ordered = mergeDocumentCells(cells).sort((left, right) => left.root.localeCompare(right.root));
-  return `HCP1:${ordered.length}:` + ordered.map((cell) => {
+  return `HCP0:${ordered.length}:` + ordered.map((cell) => {
     const refs = [...cell.refs].sort((left, right) =>
       left.position - right.position || left.role.localeCompare(right.role));
     return `C:${cell.root}:${cell.codec_version}:${cell.type_tag}:${cell.payload_hex}:${refs.length}:`
@@ -397,7 +397,7 @@ async function assembleSignedRecord(kind, body, signer, signerKeyId = null) {
   ]);
   const cells = mergeDocumentCells(bodyPlan.cells, signerKey.cells, signature.cells, signed.cells);
   return {
-    protocol: DOCUMENT_HCV1_PROTOCOL,
+    protocol: DOCUMENT_HCV0_PROTOCOL,
     version: 1,
     type: kind,
     signer_key: signerKeyId || `ed25519:${signerKey.root}`,
@@ -432,35 +432,35 @@ export async function signDocumentRecord(kind, body, key) {
 }
 
 export async function verifyDocumentRecord(record, publicKeyOrJwk) {
-  if (!record || record.protocol !== DOCUMENT_HCV1_PROTOCOL || record.version !== 1) {
-    throw new Error("invalid HCV1 document record protocol");
+  if (!record || record.protocol !== DOCUMENT_HCV0_PROTOCOL || record.version !== 1) {
+    throw new Error("invalid HCV0 document record protocol");
   }
   const bodyPlan = await encodeDocumentRecordBody(record.type, record.body);
-  if (record.body_root !== `sha256:${bodyPlan.root}`) throw new Error("HCV1 document body root mismatch");
+  if (record.body_root !== `sha256:${bodyPlan.root}`) throw new Error("HCV0 document body root mismatch");
   const signatureBytes = base64UrlToBytes(record.signature ?? "");
   const publicKey = publicKeyOrJwk?.type === "public"
     ? publicKeyOrJwk
     : await crypto.subtle.importKey("jwk", publicKeyOrJwk, { name: "Ed25519" }, true, ["verify"]);
   const publicBytes = await rawEd25519PublicKey(publicKey);
   const signerKey = await encodeDocumentValue(publicBytes);
-  if (record.signer_key_root !== `sha256:${signerKey.root}`) throw new Error("HCV1 document signer root mismatch");
+  if (record.signer_key_root !== `sha256:${signerKey.root}`) throw new Error("HCV0 document signer root mismatch");
   const valid = await crypto.subtle.verify(
     { name: "Ed25519" },
     publicKey,
     signatureBytes,
     documentSigningBytes(record.type, bodyPlan.root)
   );
-  if (!valid) throw new Error("invalid GWDP1 document signature");
+  if (!valid) throw new Error("invalid GWDP0 document signature");
   const signature = await encodeDocumentValue(signatureBytes);
   const signed = await createRecordCell("document/signed-record", [
     { root: bodyPlan.root, cells: bodyPlan.cells },
     signerKey,
     signature
   ]);
-  if (record.root !== `sha256:${signed.root}`) throw new Error("HCV1 document signed record root mismatch");
+  if (record.root !== `sha256:${signed.root}`) throw new Error("HCV0 document signed record root mismatch");
   const cells = mergeDocumentCells(bodyPlan.cells, signerKey.cells, signature.cells, signed.cells);
   if (record.hcp1_pack && record.hcp1_pack !== documentHcp1Pack(cells)) {
-    throw new Error("HCP1 document record pack mismatch");
+    throw new Error("HCP0 document record pack mismatch");
   }
   return record.body;
 }

@@ -25,7 +25,7 @@ async function post(path, body, expectedStatus = 200) {
 
 function documentAst(documentId, text = "Hello world", revision = 0) {
   return {
-    profile: "greenways.rich-text/2",
+    profile: "greenways.rich-text/0-alpha",
     id: documentId,
     revision,
     children: [{

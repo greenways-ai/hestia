@@ -1,6 +1,6 @@
 //! Portable, deterministic Hara session startup snapshots.
 //!
-//! HSS1 stores immutable language state and declarations only. Live runtime
+//! HSS0 stores immutable language state and declarations only. Live runtime
 //! values (promises, fibers, host handles, mutable references, and authority)
 //! are intentionally outside the format. An artifact may inherit unchanged
 //! namespace payloads from a content-addressed base snapshot.
@@ -9,7 +9,7 @@ use crate::core::{self, Value};
 use sha2::{Digest as ShaDigest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
-const MAGIC: &[u8; 4] = b"HSS1";
+const MAGIC: &[u8; 4] = b"HSS0";
 const FORMAT_VERSION: u16 = 1;
 const HASH_BYTES: usize = 32;
 const MAX_PAYLOAD_BYTES: usize = 512 * 1024 * 1024;
@@ -669,7 +669,7 @@ mod tests {
         let digest_before = logical_digest(&first).unwrap();
         first.accelerators.push(RuntimeAccelerator {
             runtime: "rust".into(),
-            format: "HBC2".into(),
+            format: "HBC0".into(),
             version: "1".into(),
             digest: digest(b"compiled"),
             bytes: b"compiled".to_vec(),

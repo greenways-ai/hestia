@@ -12,8 +12,8 @@ import {
 } from "./document-hcv1.js";
 import { createDocumentOperationPlan } from "./document-records.js";
 
-export const DOCUMENT_ROOM_RECORD_PROTOCOL = "hestia-document-room-record/1";
-export const DOCUMENT_ROOM_SIGNING_DOMAIN = "GWRM1";
+export const DOCUMENT_ROOM_RECORD_PROTOCOL = "hestia-document-room-record/0-alpha";
+export const DOCUMENT_ROOM_SIGNING_DOMAIN = "GWRM0";
 
 function rawRoot(value) {
   const hex = documentRootHex(value);
@@ -126,7 +126,7 @@ export async function verifyDocumentRoomRecord(record, expectedType = record?.ty
     base64UrlToBytes(record.signature || ""),
     roomSigningBytes(record.type, record.body_root)
   );
-  if (!valid) throw new Error("invalid GWRM1 document room signature");
+  if (!valid) throw new Error("invalid GWRM0 document room signature");
   const exportedJwk = publicJwk?.type === "public"
     ? await crypto.subtle.exportKey("jwk", publicKey)
     : publicJwk;

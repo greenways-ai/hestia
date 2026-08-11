@@ -78,8 +78,8 @@ pub fn read_collection(input: &Path) -> Result<AssetCollection, String> {
     let form = parse(&source).map_err(|error| format!("{}: {error}", descriptor.display()))?;
     let map = as_map(&form, "asset.edn must be an EDN map")?;
     match required(map, "asset/format")? {
-        Form::Number(1) => {}
-        _ => return Err("asset.edn :asset/format must be 1".into()),
+        Form::String(version) if version == "0.0.0-alpha" => {}
+        _ => return Err("asset.edn requires alpha asset format".into()),
     }
     let coordinate = project::normalize_coordinate(&string(
         required(map, "asset/coordinate")?,
@@ -118,7 +118,7 @@ pub fn build_manifest(collection: &AssetCollection) -> Result<String, String> {
     let mut entries = collection.entries.clone();
     entries.sort_by(|left, right| left.path.cmp(&right.path));
     let mut output = format!(
-        "{{:asset/format 1\n :asset/coordinate {}\n :asset/version {}\n :asset/entries [\n",
+        "{{:asset/format \"0.0.0-alpha\"\n :asset/coordinate {}\n :asset/version {}\n :asset/entries [\n",
         edn_string(&collection.coordinate),
         edn_string(&collection.version)
     );
@@ -247,7 +247,7 @@ mod tests {
         fs::write(root.join("images/hero.png"), b"png").unwrap();
         fs::write(
             root.join("asset.edn"),
-            "{:asset/format 1 :asset/coordinate \"alice/gallery\" :asset/version \"1.0.0\" :asset/entries [{:entry/path \"images/hero.png\" :entry/media-type \"image/png\"}]}\n",
+            "{:asset/format \"0.0.0-alpha\" :asset/coordinate \"alice/gallery\" :asset/version \"1.0.0\" :asset/entries [{:entry/path \"images/hero.png\" :entry/media-type \"image/png\"}]}\n",
         )
         .unwrap();
         let collection = read_collection(&root).unwrap();
@@ -258,7 +258,7 @@ mod tests {
         assert!(first.contains("sha256:"));
         fs::write(
             root.join("asset.edn"),
-            "{:asset/format 1 :asset/coordinate \"alice/gallery\" :asset/version \"1.0.0\" :asset/entries [{:entry/path \"../escape\" :entry/media-type \"application/octet-stream\"}]}\n",
+            "{:asset/format \"0.0.0-alpha\" :asset/coordinate \"alice/gallery\" :asset/version \"1.0.0\" :asset/entries [{:entry/path \"../escape\" :entry/media-type \"application/octet-stream\"}]}\n",
         )
         .unwrap();
         assert!(read_collection(&root)

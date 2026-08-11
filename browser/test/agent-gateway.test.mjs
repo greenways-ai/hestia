@@ -10,7 +10,7 @@ import {
 const record = Object.freeze({
   root: `sha256:${"a".repeat(64)}`,
   type: "room/admission-proof",
-  hcp1_pack: "HCP1:1:C:fixture",
+  hcp1_pack: "HCP0:1:C:fixture",
   hcv1_cells: [{ ignored: true }],
   body: { ignored: true }
 });

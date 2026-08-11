@@ -183,14 +183,14 @@ BEGIN
     RAISE EXCEPTION 'Hestia agent record field count mismatch for %', p_kind;
   END IF;
 
-  v_payload_text := 'R:hestia-agent/1:' || p_kind || ':1:'
+  v_payload_text := 'R:hestia-agent/0-alpha:' || p_kind || ':1:'
                     || cardinality(p_roots)::text || ':';
   FOR v_index IN 1..cardinality(p_roots) LOOP
     IF p_roots[v_index] IS NULL OR octet_length(p_roots[v_index]) <> 32 THEN
-      RAISE EXCEPTION 'invalid HCV1 child root at position % for %', v_index - 1, p_kind;
+      RAISE EXCEPTION 'invalid HCV0 child root at position % for %', v_index - 1, p_kind;
     END IF;
     IF NOT EXISTS (SELECT 1 FROM gw_ledger."Cell" WHERE hash = p_roots[v_index]) THEN
-      RAISE EXCEPTION 'missing HCV1 child cell at position % for %', v_index - 1, p_kind;
+      RAISE EXCEPTION 'missing HCV0 child cell at position % for %', v_index - 1, p_kind;
     END IF;
     v_payload_text := v_payload_text || encode(p_roots[v_index], 'hex');
   END LOOP;
@@ -231,7 +231,7 @@ BEGIN
     RAISE EXCEPTION 'unsupported submitted Hestia agent record kind: %', p_kind;
   END IF;
   IF gw_ledger.cell_type_tag(p_body_root) <> 14 THEN
-    RAISE EXCEPTION 'agent record body is not an HCV1 record';
+    RAISE EXCEPTION 'agent record body is not an HCV0 record';
   END IF;
 
   SELECT payload INTO STRICT v_payload
@@ -242,7 +242,7 @@ BEGIN
     RAISE EXCEPTION 'agent record body reference count mismatch for %', p_kind;
   END IF;
 
-  v_expected := 'R:hestia-agent/1:' || p_kind || ':1:'
+  v_expected := 'R:hestia-agent/0-alpha:' || p_kind || ':1:'
                 || cardinality(v_roles)::text || ':';
   FOR v_index IN 1..cardinality(v_roles) LOOP
     v_child := gw_ledger.cell_ref_child(
@@ -339,10 +339,10 @@ DECLARE
   v_sequence bigint;
 BEGIN
   IF p_pack IS NULL OR octet_length(p_pack) > 1000000 THEN
-    RAISE EXCEPTION 'HCP1 agent pack exceeds the admission bound';
+    RAISE EXCEPTION 'HCP0 agent pack exceeds the admission bound';
   END IF;
   IF p_cell_count IS NULL OR p_cell_count < 1 OR p_cell_count > 128 THEN
-    RAISE EXCEPTION 'HCP1 agent cell count is outside the admission bound';
+    RAISE EXCEPTION 'HCP0 agent cell count is outside the admission bound';
   END IF;
   IF NOT hestia.agent_record_submittable(p_record_kind) THEN
     RAISE EXCEPTION 'unsupported submitted Hestia agent record kind: %', p_record_kind;
@@ -372,7 +372,7 @@ BEGIN
     signer_key_root := v_existing.signer_key_root;
     verification_receipt_root := v_existing.verification_receipt_root;
     receipt_signing_payload := convert_to(
-      'GWAR1:ledger/verification-receipt:'
+      'GWAR0:ledger/verification-receipt:'
       || encode(v_existing.verification_receipt_root, 'hex'),
       'UTF8'
     );
@@ -381,10 +381,10 @@ BEGIN
   END IF;
 
   IF NOT gw_ledger.snapshot_pack_import(p_pack, p_cell_count) THEN
-    RAISE EXCEPTION 'HCP1 agent pack import failed';
+    RAISE EXCEPTION 'HCP0 agent pack import failed';
   END IF;
   IF gw_ledger.cell_type_tag(p_signed_record_root) <> 14 THEN
-    RAISE EXCEPTION 'submitted root is not an HCV1 signed record';
+    RAISE EXCEPTION 'submitted root is not an HCV0 signed record';
   END IF;
   IF jsonb_array_length(gw_ledger.cell_ref_entries(p_signed_record_root)) <> 3 THEN
     RAISE EXCEPTION 'signed record must contain exactly three references';
@@ -393,7 +393,7 @@ BEGIN
   v_body_root := gw_ledger.cell_ref_child(p_signed_record_root, 0, 'body');
   v_signer_key_root := gw_ledger.cell_ref_child(p_signed_record_root, 1, 'signer-key');
   v_signature_root := gw_ledger.cell_ref_child(p_signed_record_root, 2, 'signature');
-  v_expected_signed := 'R:hestia-agent/1:ledger/signed-record:1:3:'
+  v_expected_signed := 'R:hestia-agent/0-alpha:ledger/signed-record:1:3:'
                        || encode(v_body_root, 'hex')
                        || encode(v_signer_key_root, 'hex')
                        || encode(v_signature_root, 'hex');
@@ -407,7 +407,7 @@ BEGIN
   PERFORM hestia.agent_record_validate_body(p_record_kind, v_body_root);
   IF gw_ledger.cell_type_tag(v_signer_key_root) <> 6
      OR gw_ledger.cell_type_tag(v_signature_root) <> 6 THEN
-    RAISE EXCEPTION 'signed record key and signature must be HCV1 blob cells';
+    RAISE EXCEPTION 'signed record key and signature must be HCV0 blob cells';
   END IF;
   SELECT payload INTO STRICT v_signer_public_key
     FROM gw_ledger."Cell"
@@ -420,10 +420,10 @@ BEGIN
   END IF;
   IF NOT gw_ledger.signature_verify(
     v_signature,
-    convert_to('GWAR1:' || p_record_kind || ':' || encode(v_body_root, 'hex'), 'UTF8'),
+    convert_to('GWAR0:' || p_record_kind || ':' || encode(v_body_root, 'hex'), 'UTF8'),
     v_signer_public_key
   ) THEN
-    RAISE EXCEPTION 'invalid GWAR1 agent record signature';
+    RAISE EXCEPTION 'invalid GWAR0 agent record signature';
   END IF;
 
   v_sequence := nextval('hestia.agent_record_verification_sequence'::regclass);
@@ -470,7 +470,7 @@ BEGIN
   signer_key_root := v_signer_key_root;
   verification_receipt_root := v_receipt_root;
   receipt_signing_payload := convert_to(
-    'GWAR1:ledger/verification-receipt:' || encode(v_receipt_root, 'hex'),
+    'GWAR0:ledger/verification-receipt:' || encode(v_receipt_root, 'hex'),
     'UTF8'
   );
   RETURN NEXT;
@@ -522,7 +522,7 @@ BEGIN
   END IF;
 
   v_signing_payload := convert_to(
-    'GWAR1:ledger/verification-receipt:'
+    'GWAR0:ledger/verification-receipt:'
     || encode(v_row.verification_receipt_root, 'hex'),
     'UTF8'
   );
@@ -577,8 +577,8 @@ GRANT EXECUTE ON FUNCTION hestia.agent_record_verify_prepare(text, bytea, bigint
 GRANT EXECUTE ON FUNCTION hestia.agent_record_verify_commit(text, bytea, bytea) TO hestia_app;
 
 COMMENT ON TABLE hestia.agent_record_verification IS
-  'Projection of HCP1-imported, GWAR1-verified agent records and Hestia-signed verification receipts.';
+  'Projection of HCP0-imported, GWAR0-verified agent records and Hestia-signed verification receipts.';
 COMMENT ON FUNCTION hestia.agent_record_verify_prepare(text, bytea, bigint, bytea, text) IS
-  'Imports bounded HCP1 cells, validates native HCV1 structure, verifies the agent Ed25519 signature, and returns exact environment receipt signing bytes.';
+  'Imports bounded HCP0 cells, validates native HCV0 structure, verifies the agent Ed25519 signature, and returns exact environment receipt signing bytes.';
 COMMENT ON FUNCTION hestia.agent_record_verify_commit(text, bytea, bytea) IS
-  'Verifies an operator-provisioned Hestia environment signature and commits the signed verification receipt as native HCV1 cells.';
+  'Verifies an operator-provisioned Hestia environment signature and commits the signed verification receipt as native HCV0 cells.';

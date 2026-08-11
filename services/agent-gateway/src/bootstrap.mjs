@@ -64,7 +64,7 @@ export async function bootstrapAgentEnvironment({
         ) AS imported
       `;
       if (imported.length !== 1 || imported[0].imported !== true) {
-        throw new Error("Hestia policy HCP1 bootstrap import failed");
+        throw new Error("Hestia policy HCP0 bootstrap import failed");
       }
       const signerRows = await transaction`
         SELECT encode(

@@ -2,12 +2,12 @@
   (:require [std.foundation :refer [assoc conj get reduce]]
             [gw.ledger.document-protocol :as document]))
 
-(def protocol "greenways-document/1")
-(def rich-text-profile "greenways.rich-text/2")
+(def protocol "greenways-document/0-alpha")
+(def rich-text-profile "greenways.rich-text/0-alpha")
 (def max-batch-operations 64)
 
 (defn record-fields
-  "Returns the canonical HCV1 role order for signed document records."
+  "Returns the canonical HCV0 role order for signed document records."
   [kind]
   (cond
     (= kind "document/text-splice")
@@ -59,9 +59,9 @@
 
 (defn signing-frame
   "Describes the normative signing frame. The host encodes the two text fields
-   as UTF-8, includes NUL separators, and appends the raw 32-byte HCV1 body root."
+   as UTF-8, includes NUL separators, and appends the raw 32-byte HCV0 body root."
   [record-type body-root]
-  {:domain "GWDP1"
+  {:domain "GWDP0"
    :record-type record-type
    :body-root body-root})
 

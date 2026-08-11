@@ -66,7 +66,7 @@ test("serves health, environment, and signed-record admission", async () => {
       record: {
         root: `sha256:${"b".repeat(64)}`,
         kind: "profile/version",
-        hcp1_pack: "HCP1:1:C:fixture"
+        hcp1_pack: "HCP0:1:C:fixture"
       }
     };
     const admitted = await responseJson(await fetch(`${state.origin}/v1/records/admit`, {

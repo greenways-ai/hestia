@@ -1,6 +1,6 @@
 import { base64UrlToBytes, bytesToBase64Url, concatBytes, textDecoder, textEncoder } from "./encoding.js";
 
-const shareInfo = textEncoder.encode("hestia-recovery-share/v2");
+const shareInfo = textEncoder.encode("hestia-recovery-share/0-alpha");
 
 async function deriveShareKey(privateKey, publicKey, ceremonyId) {
   const bits = await crypto.subtle.deriveBits({ name: "ECDH", public: publicKey }, privateKey, 256);

@@ -69,7 +69,7 @@ Hestia separates four responsibilities:
 2. **Hara/HAL describes state and policy.** Mandates, transitions and approval
    rules are portable values and deterministic AST programs rather than hidden
    inside one database implementation.
-3. **HCV1 records durable evidence.** Canonical cells produce exact content
+3. **HCV0 records durable evidence.** Canonical cells produce exact content
    roots for signed records, event receipts and selective presentations.
 4. **Adapters provide capabilities.** Browser storage, PostgreSQL, cryptography,
    transport and hosted coordination remain explicit and replaceable edges.
@@ -143,8 +143,8 @@ protected backups because it is part of the local office identity.
 ## Signed-agent admission
 
 Canonical profiles, office genesis, invitations and external-member proofs can
-be submitted to the local [`hestia-agent-http/1` admission gateway](docs/agent-gateway.md).
-The gateway imports the bounded HCP1 pack, verifies exact `GWAR1` signatures in
+be submitted to the local [`hestia-agent-http/0-alpha` admission gateway](docs/agent-gateway.md).
+The gateway imports the bounded HCP0 pack, verifies exact `GWAR0` signatures in
 PostgreSQL through pgsodium, applies the current policy transition, and returns
 signed verification and admission receipts. Agent private keys never enter the
 gateway; the invitation capability is accepted only as transient input to guest

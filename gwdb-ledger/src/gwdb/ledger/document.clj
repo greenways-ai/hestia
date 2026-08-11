@@ -112,7 +112,7 @@
 
 (defn.pg ^{:- [:bytea]}
   document-syntax-import
-  "Rebuilds the disposable Syntax projection from authoritative HCP1 refs."
+  "Rebuilds the disposable Syntax projection from authoritative HCP0 refs."
   {:added "0.6"}
   [:bytea i-syntax-root]
   (let [(:bytea v-syntax-root)
@@ -125,7 +125,7 @@
 
 (defn.pg ^{:- [:bytea]}
   document-operation-import-replace
-  "Rebuilds the disposable replace-operation projection from an imported HCP1
+  "Rebuilds the disposable replace-operation projection from an imported HCP0
    graph and proves that its canonical root matches the signed operation."
   {:added "0.6"}
   [:bytea i-operation-root :text i-target-id :bytea i-payload-root]

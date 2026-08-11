@@ -2,7 +2,7 @@ use crate::core::Value;
 #[cfg(test)]
 use crate::lang::data::{Tuple as PTuple, Vector as PVector};
 
-const MAGIC: &[u8; 4] = b"HTA1";
+const MAGIC: &[u8; 4] = b"HTA0";
 const NIL: u8 = 0;
 const FALSE: u8 = 1;
 const TRUE: u8 = 2;
@@ -31,7 +31,7 @@ pub fn encode(value: &Value) -> Result<Vec<u8>, String> {
 
 pub fn decode(bytes: &[u8]) -> Result<Value, String> {
     if !bytes.starts_with(MAGIC) {
-        return Err("hta/value-malformed: invalid HTA1 header".into());
+        return Err("hta/value-malformed: invalid HTA0 header".into());
     }
     let mut reader = Reader {
         bytes,

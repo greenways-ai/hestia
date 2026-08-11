@@ -5,7 +5,7 @@ import { iceConfiguration, validateConnection, validateEnvelope } from "../src/p
 function envelope(overrides = {}) {
   return {
     version: 1,
-    protocol: "hestia-signal/1",
+    protocol: "hestia-signal/0-alpha",
     type: "offer",
     ceremony_id: "0123456789abcdefABCDEF",
     from: "0123456789abcdef",

@@ -76,7 +76,7 @@ fn key_command(args: &[String]) -> Result<(), String> {
 
 pub fn canonical_enrollment(tap: &str, owner: &str, public_key: &str, challenge: &str) -> String {
     format!(
-        "{{:enrollment/format 1 :enrollment/tap {} :enrollment/provider :github :enrollment/owner {} :enrollment/public-key {} :enrollment/challenge {}}}\n",
+        "{{:enrollment/format \"0.0.0-alpha\" :enrollment/tap {} :enrollment/provider :github :enrollment/owner {} :enrollment/public-key {} :enrollment/challenge {}}}\n",
         edn_string(tap),
         edn_string(owner),
         edn_string(public_key),
@@ -205,7 +205,7 @@ mod tests {
                 "challenge-1"
             ),
             format!(
-                "{{:enrollment/format 1 :enrollment/tap \"hara\" :enrollment/provider :github :enrollment/owner \"alice\" :enrollment/public-key \"{}\" :enrollment/challenge \"challenge-1\"}}\n",
+                "{{:enrollment/format \"0.0.0-alpha\" :enrollment/tap \"hara\" :enrollment/provider :github :enrollment/owner \"alice\" :enrollment/public-key \"{}\" :enrollment/challenge \"challenge-1\"}}\n",
                 "ab".repeat(32)
             )
         );

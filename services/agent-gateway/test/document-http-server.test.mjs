@@ -40,7 +40,7 @@ test("routes document imports to the signed OT service", async () => {
         record: {
           type: "document/batch",
           root: `sha256:${"b".repeat(64)}`,
-          hcp1_pack: "HCP1:1:C:fixture"
+          hcp1_pack: "HCP0:1:C:fixture"
         }
       }
     };

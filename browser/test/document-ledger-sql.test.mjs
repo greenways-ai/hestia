@@ -23,16 +23,16 @@ async function sources() {
   return { sql, hal, service, records };
 }
 
-test("document signatures use a separate GWDP1 domain with raw body roots", async () => {
+test("document signatures use a separate GWDP0 domain with raw body roots", async () => {
   const { sql, hal, records } = await sources();
-  assert.match(sql, /convert_to\('GWDP1', 'UTF8'\)/);
+  assert.match(sql, /convert_to\('GWDP0', 'UTF8'\)/);
   assert.match(sql, /decode\('00', 'hex'\)/);
   assert.match(sql, /\|\| p_body_root/);
-  assert.match(sql, /invalid GWDP1 document signature/);
-  assert.match(records, /DOCUMENT_SIGNING_DOMAIN = "GWDP1"/);
+  assert.match(sql, /invalid GWDP0 document signature/);
+  assert.match(records, /DOCUMENT_SIGNING_DOMAIN = "GWDP0"/);
   assert.match(records, /hexToBytes\(documentRootHex/);
-  assert.match(hal, /:domain "GWDP1"/);
-  assert.doesNotMatch(sql, /GWAR1:document\//);
+  assert.match(hal, /:domain "GWDP0"/);
+  assert.doesNotMatch(sql, /GWAR0:document\//);
 });
 
 test("OT revisions and operation identities are anchored to gw_ledger cells", async () => {
@@ -51,7 +51,7 @@ test("OT revisions and operation identities are anchored to gw_ledger cells", as
   assert.match(sql, /transformed_operations_root bytea NOT NULL REFERENCES gw_ledger\."Cell"\(hash\)/);
   assert.match(sql, /result_ast_root bytea NOT NULL REFERENCES gw_ledger\."Cell"\(hash\)/);
   assert.match(sql, /operation_projection jsonb NOT NULL/);
-  assert.match(sql, /operation_root is the authoritative HCV1 identity/i);
+  assert.match(sql, /operation_root is the authoritative HCV0 identity/i);
 });
 
 test("prepare and commit recheck the exact head and delegated edit authority", async () => {

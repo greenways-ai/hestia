@@ -207,14 +207,14 @@ BEGIN
   IF cardinality(v_roles) <> cardinality(p_roots) THEN
     RAISE EXCEPTION 'Hestia document record field count mismatch for %', p_kind;
   END IF;
-  v_payload_text := 'R:greenways-document/1:' || p_kind || ':1:'
+  v_payload_text := 'R:greenways-document/0-alpha:' || p_kind || ':1:'
                     || cardinality(p_roots)::text || ':';
   FOR v_index IN 1..cardinality(p_roots) LOOP
     IF p_roots[v_index] IS NULL OR octet_length(p_roots[v_index]) <> 32
        OR NOT EXISTS (
          SELECT 1 FROM gw_ledger."Cell" WHERE hash = p_roots[v_index]
        ) THEN
-      RAISE EXCEPTION 'invalid or missing document HCV1 child at position % for %',
+      RAISE EXCEPTION 'invalid or missing document HCV0 child at position % for %',
                       v_index - 1, p_kind;
     END IF;
     v_payload_text := v_payload_text || encode(p_roots[v_index], 'hex');
@@ -261,7 +261,7 @@ BEGIN
   SELECT payload INTO STRICT v_payload
     FROM gw_ledger."Cell"
    WHERE hash = p_body_root;
-  v_expected := 'R:greenways-document/1:' || p_kind || ':1:'
+  v_expected := 'R:greenways-document/0-alpha:' || p_kind || ':1:'
                 || cardinality(v_roles)::text || ':';
   FOR v_index IN 1..cardinality(v_roles) LOOP
     v_child := gw_ledger.cell_ref_child(
@@ -287,7 +287,7 @@ IMMUTABLE
 PARALLEL SAFE
 SET search_path = ''
 AS $$
-  SELECT convert_to('GWDP1', 'UTF8')
+  SELECT convert_to('GWDP0', 'UTF8')
          || decode('00', 'hex')
          || convert_to(p_kind, 'UTF8')
          || decode('00', 'hex')
@@ -320,7 +320,7 @@ BEGIN
   body_root := gw_ledger.cell_ref_child(p_signed_record_root, 0, 'body');
   signer_key_root := gw_ledger.cell_ref_child(p_signed_record_root, 1, 'signer-key');
   signature_root := gw_ledger.cell_ref_child(p_signed_record_root, 2, 'signature');
-  v_expected := 'R:greenways-document/1:document/signed-record:1:3:'
+  v_expected := 'R:greenways-document/0-alpha:document/signed-record:1:3:'
                 || encode(body_root, 'hex')
                 || encode(signer_key_root, 'hex')
                 || encode(signature_root, 'hex');
@@ -333,7 +333,7 @@ BEGIN
   PERFORM hestia.document_record_validate_body(p_kind, body_root);
   IF gw_ledger.cell_type_tag(signer_key_root) <> 6
      OR gw_ledger.cell_type_tag(signature_root) <> 6 THEN
-    RAISE EXCEPTION 'document signer key and signature must be HCV1 blobs';
+    RAISE EXCEPTION 'document signer key and signature must be HCV0 blobs';
   END IF;
   SELECT payload INTO STRICT v_public_key
     FROM gw_ledger."Cell" WHERE hash = signer_key_root;
@@ -345,7 +345,7 @@ BEGIN
        hestia.document_signing_payload(p_kind, body_root),
        v_public_key
      ) THEN
-    RAISE EXCEPTION 'invalid GWDP1 document signature';
+    RAISE EXCEPTION 'invalid GWDP0 document signature';
   END IF;
   RETURN NEXT;
 END;
@@ -425,7 +425,7 @@ DECLARE
 BEGIN
   IF p_pack IS NULL OR octet_length(p_pack) > 1000000
      OR p_cell_count IS NULL OR p_cell_count < 1 OR p_cell_count > 128 THEN
-    RAISE EXCEPTION 'HCP1 document pack is outside the admission bound';
+    RAISE EXCEPTION 'HCP0 document pack is outside the admission bound';
   END IF;
   IF NOT hestia.document_record_submittable(p_record_kind) THEN
     RAISE EXCEPTION 'unsupported submitted document record kind: %', p_record_kind;
@@ -459,7 +459,7 @@ BEGIN
     RETURN;
   END IF;
   IF NOT gw_ledger.snapshot_pack_import(p_pack, p_cell_count) THEN
-    RAISE EXCEPTION 'HCP1 document pack import failed';
+    RAISE EXCEPTION 'HCP0 document pack import failed';
   END IF;
   SELECT *
     INTO v_body_root, v_signer_key_root, v_signature_root
@@ -639,7 +639,7 @@ BEGIN
      AND environment_id = p_environment_id
      AND status = 'verified';
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'document batch requires a verified GWDP1 receipt';
+    RAISE EXCEPTION 'document batch requires a verified GWDP0 receipt';
   END IF;
   SELECT * INTO v_transform_verification
     FROM hestia.document_record_verification
@@ -648,7 +648,7 @@ BEGIN
      AND environment_id = p_environment_id
      AND status = 'verified';
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'document transformation requires a verified GWDP1 receipt';
+    RAISE EXCEPTION 'document transformation requires a verified GWDP0 receipt';
   END IF;
   SELECT * INTO STRICT v_environment
     FROM hestia.environment_signer
@@ -706,7 +706,7 @@ BEGIN
      OR jsonb_typeof(p_transformed_operations_projection) <> 'array'
      OR jsonb_array_length(gw_ledger.cell_ref_entries(v_transformed_operations_root))
         <> jsonb_array_length(p_transformed_operations_projection) THEN
-    RAISE EXCEPTION 'document transformed operation projection does not match its HCV1 vector';
+    RAISE EXCEPTION 'document transformed operation projection does not match its HCV0 vector';
   END IF;
   IF p_result_ast_projection IS NULL THEN
     RAISE EXCEPTION 'document result AST projection is required';
@@ -1068,10 +1068,10 @@ COMMENT ON TABLE hestia.document_head IS
 COMMENT ON TABLE hestia.document_revision IS
   'Append-only projection of environment-signed document revisions created from contributor batches after OT.';
 COMMENT ON TABLE hestia.document_operation_projection IS
-  'Non-canonical JSON projection for future transformation; operation_root is the authoritative HCV1 identity.';
+  'Non-canonical JSON projection for future transformation; operation_root is the authoritative HCV0 identity.';
 COMMENT ON TABLE hestia.document_batch_admission IS
   'Two-stage document OT admission. The database constructs the canonical revision and receipt and signs only after rechecking the exact head.';
 COMMENT ON FUNCTION hestia.document_batch_prepare(text, bytea, bytea, bigint, bytea, bytea, jsonb, jsonb, jsonb) IS
-  'Binds a verified contributor batch and environment transformation to the current Hara ledger head, then returns exact GWDP1 receipt signing bytes.';
+  'Binds a verified contributor batch and environment transformation to the current Hara ledger head, then returns exact GWDP0 receipt signing bytes.';
 COMMENT ON FUNCTION hestia.document_batch_commit(text, bytea, bytea, bytea) IS
-  'Rechecks head and delegated authority, verifies the environment GWDP1 signature, and atomically appends the revision, transformed operations and signed receipt.';
+  'Rechecks head and delegated authority, verifies the environment GWDP0 signature, and atomically appends the revision, transformed operations and signed receipt.';

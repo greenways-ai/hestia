@@ -106,7 +106,7 @@ SQL
 IFS='|' read -r verification_sequence body_root_hex signer_key_root_hex receipt_root_hex receipt_payload_hex <<<"$prepare_output"
 for value in "$body_root_hex" "$signer_key_root_hex" "$receipt_root_hex"; do
   if [[ ! "$value" =~ ^[0-9a-f]{64}$ ]]; then
-    echo "PostgreSQL returned an invalid HCV1 root: $value" >&2
+    echo "PostgreSQL returned an invalid HCV0 root: $value" >&2
     exit 1
   fi
 done

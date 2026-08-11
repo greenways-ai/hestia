@@ -23,7 +23,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 use std::rc::Rc;
 
-const ABI_VERSION: u32 = 1;
+const ABI_VERSION: u32 = 0;
 const REQUEST_BINDING: &str = "__hoplite_request";
 
 type HostCall = (u64, Promise, String, String, Vec<Value>);

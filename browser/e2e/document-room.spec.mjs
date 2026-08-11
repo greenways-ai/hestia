@@ -93,7 +93,7 @@ test("two real Hara kernels converge on a stale signed batch", async ({ page }) 
     );
 
     const document = {
-      profile: "greenways.rich-text/2",
+      profile: "greenways.rich-text/0-alpha",
       id: "document:kernel-webrtc-test",
       revision: 0,
       children: [{

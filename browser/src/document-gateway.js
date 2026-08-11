@@ -1,4 +1,4 @@
-export const DOCUMENT_HTTP_PROTOCOL = "hestia-document-http/1";
+export const DOCUMENT_HTTP_PROTOCOL = "hestia-document-http/0-alpha";
 
 export class HestiaDocumentGatewayError extends Error {
   constructor(message, { status, code, response } = {}) {

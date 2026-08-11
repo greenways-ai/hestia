@@ -6,8 +6,8 @@ import {
   verifyDocumentRoomMember
 } from "./document-room-member.js";
 
-export const DOCUMENT_ROOM_DATA_PROTOCOL = "hestia-document-room/1";
-export const DOCUMENT_ROOM_AWARENESS_PROTOCOL = "hestia-document-awareness/1";
+export const DOCUMENT_ROOM_DATA_PROTOCOL = "hestia-document-room/0-alpha";
+export const DOCUMENT_ROOM_AWARENESS_PROTOCOL = "hestia-document-awareness/0-alpha";
 
 function publicMember(member) {
   return {

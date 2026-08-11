@@ -10,7 +10,7 @@ sequencer; every kernel independently verifies and replays the result.
 The sequencer is trusted to assign one room order. It is not trusted to rewrite
 contributor intent or invent a result:
 
-- each contributor signs an exact `document/batch` in the `GWDP1` domain;
+- each contributor signs an exact `document/batch` in the `GWDP0` domain;
 - each operation is independently content-addressed;
 - the sequencer signs the exact `document/transformation`;
 - the revision binds the previous head, operation vector and result AST;
@@ -18,7 +18,7 @@ contributor intent or invent a result:
 - every receiving kernel reconstructs all referenced roots and replays the
   transformed operations before accepting the head.
 
-The room genesis uses a separate `GWRM1` domain. It fixes the room ID, document
+The room genesis uses a separate `GWRM0` domain. It fixes the room ID, document
 ID, epoch, sequencer key, initial AST and member document keys. Before accepting
 genesis, each kernel verifies the member profile root signature, active
 operational key, `document.edit` delegation and the profile/delegation roots
@@ -41,7 +41,7 @@ source.
 
 ## Channels
 
-The existing blind signalling relay remains on `hestia-signal/1`. It sees only
+The existing blind signalling relay remains on `hestia-signal/0-alpha`. It sees only
 signed signalling envelopes and ICE data.
 
 The peer connection uses two data channels:
@@ -50,12 +50,12 @@ The peer connection uses two data channels:
 hestia-document-v1
   ordered: true
   reliable: true
-  protocol: hestia-document-room/1
+  protocol: hestia-document-room/0-alpha
 
 hestia-document-awareness-v1
   ordered: false
   maxRetransmits: 0
-  protocol: hestia-document-awareness/1
+  protocol: hestia-document-awareness/0-alpha
 ```
 
 Canonical document messages use the first channel. Cursor, focus and presence
@@ -89,7 +89,7 @@ work can be retained as a private pending branch for later resolution.
 
 A `hara-artefact` source remains an ordinary text node, so its HAL source uses
 normal `text.splice` OT. Live evaluation runs in the local document-room kernel.
-A durable `artefact.commit` binds exact HCV1 source and result roots. Both the
+A durable `artefact.commit` binds exact HCV0 source and result roots. Both the
 sequencer and receiving kernel recompute the current source root; a stale or
 competing result conflicts rather than silently replacing the artefact.
 
@@ -113,7 +113,7 @@ retaining one epoch sequencer and the same signed commit bundle.
 ## Durable import
 
 The peer room is not a separate document format. Its batches, transformations,
-revisions and receipts use the same HCV1/GWDP1 records as the PostgreSQL-backed
+revisions and receipts use the same HCV0/GWDP0 records as the PostgreSQL-backed
 Hestia document ledger. A personal or environment Hestia can later import the
 verified room history for backup, approval, selective presentation and
 delivery.

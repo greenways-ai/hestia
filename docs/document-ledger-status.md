@@ -2,9 +2,9 @@
 
 Implemented in this change:
 
-- canonical HCV1 document operation, batch, transformation, revision and receipt
+- canonical HCV0 document operation, batch, transformation, revision and receipt
   schemas;
-- independent GWDP1 Ed25519 signing and PostgreSQL verification;
+- independent GWDP0 Ed25519 signing and PostgreSQL verification;
 - signed contributor batches and environment transformation records;
 - Hara-ledger OT rules for text, structural operations and embedded artefacts;
 - two-stage PostgreSQL prepare/sign/commit admission;

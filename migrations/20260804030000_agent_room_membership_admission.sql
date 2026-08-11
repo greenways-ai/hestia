@@ -360,7 +360,7 @@ DECLARE
   v_payload bytea;
 BEGIN
   IF gw_ledger.cell_type_tag(p_root) <> 1 THEN
-    RAISE EXCEPTION 'HCV1 value is not a boolean';
+    RAISE EXCEPTION 'HCV0 value is not a boolean';
   END IF;
   SELECT payload INTO STRICT v_payload
     FROM gw_ledger."Cell" WHERE hash = p_root;
@@ -369,7 +369,7 @@ BEGIN
   ELSIF v_payload = decode('01', 'hex') THEN
     RETURN true;
   END IF;
-  RAISE EXCEPTION 'invalid HCV1 boolean transport';
+  RAISE EXCEPTION 'invalid HCV0 boolean transport';
 END;
 $$;
 
@@ -386,16 +386,16 @@ DECLARE
   v_index integer;
 BEGIN
   IF p_roots IS NULL THEN
-    RAISE EXCEPTION 'HCV1 vector roots are required';
+    RAISE EXCEPTION 'HCV0 vector roots are required';
   END IF;
   v_payload_text := 'S:' || v_count::text || ':';
   IF v_count > 0 THEN
     FOR v_index IN 1..v_count LOOP
       IF p_roots[v_index] IS NULL OR octet_length(p_roots[v_index]) <> 32 THEN
-        RAISE EXCEPTION 'invalid HCV1 vector child at position %', v_index - 1;
+        RAISE EXCEPTION 'invalid HCV0 vector child at position %', v_index - 1;
       END IF;
       IF NOT EXISTS (SELECT 1 FROM gw_ledger."Cell" WHERE hash = p_roots[v_index]) THEN
-        RAISE EXCEPTION 'missing HCV1 vector child at position %', v_index - 1;
+        RAISE EXCEPTION 'missing HCV0 vector child at position %', v_index - 1;
       END IF;
       v_payload_text := v_payload_text || encode(p_roots[v_index], 'hex');
     END LOOP;
@@ -422,7 +422,7 @@ DECLARE
   v_index integer;
 BEGIN
   IF p_values IS NULL THEN
-    RAISE EXCEPTION 'HCV1 vector values are required';
+    RAISE EXCEPTION 'HCV0 vector values are required';
   END IF;
   IF v_count > 0 THEN
     FOR v_index IN 1..v_count LOOP
@@ -645,7 +645,7 @@ BEGIN
     RAISE EXCEPTION 'Hestia admission receipt requires a 64-byte Ed25519 signature';
   END IF;
   v_signing_payload := convert_to(
-    'GWAR1:ledger/admission-receipt:' || encode(p_body_root, 'hex'),
+    'GWAR0:ledger/admission-receipt:' || encode(p_body_root, 'hex'),
     'UTF8'
   );
   IF NOT gw_ledger.signature_verify(
@@ -692,7 +692,7 @@ BEGIN
   IF p_room_policy_root IS NULL OR p_room_kernel_root IS NULL
      OR octet_length(p_room_policy_root) <> 32
      OR octet_length(p_room_kernel_root) <> 32 THEN
-    RAISE EXCEPTION 'room policy and kernel must be HCV1 roots';
+    RAISE EXCEPTION 'room policy and kernel must be HCV0 roots';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM gw_ledger."Cell" WHERE hash = p_room_policy_root)
      OR NOT EXISTS (SELECT 1 FROM gw_ledger."Cell" WHERE hash = p_room_kernel_root) THEN
@@ -807,7 +807,7 @@ BEGIN
     result_state_root := v_existing.result_state_root;
     admission_receipt_root := v_existing.admission_receipt_root;
     receipt_signing_payload := convert_to(
-      'GWAR1:ledger/admission-receipt:'
+      'GWAR0:ledger/admission-receipt:'
       || encode(v_existing.admission_receipt_root, 'hex'),
       'UTF8'
     );
@@ -994,7 +994,7 @@ BEGIN
   result_state_root := v_result_state_root;
   admission_receipt_root := v_admission_receipt_root;
   receipt_signing_payload := convert_to(
-    'GWAR1:ledger/admission-receipt:' || encode(v_admission_receipt_root, 'hex'),
+    'GWAR0:ledger/admission-receipt:' || encode(v_admission_receipt_root, 'hex'),
     'UTF8'
   );
   RETURN NEXT;
@@ -1287,7 +1287,7 @@ BEGIN
     result_room_state_root := v_existing.result_room_state_root;
     admission_receipt_root := v_existing.admission_receipt_root;
     receipt_signing_payload := convert_to(
-      'GWAR1:ledger/admission-receipt:'
+      'GWAR0:ledger/admission-receipt:'
       || encode(v_existing.admission_receipt_root, 'hex'),
       'UTF8'
     );
@@ -1370,7 +1370,7 @@ BEGIN
     RAISE EXCEPTION 'v0 room invitations must be single-use';
   END IF;
   IF gw_ledger.cell_type_tag(v_capability_commitment_root) <> 6 THEN
-    RAISE EXCEPTION 'room capability commitment must be an HCV1 blob';
+    RAISE EXCEPTION 'room capability commitment must be an HCV0 blob';
   END IF;
   SELECT payload INTO STRICT v_capability_payload
     FROM gw_ledger."Cell" WHERE hash = v_capability_commitment_root;
@@ -1529,7 +1529,7 @@ BEGIN
   result_room_state_root := v_result_room_state_root;
   admission_receipt_root := v_admission_receipt_root;
   receipt_signing_payload := convert_to(
-    'GWAR1:ledger/admission-receipt:' || encode(v_admission_receipt_root, 'hex'),
+    'GWAR0:ledger/admission-receipt:' || encode(v_admission_receipt_root, 'hex'),
     'UTF8'
   );
   RETURN NEXT;
@@ -1778,7 +1778,7 @@ BEGIN
     result_room_state_root := v_existing.result_room_state_root;
     admission_receipt_root := v_existing.admission_receipt_root;
     receipt_signing_payload := convert_to(
-      'GWAR1:ledger/admission-receipt:'
+      'GWAR0:ledger/admission-receipt:'
       || encode(v_existing.admission_receipt_root, 'hex'),
       'UTF8'
     );
@@ -1845,7 +1845,7 @@ BEGIN
      OR (SELECT octet_length(payload)
            FROM gw_ledger."Cell"
           WHERE hash = v_capability_proof_root) <> 32 THEN
-    RAISE EXCEPTION 'room admission proof commitment must be a SHA-256 HCV1 blob';
+    RAISE EXCEPTION 'room admission proof commitment must be a SHA-256 HCV0 blob';
   END IF;
 
   PERFORM pg_advisory_xact_lock(hashtextextended(v_room_id, 6));
@@ -2071,7 +2071,7 @@ BEGIN
   result_room_state_root := v_result_room_state_root;
   admission_receipt_root := v_admission_receipt_root;
   receipt_signing_payload := convert_to(
-    'GWAR1:ledger/admission-receipt:' || encode(v_admission_receipt_root, 'hex'),
+    'GWAR0:ledger/admission-receipt:' || encode(v_admission_receipt_root, 'hex'),
     'UTF8'
   );
   RETURN NEXT;

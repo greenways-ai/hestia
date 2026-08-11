@@ -26,7 +26,7 @@
          "profile" "delegation" operations)]
     [(test/check "frames domain-separated signing bytes"
                  (document/signing-payload "change-batch" "root")
-                 (str "GWDP1" \0 "change-batch" \0 "root"))
+                 (str "GWDP0" \0 "change-batch" \0 "root"))
      (test/check "stores operations in one batch without hiding replay boundaries"
                  [(get batch :operations)
                   (get replayed :document)

@@ -39,20 +39,20 @@ async function signedProfile(name) {
   return { record, delegation, rootKey, operationalKey };
 }
 
-test("canonical maps are ordered by complete HCV1 key bytes", async () => {
+test("canonical maps are ordered by complete HCV0 key bytes", async () => {
   const left = await encodeHcv1Value({ beta: 2, alpha: 1 });
   const right = await encodeHcv1Value({ alpha: 1, beta: 2 });
   assert.equal(left.root, right.root);
   assert.equal(left.cell.payload_hex, right.cell.payload_hex);
 });
 
-test("signs and verifies a native HCV1 profile with an HCP1 pack", async () => {
+test("signs and verifies a native HCV0 profile with an HCP0 pack", async () => {
   const profile = await signedProfile("Host Agent");
   const body = await verifyHcv1AgentRecord(profile.record, profile.rootKey.publicKey);
   assert.equal(body.name, "Host Agent");
   assert.match(profile.record.body_root, /^sha256:[0-9a-f]{64}$/);
   assert.match(profile.record.root, /^sha256:[0-9a-f]{64}$/);
-  assert.match(profile.record.hcp1_pack, /^HCP1:[1-9][0-9]*:/);
+  assert.match(profile.record.hcp1_pack, /^HCP0:[1-9][0-9]*:/);
   assert.ok(profile.record.hcv1_cells.some(({ type_tag }) => type_tag === 14));
   assert.ok(profile.record.hcv1_cells.some(({ type_tag }) => type_tag === 6));
 
@@ -64,7 +64,7 @@ test("signs and verifies a native HCV1 profile with an HCP1 pack", async () => {
   );
 });
 
-test("derives portable HCV1 key fingerprints and value roots", async () => {
+test("derives portable HCV0 key fingerprints and value roots", async () => {
   const key = await generateAgentKey();
   const fingerprint = await hcv1KeyFingerprint(key.publicJwk);
   const approval = await hcv1ValueRoot({
@@ -73,10 +73,10 @@ test("derives portable HCV1 key fingerprints and value roots", async () => {
   });
   assert.match(fingerprint, /^ed25519:[0-9a-f]{64}$/);
   assert.match(approval.root, /^sha256:[0-9a-f]{64}$/);
-  assert.match(approval.hcp1_pack, /^HCP1:/);
+  assert.match(approval.hcp1_pack, /^HCP0:/);
 });
 
-test("HCV1 acceptance binds the exact signed offer root", async () => {
+test("HCV0 acceptance binds the exact signed offer root", async () => {
   const host = await signedProfile("Host Agent");
   const guest = await signedProfile("External Agent");
   const offer = await signHcv1AgentRecord("negotiation/offer", {

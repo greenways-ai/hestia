@@ -1,4 +1,4 @@
-//! Versioned persistent encoding for validated VM programs.
+//! Alpha persistent encoding for validated VM programs.
 
 use std::rc::Rc;
 
@@ -13,8 +13,7 @@ use crate::core::Value;
 use crate::kernel::Position;
 use crate::lang::data::{Keyword, Metadata, MetadataValue, Symbol};
 
-const MAGIC_V1: &[u8; 4] = b"HBC1";
-const MAGIC_V2: &[u8; 4] = b"HBC2";
+const MAGIC: &[u8; 4] = b"HBC0";
 
 /// Encodes a program after validating it. Constants use the portable HTA
 /// value codec; unsupported runtime-only values are rejected explicitly.
@@ -35,7 +34,7 @@ pub fn encode_program(program: &Program) -> Result<Vec<u8>, String> {
         write_function(&mut payload, function)?;
     }
     let digest = Sha256::digest(&payload.bytes);
-    let mut output = MAGIC_V2.to_vec();
+    let mut output = MAGIC.to_vec();
     output.extend_from_slice(
         &u32::try_from(payload.bytes.len())
             .map_err(|_| "bytecode artifact is too large")?
@@ -48,13 +47,9 @@ pub fn encode_program(program: &Program) -> Result<Vec<u8>, String> {
 
 /// Decodes, authenticates, and validates a persistent VM program.
 pub fn decode_program(bytes: &[u8]) -> Result<Program, String> {
-    let version = if bytes.starts_with(MAGIC_V2) {
-        2
-    } else if bytes.starts_with(MAGIC_V1) {
-        1
-    } else {
+    if !bytes.starts_with(MAGIC) {
         return Err("bytecode artifact has invalid magic".into());
-    };
+    }
     if bytes.len() < 8 + 32 {
         return Err("bytecode artifact is truncated".into());
     }
@@ -73,7 +68,7 @@ pub fn decode_program(bytes: &[u8]) -> Result<Program, String> {
     let entry = reader.u16()?;
     let constants = reader.many(|reader| crate::hta::decode(reader.bytes()?))?;
     let var_metadata = reader.many(|reader| read_metadata(reader))?;
-    let functions = reader.many(|reader| read_function(reader, version))?;
+    let functions = reader.many(|reader| read_function(reader, 2))?;
     reader.finish()?;
     let program = Program {
         constants,
@@ -682,7 +677,7 @@ mod tests {
         let source = "(do (defn add-one [x] (+ x 1)) (add-one 41))";
         let program = compile_source(source).unwrap();
         let encoded = encode_program(&program).unwrap();
-        assert!(encoded.starts_with(b"HBC2"));
+        assert!(encoded.starts_with(b"HBC0"));
         let decoded = decode_program(&encoded).unwrap();
         assert_eq!(disassemble(&decoded), disassemble(&program));
         assert_eq!(

@@ -32,7 +32,7 @@ function request(kind, capability) {
     record: {
       root: `sha256:${ROOTS.record}`,
       kind,
-      hcp1_pack: "HCP1:1:C:fixture"
+      hcp1_pack: "HCP0:1:C:fixture"
     }
   };
   if (capability) value.capability = capability.toString("base64url");

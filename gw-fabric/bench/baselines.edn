@@ -1,4 +1,4 @@
-{:benchmark/format 1
+{:benchmark/format "0.0.0-alpha"
  :workload :agent-workroom
  :semantics
  {:sessions-per-room 4

@@ -1,10 +1,10 @@
 (ns hestia.controller
   (:require [std.foundation :refer :all]))
 
-(def controller-protocol "hestia.controller/1")
-(def intent-protocol "hestia.control-intent/1")
-(def approval-protocol "hestia.control-approval/1")
-(def evidence-protocol "hestia.control-evidence/1")
+(def controller-protocol "hestia.controller/0-alpha")
+(def intent-protocol "hestia.control-intent/0-alpha")
+(def approval-protocol "hestia.control-approval/0-alpha")
+(def evidence-protocol "hestia.control-evidence/0-alpha")
 
 (def port-services
   {:semantic "tahto.semantic"
@@ -44,11 +44,11 @@
 
 (defn signing-payload
   [kind root]
-  (str "HST1:" kind ":1:" root))
+  (str "HST0:" kind ":1:" root))
 
 (defn evidence-signing-payload
   [domain root signer key-id sequence]
-  (str "IGE1:" domain ":" root ":" signer ":" key-id ":" sequence))
+  (str "IGE0:" domain ":" root ":" signer ":" key-id ":" sequence))
 
 (defn proposal
   [intent root]
@@ -107,7 +107,7 @@
          (host-call
           (get port-services :signing)
           "sign"
-          [{:domain "hestia.control-approval/1"
+          [{:domain "hestia.control-approval/0-alpha"
             :key-id key-id
             :payload (signing-payload "approval" root)}])}))))
 
@@ -198,7 +198,7 @@
            (host-call
             (get port-services :signing)
             "sign"
-            [{:domain "hestia.control-evidence/1"
+            [{:domain "hestia.control-evidence/0-alpha"
               :key-id key-id
               :payload
               (evidence-signing-payload

@@ -591,7 +591,7 @@ fn package_manifest(project: &Project, contents: &[(PathBuf, Vec<u8>)]) -> Resul
         .collect::<Vec<_>>()
         .join(" ");
     Ok(format!(
-        "{{:harp/format 1\n :package {{:identity {} :version {}}}\n :files {{\n{}}} :resources {{\n{}}} :extensions [{}]\n :integrity {{:tree-sha256 \"sha256:{}\"}}}}\n",
+        "{{:harp/format \"0.0.0-alpha\"\n :package {{:identity {} :version {}}}\n :files {{\n{}}} :resources {{\n{}}} :extensions [{}]\n :integrity {{:tree-sha256 \"sha256:{}\"}}}}\n",
         edn_string(&project.id),
         edn_string(&project.version.to_string()),
         files,

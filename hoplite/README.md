@@ -165,7 +165,7 @@ hoplite serve status /path/to/project
 hoplite serve uninstall /path/to/project
 ```
 
-`hoplite serve build` emits `.hoplite/app.hal`, the HBC2 bytecode artifact
+`hoplite serve build` emits `.hoplite/app.hal`, the HBC0 bytecode artifact
 `.hoplite/app.hbc`, and a generated Nginx configuration. `server.edn` controls
 `:hoplite/listen` and `:hoplite/workers`; `routes.edn` maps route `:path` values
 to Hara `:handler` vars. `hoplite serve foreground` keeps the embedded host in

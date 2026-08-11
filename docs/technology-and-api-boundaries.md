@@ -21,8 +21,8 @@ Hestia should deliberately use two kinds of state.
 
 Ignatius stores canonical, signed and replayable facts:
 
-- HCV1 values and roots;
-- HCP1 packs;
+- HCV0 values and roots;
+- HCP0 packs;
 - accounts, controller keys and delegations understood by the chain;
 - operations, transactions, receipts, blocks, states and snapshots;
 - deterministic Hara execution and cost accounting;
@@ -205,7 +205,7 @@ Hestia owns:
 - transformations and conflicts;
 - revisions and document heads;
 - document approvals, provenance and deliveries; and
-- document-specific signing domains such as `GWDP1`.
+- document-specific signing domains such as `GWDP0`.
 
 The portable document policy remains HAL, but it is a Hestia package depending
 on Ignatius. It is not part of the generic chain client.
@@ -239,7 +239,7 @@ constructor:
 (def app
   (h/app
     {:id "example-office"
-     :chain (ignatius/network {:protocol "ignatius/1"})
+     :chain (ignatius/network {:protocol "ignatius/0-alpha"})
      :modules
      [(authority/module)
       (rooms/module)
@@ -403,7 +403,7 @@ the `postgres.core` capability:
 | `ignatius/head` | Current canonical head |
 | `ignatius/account-register` | Register an account/controller |
 | `ignatius/account-sequence` | Read the next accepted sequence |
-| `ignatius/pack-import` | Import a bounded HCP1 pack |
+| `ignatius/pack-import` | Import a bounded HCP0 pack |
 | `ignatius/submit` | Atomically verify, execute and commit one signed transaction |
 | `ignatius/transaction-receipt` | Read a transaction receipt |
 | `ignatius/block-receipt` | Read block commitment evidence |
@@ -483,8 +483,8 @@ extraction will be used.
 
 Before moving code, freeze fixtures for:
 
-- HCV1 bytes and roots;
-- HCP1 packs;
+- HCV0 bytes and roots;
+- HCP0 packs;
 - signing payloads;
 - accepted and rejected transactions;
 - receipts and block roots;
@@ -530,7 +530,7 @@ the copied generic migration from Hestia.
 Ignatius versions canonical behavior. A major Ignatius version is required for
 changes to:
 
-- HCV1 or HCP1 bytes;
+- HCV0 or HCP0 bytes;
 - signing domains or payload bytes;
 - transaction interpretation;
 - state, block or receipt commitments;

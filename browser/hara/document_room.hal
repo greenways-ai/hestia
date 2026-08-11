@@ -1,12 +1,12 @@
 ;; Hestia peer document room kernel. The browser owns WebRTC, cryptography and
-;; HCV1 projection; this module owns room lifecycle and adapts browser-shaped
+;; HCV0 projection; this module owns room lifecycle and adapts browser-shaped
 ;; operations to the canonical gw.ledger.document-ot policy.
 (ns hestia.document-room
   (:require [std.foundation :refer [assoc conj get merge nth]]
             [gw.ledger.document-ot :as document-ot]))
 
-(def protocol "hestia-document-room/1")
-(def awareness-protocol "hestia-document-awareness/1")
+(def protocol "hestia-document-room/0-alpha")
+(def awareness-protocol "hestia-document-awareness/0-alpha")
 (def max-batch-operations document-ot/max-batch-operations)
 
 (defn command

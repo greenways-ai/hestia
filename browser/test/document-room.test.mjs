@@ -7,7 +7,7 @@ import { transformBatch } from "../../protocol/document-ot.js";
 
 function documentAst(text = "Hello world") {
   return {
-    profile: "greenways.rich-text/2",
+    profile: "greenways.rich-text/0-alpha",
     id: "document:webrtc-test",
     revision: 0,
     children: [{

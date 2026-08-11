@@ -11,7 +11,7 @@ const bundle = Object.freeze({
   record: {
     type: "document/batch",
     root: `sha256:${"a".repeat(64)}`,
-    hcp1_pack: "HCP1:1:C:fixture"
+    hcp1_pack: "HCP0:1:C:fixture"
   },
   operations: [],
   baseAst: {},

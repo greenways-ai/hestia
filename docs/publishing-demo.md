@@ -120,7 +120,7 @@ recovery flow in Chromium and Firefox before deployment.
 
 The product preview stores non-extractable keys and records in browser IndexedDB.
 It is not yet a `gw_ledger` admission endpoint; roots become authoritative only
-after the next milestone adds canonical HCV1 mapping and signed receipts.
+after the next milestone adds canonical HCV0 mapping and signed receipts.
 
 ## 4. Test recovery on two devices
 

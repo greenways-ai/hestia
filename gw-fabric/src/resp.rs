@@ -258,7 +258,7 @@ fn fabric_operation(
                 }
                 "CALL" => {
                     let qualified = fabric_text(arguments, 1, "namespace/export")?;
-                    let args = fabric_bytes(arguments, 2, "HTA1 arguments")?;
+                    let args = fabric_bytes(arguments, 2, "HTA0 arguments")?;
                     Ok(vec![RespValue::Bulk(Some(service.invoke_module(
                         attached_space,
                         attached_session,

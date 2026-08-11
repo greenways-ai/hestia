@@ -38,7 +38,7 @@
                 :sql {:default (pg/time-us)}}])
 
 (defn.pg ^{:- [:bytea]} account-value-payload
-  "Builds the fixed HCV1 account-record payload from four committed roots."
+  "Builds the fixed HCV0 account-record payload from four committed roots."
   {:added "0.1"}
   [:bytea i-sequence-root
    :bytea i-environment-root

@@ -4,9 +4,9 @@ import {
   textEncoder
 } from "./encoding.js";
 
-export const HCV1_AGENT_PROTOCOL = "hestia-agent-hcv1/1";
-export const HCV1_CODEC_VERSION = 1;
-export const HCV1_RECORD_TYPE_TAG = 14;
+export const HCV0_AGENT_PROTOCOL = "hestia-agent-hcv1/0-alpha";
+export const HCV0_CODEC_VERSION = 1;
+export const HCV0_RECORD_TYPE_TAG = 14;
 
 const TYPE = Object.freeze({
   nil: 0,
@@ -173,7 +173,7 @@ async function digestHex(bytes) {
 }
 
 function envelopeBytes(typeTag, payload) {
-  return textEncoder.encode(`HCV1:${typeTag}:${payload.length}:${bytesToHex(payload)}`);
+  return textEncoder.encode(`HCV0:${typeTag}:${payload.length}:${bytesToHex(payload)}`);
 }
 
 function roleRef(position, role, childRoot) {
@@ -184,7 +184,7 @@ async function createCell(typeTag, payload, refs = []) {
   const envelope = envelopeBytes(typeTag, payload);
   return {
     root: await digestHex(envelope),
-    codec_version: HCV1_CODEC_VERSION,
+    codec_version: HCV0_CODEC_VERSION,
     type_tag: typeTag,
     payload_hex: bytesToHex(payload),
     refs,
@@ -205,7 +205,7 @@ function rootHex(value) {
     ? value
     : value?.hcv1?.root ?? value?.root ?? value?.body_root;
   const match = /^sha256:([0-9a-f]{64})$/.exec(String(root ?? ""));
-  if (!match) throw new Error("expected an HCV1 sha256 root reference");
+  if (!match) throw new Error("expected an HCV0 sha256 root reference");
   return match[1];
 }
 
@@ -286,7 +286,7 @@ export async function encodeHcv1Value(value) {
     cell = await createCell(TYPE.boolean, new Uint8Array([value ? 1 : 0]));
   } else if (typeof value === "number" || typeof value === "bigint") {
     if (typeof value === "number" && (!Number.isSafeInteger(value) || !Number.isFinite(value))) {
-      throw new Error("HCV1 agent records currently require safe integers");
+      throw new Error("HCV0 agent records currently require safe integers");
     }
     cell = await createCell(TYPE.integer, textEncoder.encode(String(value)));
   } else if (typeof value === "string") {
@@ -298,20 +298,20 @@ export async function encodeHcv1Value(value) {
   } else if (typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
     return encodeMap(value);
   } else {
-    throw new Error(`unsupported HCV1 value: ${Object.prototype.toString.call(value)}`);
+    throw new Error(`unsupported HCV0 value: ${Object.prototype.toString.call(value)}`);
   }
   return { root: cell.root, cell, cells: [cell], envelope: cell.envelope };
 }
 
 function recordPayload(kind, roots) {
   return textEncoder.encode(
-    `R:hestia-agent/1:${kind}:1:${roots.length}:${roots.join("")}`
+    `R:hestia-agent/0-alpha:${kind}:1:${roots.length}:${roots.join("")}`
   );
 }
 
 async function createRecordCell(kind, encodedFields) {
   const schema = AGENT_RECORD_SCHEMAS[kind];
-  if (!schema) throw new Error(`unknown HCV1 agent record kind: ${kind}`);
+  if (!schema) throw new Error(`unknown HCV0 agent record kind: ${kind}`);
   if (schema.length !== encodedFields.length) throw new Error(`invalid ${kind} field count`);
   const roots = encodedFields.map(({ root }) => root);
   const cell = await createCell(
@@ -329,7 +329,7 @@ async function createRecordCell(kind, encodedFields) {
 
 export async function encodeAgentRecordBody(kind, body) {
   const schema = AGENT_RECORD_SCHEMAS[kind];
-  if (!schema) throw new Error(`unknown HCV1 agent record kind: ${kind}`);
+  if (!schema) throw new Error(`unknown HCV0 agent record kind: ${kind}`);
   const fields = [];
   for (const [, property, mode] of schema) {
     const value = body?.[property] ?? null;
@@ -343,7 +343,7 @@ export async function encodeAgentRecordBody(kind, body) {
 export function agentSigningBytes(kind, bodyRoot) {
   const root = /^sha256:/.test(bodyRoot) ? rootHex(bodyRoot) : bodyRoot;
   if (!/^[0-9a-f]{64}$/.test(root)) throw new Error("invalid agent body root");
-  return textEncoder.encode(`GWAR1:${kind}:${root}`);
+  return textEncoder.encode(`GWAR0:${kind}:${root}`);
 }
 
 function serializableCell(cell) {
@@ -358,7 +358,7 @@ function serializableCell(cell) {
 
 export function hcp1Pack(cells) {
   const ordered = mergeCells(cells).sort((left, right) => left.root.localeCompare(right.root));
-  return `HCP1:${ordered.length}:` + ordered.map((cell) => {
+  return `HCP0:${ordered.length}:` + ordered.map((cell) => {
     const refs = [...cell.refs].sort((left, right) =>
       left.position - right.position || left.role.localeCompare(right.role));
     return `C:${cell.root}:${cell.codec_version}:${cell.type_tag}:${cell.payload_hex}:${refs.length}:`
@@ -388,7 +388,7 @@ export async function signHcv1AgentRecord(kind, body, key) {
   ]);
   const cells = mergeCells(bodyPlan.cells, signerKey.cells, signature.cells, signed.cells);
   return {
-    protocol: HCV1_AGENT_PROTOCOL,
+    protocol: HCV0_AGENT_PROTOCOL,
     version: 1,
     type: kind,
     signer_key: key.id,
@@ -403,28 +403,28 @@ export async function signHcv1AgentRecord(kind, body, key) {
 }
 
 export async function verifyHcv1AgentRecord(record, publicKeyOrJwk) {
-  if (!record || record.protocol !== HCV1_AGENT_PROTOCOL || record.version !== 1) {
-    throw new Error("invalid HCV1 agent record protocol");
+  if (!record || record.protocol !== HCV0_AGENT_PROTOCOL || record.version !== 1) {
+    throw new Error("invalid HCV0 agent record protocol");
   }
   const bodyPlan = await encodeAgentRecordBody(record.type, record.body);
-  if (record.body_root !== `sha256:${bodyPlan.root}`) throw new Error("HCV1 agent body root mismatch");
+  if (record.body_root !== `sha256:${bodyPlan.root}`) throw new Error("HCV0 agent body root mismatch");
   const signatureBytes = base64UrlToBytes(record.signature ?? "");
   const publicKey = publicKeyOrJwk?.type === "public"
     ? publicKeyOrJwk
     : await crypto.subtle.importKey("jwk", publicKeyOrJwk, { name: "Ed25519" }, true, ["verify"]);
   const publicBytes = await rawEd25519PublicKey(publicKey);
   const expectedKeyId = await hcv1KeyFingerprint(publicBytes);
-  if (record.signer_key !== expectedKeyId) throw new Error("HCV1 signer key identifier mismatch");
+  if (record.signer_key !== expectedKeyId) throw new Error("HCV0 signer key identifier mismatch");
   const valid = await crypto.subtle.verify(
     { name: "Ed25519" },
     publicKey,
     signatureBytes,
     agentSigningBytes(record.type, bodyPlan.root)
   );
-  if (!valid) throw new Error("invalid HCV1 agent signature");
+  if (!valid) throw new Error("invalid HCV0 agent signature");
   const signerKey = await encodeHcv1Value(publicBytes);
   if (record.signer_key_root && record.signer_key_root !== `sha256:${signerKey.root}`) {
-    throw new Error("HCV1 signer key root mismatch");
+    throw new Error("HCV0 signer key root mismatch");
   }
   const signature = await encodeHcv1Value(signatureBytes);
   const signed = await createRecordCell("ledger/signed-record", [
@@ -432,10 +432,10 @@ export async function verifyHcv1AgentRecord(record, publicKeyOrJwk) {
     signerKey,
     signature
   ]);
-  if (record.root !== `sha256:${signed.root}`) throw new Error("HCV1 signed record root mismatch");
+  if (record.root !== `sha256:${signed.root}`) throw new Error("HCV0 signed record root mismatch");
   const cells = mergeCells(bodyPlan.cells, signerKey.cells, signature.cells, signed.cells);
   if (record.hcp1_pack && record.hcp1_pack !== hcp1Pack(cells)) {
-    throw new Error("HCP1 agent record pack mismatch");
+    throw new Error("HCP0 agent record pack mismatch");
   }
   return record.body;
 }
@@ -464,10 +464,10 @@ export async function verifyExactHcv1Acceptance({
   await verifyHcv1AgentRecord(offerRecord, offerPublicKey);
   const acceptance = await verifyHcv1AgentRecord(acceptanceRecord, acceptancePublicKey);
   if (acceptanceRecord.type !== "negotiation/acceptance") {
-    throw new Error("expected an HCV1 negotiation acceptance");
+    throw new Error("expected an HCV0 negotiation acceptance");
   }
   if (acceptance.offer_root !== offerRecord.root) {
-    throw new Error("HCV1 acceptance does not bind the exact offer root");
+    throw new Error("HCV0 acceptance does not bind the exact offer root");
   }
   return acceptance;
 }

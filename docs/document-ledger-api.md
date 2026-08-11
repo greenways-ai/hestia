@@ -11,13 +11,13 @@ Content-Type: application/json
 {
   "batch": {
     "record": {
-      "protocol": "greenways-document-hcv1/1",
+      "protocol": "greenways-document-hcv1/0-alpha",
       "version": 1,
       "type": "document/batch",
       "root": "sha256:…",
       "body_root": "sha256:…",
       "signature": "…",
-      "hcp1_pack": "HCP1:…"
+      "hcp1_pack": "HCP0:…"
     },
     "documentId": "019…",
     "batchId": "019…",
@@ -30,7 +30,7 @@ Content-Type: application/json
 ```
 
 The JSON AST and operations are replay projections. The gateway reconstructs
-their HCV1 roots and rejects the request before OT if they do not match the
+their HCV0 roots and rejects the request before OT if they do not match the
 signed batch record.
 
 Accepted response:
@@ -38,7 +38,7 @@ Accepted response:
 ```json
 {
   "ok": true,
-  "protocol": "hestia-document-http/1",
+  "protocol": "hestia-document-http/0-alpha",
   "document_id": "019…",
   "outcome": "accepted",
   "sequence": "12",

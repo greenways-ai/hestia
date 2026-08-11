@@ -17,7 +17,7 @@ function ed25519Pem() {
 test("loads an Ed25519 PEM and signs exact receipt bytes", () => {
   const generated = ed25519Pem();
   const signer = createEnvironmentSigner(generated.privateKey);
-  const payload = Buffer.from("GWAR1:ledger/admission-receipt:" + "a".repeat(64));
+  const payload = Buffer.from("GWAR0:ledger/admission-receipt:" + "a".repeat(64));
   const signature = signer.sign(payload);
 
   assert.equal(signer.publicKeyBytes.length, 32);

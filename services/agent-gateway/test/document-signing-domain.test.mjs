@@ -11,6 +11,6 @@ test("document records cannot be substituted into the agent-room signing domain"
   const sql = await migration();
   assert.match(sql, /R:greenways-document\/1:document\/signed-record/);
   assert.match(sql, /hestia\.document_signing_payload\(p_kind, body_root\)/);
-  assert.match(sql, /invalid GWDP1 document signature/);
-  assert.doesNotMatch(sql, /convert_to\('GWAR1:' \|\| p_kind/);
+  assert.match(sql, /invalid GWDP0 document signature/);
+  assert.doesNotMatch(sql, /convert_to\('GWAR0:' \|\| p_kind/);
 });

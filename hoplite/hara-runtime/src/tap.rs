@@ -209,7 +209,7 @@ pub fn initialize(
     empty_directory(registry, "registry")?;
     empty_directory(identity, "identity")?;
     let policy = format!(
-        "{{:identity/format 1\n :identity/root-key \"{}\"\n :publisher-keys {{}}}}\n",
+        "{{:identity/format \"0.0.0-alpha\"\n :identity/root-key \"{}\"\n :publisher-keys {{}}}}\n",
         hex(&root_key)
     );
     let (_, signature) = sign(policy.as_bytes())?;
@@ -393,7 +393,7 @@ pub fn canonical_intent(
     tap: &str,
     identity_revision: &str,
 ) -> String {
-    format!("{{:intent/format 1 :tap \"{tap}\" :coordinate \"{coordinate}\" :version \"{version}\" :repository \"{repository}\" :tag \"{tag}\" :commit \"{commit}\" :archive-sha256 \"sha256:{archive_sha256}\" :identity-revision \"{identity_revision}\"}}\n")
+    format!("{{:intent/format \"0.0.0-alpha\" :tap \"{tap}\" :coordinate \"{coordinate}\" :version \"{version}\" :repository \"{repository}\" :tag \"{tag}\" :commit \"{commit}\" :archive-sha256 \"sha256:{archive_sha256}\" :identity-revision \"{identity_revision}\"}}\n")
 }
 
 pub fn canonical_recipe_intent(
@@ -406,7 +406,7 @@ pub fn canonical_recipe_intent(
     tap: &str,
     identity_revision: &str,
 ) -> String {
-    format!("{{:intent/format 2 :tap \"{tap}\" :coordinate \"{coordinate}\" :version \"{version}\" :repository \"{repository}\" :tag \"{tag}\" :commit \"{commit}\" :recipe-sha256 \"sha256:{recipe_sha256}\" :identity-revision \"{identity_revision}\"}}\n")
+    format!("{{:intent/format \"0.0.0-alpha\" :tap \"{tap}\" :coordinate \"{coordinate}\" :version \"{version}\" :repository \"{repository}\" :tag \"{tag}\" :commit \"{commit}\" :recipe-sha256 \"sha256:{recipe_sha256}\" :identity-revision \"{identity_revision}\"}}\n")
 }
 
 pub fn git(
@@ -453,7 +453,7 @@ pub fn clone_first(mirrors: &[String], destination: &Path, label: &str) -> Resul
 fn save(root: &Path, taps: &BTreeMap<String, Tap>) -> Result<(), String> {
     fs::create_dir_all(root)
         .map_err(|error| format!("cannot create {}: {error}", root.display()))?;
-    let mut text = String::from("{:tap-store/format 1\n :taps {\n");
+    let mut text = String::from("{:tap-store/format \"0.0.0-alpha\"\n :taps {\n");
     for (name, tap) in taps {
         let trust = match tap.trust {
             TrustMode::SignedRoot => "signed-root",
@@ -490,7 +490,7 @@ fn identity_readme(name: &str) -> String {
     format!("# {name} identity policy\n\nThis repository contains public keys and signed policy only. Do not add private keys.\n\n`identity.edn` is signed by the root key declared in the document. Add publisher grants under `:publisher-keys`, then re-sign the exact file through the external identity signer.\n")
 }
 fn registry_document(name: &str, identity: &Path, root_key: &[u8]) -> String {
-    format!("{{:registry/format 1\n :tap \"{name}\"\n :identity {{:repository \"{}\" :root-key-sha256 \"sha256:{}\"}}\n :packages {{}}}}\n", identity.display(), sha256_hex(root_key))
+    format!("{{:registry/format \"0.0.0-alpha\"\n :tap \"{name}\"\n :identity {{:repository \"{}\" :root-key-sha256 \"sha256:{}\"}}\n :packages {{}}}}\n", identity.display(), sha256_hex(root_key))
 }
 fn registry_readme(name: &str) -> String {
     format!("# {name} package registry\n\nPublication requests are submitted below `requests/` as a canonical publisher intent plus detached signature. Protect `main` and require CI review. CI must verify the paired identity policy, validate the signed source tag, rebuild the HARP archive, and create its own registry attestation before merging a release record.\n")

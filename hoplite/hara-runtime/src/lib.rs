@@ -1556,7 +1556,7 @@ impl Runtime {
     }
 
     /// Invokes an installed WASM extension without routing the call through
-    /// source text. Service hosts use this binary-safe boundary for HTA1
+    /// source text. Service hosts use this binary-safe boundary for HTA0
     /// arguments and results.
     pub fn invoke_wasm_extension(
         &mut self,

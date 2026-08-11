@@ -13,8 +13,8 @@ test("recovery transport keeps its historical protocol defaults", () => {
     record: {},
     endpoint: new URL("wss://hestia.example/signal")
   });
-  assert.equal(peer.signalProtocol, "hestia-signal/1");
-  assert.equal(peer.dataProtocol, "hestia-ceremony/1");
+  assert.equal(peer.signalProtocol, "hestia-signal/0-alpha");
+  assert.equal(peer.dataProtocol, "hestia-ceremony/0-alpha");
   assert.equal(peer.channelLabel, "hestia-ceremony-v1");
   assert.equal(peer.awarenessProtocol, null);
 });
@@ -24,14 +24,14 @@ test("document rooms select canonical and awareness channels without changing si
     invite,
     record: {},
     endpoint: new URL("wss://hestia.example/signal"),
-    dataProtocol: "hestia-document-room/1",
+    dataProtocol: "hestia-document-room/0-alpha",
     channelLabel: "hestia-document-v1",
-    awarenessProtocol: "hestia-document-awareness/1",
+    awarenessProtocol: "hestia-document-awareness/0-alpha",
     awarenessChannelLabel: "hestia-document-awareness-v1"
   });
-  assert.equal(peer.signalProtocol, "hestia-signal/1");
-  assert.equal(peer.dataProtocol, "hestia-document-room/1");
+  assert.equal(peer.signalProtocol, "hestia-signal/0-alpha");
+  assert.equal(peer.dataProtocol, "hestia-document-room/0-alpha");
   assert.equal(peer.channelLabel, "hestia-document-v1");
-  assert.equal(peer.awarenessProtocol, "hestia-document-awareness/1");
+  assert.equal(peer.awarenessProtocol, "hestia-document-awareness/0-alpha");
   assert.equal(peer.awarenessChannelLabel, "hestia-document-awareness-v1");
 });

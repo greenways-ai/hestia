@@ -93,7 +93,7 @@ async function ledgerSession(page, name) {
   }, { sessionName: name });
 }
 
-test("portable HAL frames native HCV1 agent records", async ({ page }) => {
+test("portable HAL frames native HCV0 agent records", async ({ page }) => {
   await page.goto(`${origin}/runtime/`);
   await ledgerSession(page, "LEDGER-AGENT-ROOM");
   const result = await page.evaluate(async () => {
@@ -113,8 +113,8 @@ test("portable HAL frames native HCV1 agent records", async ({ page }) => {
 
   expect(result.recordTypeTag).toBe(14);
   expect(result.payload).toMatch(/^R:hestia-agent\/1:profile\/version:1:8:/);
-  expect(result.payload).toHaveLength("R:hestia-agent/1:profile/version:1:8:".length + 8 * 64);
-  expect(result.signing).toBe(`GWAR1:profile/version:${"a".repeat(64)}`);
+  expect(result.payload).toHaveLength("R:hestia-agent/0-alpha:profile/version:1:8:".length + 8 * 64);
+  expect(result.signing).toBe(`GWAR0:profile/version:${"a".repeat(64)}`);
   expect(result.fieldCount).toBe(5);
 });
 

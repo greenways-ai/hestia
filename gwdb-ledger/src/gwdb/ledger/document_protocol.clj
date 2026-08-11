@@ -151,7 +151,7 @@
 
 (defn.pg ^{:- [:bytea] :%% :sql :props [:immutable :parallel-safe]}
   document-protocol-signing-payload
-  "GWDP1 NUL type NUL root; JSON projections never participate in signing."
+  "GWDP0 NUL type NUL root; JSON projections never participate in signing."
   {:added "0.7"}
   [:text i-record-type :bytea i-body-root]
   (|| (pg/decode "475744503100" "hex")

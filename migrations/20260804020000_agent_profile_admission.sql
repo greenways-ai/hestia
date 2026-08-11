@@ -197,7 +197,7 @@ DECLARE
   v_payload bytea;
 BEGIN
   IF gw_ledger.cell_type_tag(p_root) <> 5 THEN
-    RAISE EXCEPTION 'HCV1 value is not a string';
+    RAISE EXCEPTION 'HCV0 value is not a string';
   END IF;
   SELECT payload INTO STRICT v_payload FROM gw_ledger."Cell" WHERE hash = p_root;
   RETURN convert_from(v_payload, 'UTF8');
@@ -214,12 +214,12 @@ DECLARE
   v_text text;
 BEGIN
   IF gw_ledger.cell_type_tag(p_root) <> 2 THEN
-    RAISE EXCEPTION 'HCV1 value is not an integer';
+    RAISE EXCEPTION 'HCV0 value is not an integer';
   END IF;
   SELECT convert_from(payload, 'UTF8') INTO STRICT v_text
     FROM gw_ledger."Cell" WHERE hash = p_root;
   IF v_text !~ '^-?(0|[1-9][0-9]*)$' THEN
-    RAISE EXCEPTION 'invalid HCV1 integer transport';
+    RAISE EXCEPTION 'invalid HCV0 integer transport';
   END IF;
   RETURN v_text::bigint;
 END;
@@ -240,11 +240,11 @@ DECLARE
   v_found bytea;
 BEGIN
   IF gw_ledger.cell_type_tag(p_map_root) <> 11 THEN
-    RAISE EXCEPTION 'HCV1 value is not a map';
+    RAISE EXCEPTION 'HCV0 value is not a map';
   END IF;
   v_ref_count := jsonb_array_length(gw_ledger.cell_ref_entries(p_map_root));
   IF mod(v_ref_count, 2) <> 0 THEN
-    RAISE EXCEPTION 'HCV1 map has an invalid reference count';
+    RAISE EXCEPTION 'HCV0 map has an invalid reference count';
   END IF;
   v_pair_count := v_ref_count / 2;
   IF v_pair_count > 0 THEN
@@ -253,14 +253,14 @@ BEGIN
       v_value_root := gw_ledger.cell_ref_child(p_map_root, v_position, 'value');
       IF hestia.hcv1_text(v_key_root) = p_key THEN
         IF v_found IS NOT NULL THEN
-          RAISE EXCEPTION 'HCV1 map contains duplicate key: %', p_key;
+          RAISE EXCEPTION 'HCV0 map contains duplicate key: %', p_key;
         END IF;
         v_found := v_value_root;
       END IF;
     END LOOP;
   END IF;
   IF v_found IS NULL THEN
-    RAISE EXCEPTION 'HCV1 map is missing key: %', p_key;
+    RAISE EXCEPTION 'HCV0 map is missing key: %', p_key;
   END IF;
   RETURN v_found;
 END;
@@ -278,7 +278,7 @@ DECLARE
   v_values text[] := ARRAY[]::text[];
 BEGIN
   IF gw_ledger.cell_type_tag(p_vector_root) <> 10 THEN
-    RAISE EXCEPTION 'HCV1 value is not a vector';
+    RAISE EXCEPTION 'HCV0 value is not a vector';
   END IF;
   v_count := jsonb_array_length(gw_ledger.cell_ref_entries(p_vector_root));
   IF v_count > 0 THEN
@@ -387,7 +387,7 @@ DECLARE
   v_signature bytea;
 BEGIN
   IF gw_ledger.cell_type_tag(p_signed_record_root) <> 14 THEN
-    RAISE EXCEPTION 'submitted root is not an HCV1 signed record';
+    RAISE EXCEPTION 'submitted root is not an HCV0 signed record';
   END IF;
   IF jsonb_array_length(gw_ledger.cell_ref_entries(p_signed_record_root)) <> 3 THEN
     RAISE EXCEPTION 'signed record must contain exactly three references';
@@ -395,7 +395,7 @@ BEGIN
   body_root := gw_ledger.cell_ref_child(p_signed_record_root, 0, 'body');
   signer_key_root := gw_ledger.cell_ref_child(p_signed_record_root, 1, 'signer-key');
   signature_root := gw_ledger.cell_ref_child(p_signed_record_root, 2, 'signature');
-  v_expected := 'R:hestia-agent/1:ledger/signed-record:1:3:'
+  v_expected := 'R:hestia-agent/0-alpha:ledger/signed-record:1:3:'
                 || encode(body_root, 'hex')
                 || encode(signer_key_root, 'hex')
                 || encode(signature_root, 'hex');
@@ -407,7 +407,7 @@ BEGIN
   PERFORM hestia.agent_record_validate_body(p_record_kind, body_root);
   IF gw_ledger.cell_type_tag(signer_key_root) <> 6
      OR gw_ledger.cell_type_tag(signature_root) <> 6 THEN
-    RAISE EXCEPTION 'signed record key and signature must be HCV1 blob cells';
+    RAISE EXCEPTION 'signed record key and signature must be HCV0 blob cells';
   END IF;
   SELECT payload INTO STRICT v_public_key
     FROM gw_ledger."Cell" WHERE hash = signer_key_root;
@@ -418,10 +418,10 @@ BEGIN
   END IF;
   IF NOT gw_ledger.signature_verify(
     v_signature,
-    convert_to('GWAR1:' || p_record_kind || ':' || encode(body_root, 'hex'), 'UTF8'),
+    convert_to('GWAR0:' || p_record_kind || ':' || encode(body_root, 'hex'), 'UTF8'),
     v_public_key
   ) THEN
-    RAISE EXCEPTION 'invalid GWAR1 agent record signature';
+    RAISE EXCEPTION 'invalid GWAR0 agent record signature';
   END IF;
 END;
 $$;
@@ -448,7 +448,7 @@ BEGIN
   IF p_profile_policy_root IS NULL OR p_profile_kernel_root IS NULL
      OR octet_length(p_profile_policy_root) <> 32
      OR octet_length(p_profile_kernel_root) <> 32 THEN
-    RAISE EXCEPTION 'profile policy and kernel must be HCV1 roots';
+    RAISE EXCEPTION 'profile policy and kernel must be HCV0 roots';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM gw_ledger."Cell" WHERE hash = p_profile_policy_root)
      OR NOT EXISTS (SELECT 1 FROM gw_ledger."Cell" WHERE hash = p_profile_kernel_root) THEN
@@ -549,7 +549,7 @@ BEGIN
     result_state_root := v_existing.result_state_root;
     admission_receipt_root := v_existing.admission_receipt_root;
     receipt_signing_payload := convert_to(
-      'GWAR1:ledger/admission-receipt:'
+      'GWAR0:ledger/admission-receipt:'
       || encode(v_existing.admission_receipt_root, 'hex'),
       'UTF8'
     );
@@ -803,7 +803,7 @@ BEGIN
   result_state_root := v_result_state_root;
   admission_receipt_root := v_admission_receipt_root;
   receipt_signing_payload := convert_to(
-    'GWAR1:ledger/admission-receipt:' || encode(v_admission_receipt_root, 'hex'),
+    'GWAR0:ledger/admission-receipt:' || encode(v_admission_receipt_root, 'hex'),
     'UTF8'
   );
   RETURN NEXT;
@@ -856,7 +856,7 @@ BEGIN
     RAISE EXCEPTION 'Hestia admission receipt requires a 64-byte Ed25519 signature';
   END IF;
   v_signing_payload := convert_to(
-    'GWAR1:ledger/admission-receipt:'
+    'GWAR0:ledger/admission-receipt:'
     || encode(v_row.admission_receipt_root, 'hex'),
     'UTF8'
   );
@@ -1053,7 +1053,7 @@ GRANT EXECUTE ON FUNCTION hestia.agent_profile_admit_prepare(text, bytea) TO hes
 GRANT EXECUTE ON FUNCTION hestia.agent_profile_admit_commit(text, bytea, bytea) TO hestia_app;
 
 COMMENT ON TABLE hestia.agent_profile IS
-  'Current projection of HCV1 agent profile state; authoritative history remains in agent_profile_version and signed admission receipts.';
+  'Current projection of HCV0 agent profile state; authoritative history remains in agent_profile_version and signed admission receipts.';
 COMMENT ON FUNCTION hestia.agent_profile_admit_prepare(text, bytea) IS
   'Decodes a verified profile and root-signed delegation, enforces key binding and sequence continuity, then returns exact environment signing bytes for the admission receipt.';
 COMMENT ON FUNCTION hestia.agent_profile_admit_commit(text, bytea, bytea) IS

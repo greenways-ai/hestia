@@ -8,7 +8,7 @@ import {
 } from "../src/protocol.mjs";
 
 const root = `sha256:${"a".repeat(64)}`;
-const pack = "HCP1:1:C:fixture";
+const pack = "HCP0:1:C:fixture";
 
 function request(kind = "profile/version", extra = {}) {
   return {
@@ -76,10 +76,10 @@ test("rejects non-canonical roots, packs, fields, and kinds", () => {
     () => normalizeAdmissionRequest(request("negotiation/offer")),
     /unsupported admitted record kind/
   );
-  assert.throws(() => parseHcp1Pack("HCP1:0:"), /cell count/);
+  assert.throws(() => parseHcp1Pack("HCP0:0:"), /cell count/);
   assert.throws(() => parseHcp1Pack("not-a-pack"), /invalid header/);
   assert.throws(
-    () => parseHcp1Pack(`HCP1:129:${"x".repeat(20)}`),
+    () => parseHcp1Pack(`HCP0:129:${"x".repeat(20)}`),
     /cell count/
   );
 });

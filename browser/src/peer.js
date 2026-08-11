@@ -22,15 +22,15 @@ function signalUrl() {
  * CeremonyPeer keeps its historical name and defaults so recovery callers do
  * not change. Document rooms opt into a different data protocol and channel
  * label, plus an optional lossy awareness channel. Signalling stays on the
- * blind relay's hestia-signal/1 ABI.
+ * blind relay's hestia-signal/0-alpha ABI.
  */
 export class CeremonyPeer extends EventTarget {
   constructor({
     invite,
     record,
     endpoint = signalUrl(),
-    signalProtocol = "hestia-signal/1",
-    dataProtocol = "hestia-ceremony/1",
+    signalProtocol = "hestia-signal/0-alpha",
+    dataProtocol = "hestia-ceremony/0-alpha",
     channelLabel = "hestia-ceremony-v1",
     awarenessProtocol = null,
     awarenessChannelLabel = null

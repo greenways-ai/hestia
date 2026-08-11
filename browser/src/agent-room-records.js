@@ -38,7 +38,7 @@ export function mergeHcv1Cells(...values) {
     for (const cell of companionCells(value)) {
       const previous = cells.get(cell.root);
       if (previous && JSON.stringify(previous) !== JSON.stringify(cell)) {
-        throw new Error(`conflicting HCV1 cell for root ${cell.root}`);
+        throw new Error(`conflicting HCV0 cell for root ${cell.root}`);
       }
       cells.set(cell.root, cell);
     }
@@ -48,7 +48,7 @@ export function mergeHcv1Cells(...values) {
 
 export function agentAdmissionBundle(record, ...companions) {
   if (!record?.root || !record?.hcp1_pack || !record?.hcv1_cells) {
-    throw new Error("a signed HCV1 agent record is required");
+    throw new Error("a signed HCV0 agent record is required");
   }
   const hcv1Cells = mergeHcv1Cells(record, ...companions);
   return Object.freeze({
@@ -198,7 +198,7 @@ export async function createRoomVersion({
 export async function verifyRoomVersion({ roomRecord, signerPublicKey }) {
   const body = await verifyHcv1AgentRecord(roomRecord, signerPublicKey);
   if (roomRecord.type !== "room/version") {
-    throw new Error("expected an HCV1 room version");
+    throw new Error("expected an HCV0 room version");
   }
   if (body.sequence === 1 && body.previous_room_root !== null) {
     throw new Error("room genesis cannot have a predecessor");

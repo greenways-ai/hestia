@@ -101,7 +101,7 @@ test("portable HAL and PostgreSQL share room projection field order", async () =
   }
 });
 
-test("browser room bundles include companion HCV1 cells in deterministic HCP1", async () => {
+test("browser room bundles include companion HCV0 cells in deterministic HCP0", async () => {
   const { roomRecords } = await sources();
   assert.match(roomRecords, /export function agentAdmissionBundle/);
   assert.match(roomRecords, /hcp1Pack\(hcv1Cells\)/);

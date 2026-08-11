@@ -1,6 +1,6 @@
 import { bytesToBase64Url } from "./encoding.js";
 
-export const AGENT_HTTP_PROTOCOL = "hestia-agent-http/1";
+export const AGENT_HTTP_PROTOCOL = "hestia-agent-http/0-alpha";
 
 export class HestiaAgentGatewayError extends Error {
   constructor(message, { status, code, response } = {}) {
@@ -14,7 +14,7 @@ export class HestiaAgentGatewayError extends Error {
 
 function admissionRecord(record) {
   if (!record?.root || !record?.type || !record?.hcp1_pack) {
-    throw new Error("a signed HCV1 record with an HCP1 pack is required");
+    throw new Error("a signed HCV0 record with an HCP0 pack is required");
   }
   return {
     root: record.root,

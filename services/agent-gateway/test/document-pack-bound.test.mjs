@@ -9,10 +9,10 @@ import {
   createDocumentBatchBundle,
   createDocumentTransformationBundle
 } from "../../../browser/src/document-records.js";
-import { DOCUMENT_HCP1_MAX_CELLS } from "../src/document-ledger-service.mjs";
+import { DOCUMENT_HCP0_MAX_CELLS } from "../src/document-ledger-service.mjs";
 
 function packCellCount(pack) {
-  return Number(/^HCP1:([0-9]+):/.exec(pack)?.[1]);
+  return Number(/^HCP0:([0-9]+):/.exec(pack)?.[1]);
 }
 
 async function signerAdapter(key) {
@@ -40,7 +40,7 @@ test("production-shaped batch and transformation packs remain bounded", async ()
     validUntil: "2099-01-01T00:00:00.000Z"
   });
   const baseAst = {
-    profile: "greenways.rich-text/2",
+    profile: "greenways.rich-text/0-alpha",
     id: "document:pack-bound",
     revision: 0,
     children: [{
@@ -89,7 +89,7 @@ test("production-shaped batch and transformation packs remain bounded", async ()
   const packs = [batch.record.hcp1_pack, transformation.record.hcp1_pack];
   const counts = packs.map(packCellCount);
   assert.ok(counts.every((count) => Number.isSafeInteger(count) && count > 0));
-  assert.ok(counts.every((count) => count <= DOCUMENT_HCP1_MAX_CELLS));
+  assert.ok(counts.every((count) => count <= DOCUMENT_HCP0_MAX_CELLS));
   assert.ok(packs.every((pack) => Buffer.byteLength(pack, "utf8") <= 1_000_000));
   assert.ok(counts[1] >= counts[0], "transformation should retain the batch reference graph");
 });
@@ -99,7 +99,7 @@ test("browser and PostgreSQL use the same 512-cell, 1 MB document bound", async 
     new URL("../../../migrations/20260804053000_document_pack_bound.sql", import.meta.url),
     "utf8"
   );
-  assert.equal(DOCUMENT_HCP1_MAX_CELLS, 512);
+  assert.equal(DOCUMENT_HCP0_MAX_CELLS, 512);
   assert.match(migration, /p_cell_count > 512/);
   assert.match(migration, /octet_length\(p_pack\) > 1000000/);
   assert.match(migration, /batches remain limited to 64 operations/i);

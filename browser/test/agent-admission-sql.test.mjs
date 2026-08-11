@@ -19,10 +19,10 @@ async function sources() {
   return { sql, portableHal, browserHcv1 };
 }
 
-test("database verification imports HCP1 and verifies exact GWAR1 Ed25519 bytes", async () => {
+test("database verification imports HCP0 and verifies exact GWAR0 Ed25519 bytes", async () => {
   const { sql } = await sources();
   assert.match(sql, /snapshot_pack_import\(p_pack, p_cell_count\)/);
-  assert.match(sql, /GWAR1:' \|\| p_record_kind \|\| ':' \|\| encode\(v_body_root, 'hex'\)/);
+  assert.match(sql, /GWAR0:' \|\| p_record_kind \|\| ':' \|\| encode\(v_body_root, 'hex'\)/);
   assert.match(sql, /gw_ledger\.signature_verify\(/);
   assert.match(sql, /octet_length\(v_signer_public_key\) <> 32/);
   assert.match(sql, /octet_length\(v_signature\) <> 64/);
@@ -52,7 +52,7 @@ test("environment receipt signing is two-stage and cannot accept an arbitrary ke
   );
 });
 
-test("portable HAL, browser HCV1, and SQL share verification receipt roles", async () => {
+test("portable HAL, browser HCV0, and SQL share verification receipt roles", async () => {
   const { sql, portableHal, browserHcv1 } = await sources();
   const roles = [
     "record",

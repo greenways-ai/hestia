@@ -13,8 +13,8 @@ import {
   createDocumentTransformationBundle
 } from "../../../browser/src/document-records.js";
 
-export const DOCUMENT_HTTP_PROTOCOL = "hestia-document-http/1";
-export const DOCUMENT_HCP1_MAX_CELLS = 512;
+export const DOCUMENT_HTTP_PROTOCOL = "hestia-document-http/0-alpha";
+export const DOCUMENT_HCP0_MAX_CELLS = 512;
 
 function required(value, name) {
   if (value === undefined || value === null || value === "") throw new Error(`${name} is required`);
@@ -26,12 +26,12 @@ function root(value, name) {
 }
 
 function packCellCount(pack) {
-  const match = /^HCP1:(0|[1-9][0-9]*):/.exec(String(pack || ""));
-  if (!match) throw new Error("document record has an invalid HCP1 pack");
+  const match = /^HCP0:(0|[1-9][0-9]*):/.exec(String(pack || ""));
+  if (!match) throw new Error("document record has an invalid HCP0 pack");
   const count = Number(match[1]);
   if (!Number.isSafeInteger(count)
       || count < 1
-      || count > DOCUMENT_HCP1_MAX_CELLS) {
+      || count > DOCUMENT_HCP0_MAX_CELLS) {
     throw new Error("document record cell count is outside the Hestia admission bound");
   }
   return count;
@@ -90,7 +90,7 @@ async function canonicalProjection(bundle) {
     [root(body.expected_result_root, "signed expected result"), root(expectedResultPlan, "expected result"), "expected result root"]
   ];
   for (const [actual, expected, name] of checks) {
-    if (actual !== expected) throw new Error(`document batch ${name} does not match its signed HCV1 record`);
+    if (actual !== expected) throw new Error(`document batch ${name} does not match its signed HCV0 record`);
   }
 
   const baseSourceRoots = await artefactSourceRoots(bundle.baseAst);

@@ -18,7 +18,7 @@ fn fixture() -> PathBuf {
     fs::write(root.join("project.edn"), "{:hara/type :project :hara/version \"1.0.0\" :project/id example/app :project/version \"1.2.3\" :project/source-paths [\"src\"] :project/test-paths [\"test\"] :project/extension-paths [\"extensions\"] :project/capabilities #{} :project/dependencies {\"hara:hara/graph\" {:version \"^1.2.0\"}}}").unwrap();
     fs::write(
         root.join("project.lock.edn"),
-        "{:lock/format 1 :packages {}}\n",
+        "{:lock/format \"0.0.0-alpha\" :packages {}}\n",
     )
     .unwrap();
     root
@@ -34,7 +34,7 @@ fn validates_and_builds_deterministic_archive() {
     build_archive(&project, &second).unwrap();
     assert_eq!(fs::read(&first).unwrap(), fs::read(&second).unwrap());
     let manifest = inspect_archive(&first).unwrap();
-    assert!(manifest.contains(":harp/format 1"));
+    assert!(manifest.contains(":harp/format \"0.0.0-alpha\""));
     assert!(manifest.contains("\"example.main\" \"src/example/main.hal\""));
     let file = File::open(&first).unwrap();
     let mut zip = ZipArchive::new(file).unwrap();
@@ -102,7 +102,7 @@ fn packages_lock_and_explicit_portable_workspace_only() {
     let root = fixture();
     fs::write(
         root.join("project.lock.edn"),
-        "{:lock/format 1 :packages {}}\n",
+        "{:lock/format \"0.0.0-alpha\" :packages {}}\n",
     )
     .unwrap();
     fs::write(
@@ -132,7 +132,7 @@ fn packages_lock_and_explicit_portable_workspace_only() {
 #[test]
 fn validates_typed_recipes_and_installs_content_addressed_roots() {
     let root = fixture();
-    fs::write(root.join("hara.recipe.edn"), "{:recipe/format 1 :recipe/adapter :hal :recipe/toolchain {} :recipe/inputs {} :recipe/outputs []}\n").unwrap();
+    fs::write(root.join("hara.recipe.edn"), "{:recipe/format \"0.0.0-alpha\" :recipe/adapter :hal :recipe/toolchain {} :recipe/inputs {} :recipe/outputs []}\n").unwrap();
     let source = fs::read_to_string(root.join("project.edn")).unwrap();
     fs::write(
         root.join("project.edn"),
@@ -157,7 +157,7 @@ fn validates_typed_recipes_and_installs_content_addressed_roots() {
 #[test]
 fn rejects_shell_recipe_escape_hatches() {
     let root = fixture();
-    fs::write(root.join("hara.recipe.edn"), "{:recipe/format 1 :recipe/adapter :hal :recipe/toolchain {} :recipe/inputs {:command [\"sh\"]} :recipe/outputs []}\n").unwrap();
+    fs::write(root.join("hara.recipe.edn"), "{:recipe/format \"0.0.0-alpha\" :recipe/adapter :hal :recipe/toolchain {} :recipe/inputs {:command [\"sh\"]} :recipe/outputs []}\n").unwrap();
     let source = fs::read_to_string(root.join("project.edn")).unwrap();
     fs::write(
         root.join("project.edn"),

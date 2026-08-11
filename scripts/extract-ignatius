@@ -104,7 +104,7 @@ namespaces inside the moved files. The first Ignatius implementation PR should:
 1. create the root project and package metadata;
 2. rename generic namespaces to `ignatius.*`;
 3. add one-release `gw.ledger.*` compatibility aliases where needed;
-4. freeze canonical HCV1, HCP1, transaction, receipt and snapshot fixtures;
+4. freeze canonical HCV0, HCP0, transaction, receipt and snapshot fixtures;
 5. generate the PostgreSQL SQL artefact from `db/`; and
 6. publish the HAL and host client packages consumed by Hestia.
 

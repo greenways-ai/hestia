@@ -7,7 +7,7 @@ conformance requirements.
 
 ## 1. Authority and privacy
 
-HCV1 cells and SHA-256 roots are canonical. HCP1 is the canonical pack
+HCV0 cells and SHA-256 roots are canonical. HCP0 is the canonical pack
 transport. JSON is a replay and interface projection and MUST NOT be signed as
 the source of truth.
 
@@ -36,11 +36,11 @@ wall-clock time is descriptive.
 Signing bytes are exactly:
 
 ```text
-GWDP1 NUL <record-type UTF-8> NUL <32 raw body-root bytes>
+GWDP0 NUL <record-type UTF-8> NUL <32 raw body-root bytes>
 ```
 
-The body root is not hexadecimal text in the signing payload. `GWDP1` records
-MUST NOT be accepted as `GWAR1` agent-room records, or vice versa. Protocol keys
+The body root is not hexadecimal text in the signing payload. `GWDP0` records
+MUST NOT be accepted as `GWAR0` agent-room records, or vice versa. Protocol keys
 MUST use Ed25519.
 
 A delegation binds issuer identity, subject key, purposes,
@@ -55,7 +55,7 @@ Three independent signatures are used at the collaboration boundary:
 1. the contributor operational key signs `document/batch`;
 2. the active Hestia environment key signs `document/transformation`, binding
    the exact current head, transformed operation vector, result AST and outcome;
-3. PostgreSQL constructs `document/import-receipt`, returns its exact GWDP1
+3. PostgreSQL constructs `document/import-receipt`, returns its exact GWDP0
    signing bytes, and accepts the environment signature only after rechecking
    the head and delegation in the committing transaction.
 
@@ -110,7 +110,7 @@ The environment creates a separate `document/transformation` record committing:
 Replay MUST derive an intermediate AST root after each operation. Receipts retain
 each original root, transformed root or conflict, disposition and result.
 
-A document HCP1 pack is bounded to 512 canonical cells and 1,000,000 bytes;
+A document HCP0 pack is bounded to 512 canonical cells and 1,000,000 bytes;
 a batch remains bounded to 64 operations. Larger documents or edits MUST split.
 The higher cell allowance reflects the base/result AST trees and independently
 rooted operation vector carried by a document batch. Transport compression and
@@ -159,7 +159,7 @@ abandoning the conflicting operation roots.
 
 ## 7. Rich text and Hara artefact profile
 
-`greenways.rich-text/2` nodes are `doc`, `paragraph`, `heading`, `blockquote`,
+`greenways.rich-text/0-alpha` nodes are `doc`, `paragraph`, `heading`, `blockquote`,
 `bullet-list`, `ordered-list`, `list-item`, `code-block`, `horizontal-rule`,
 `hard-break`, `text`, and `hara-artefact`. Marks are `strong`, `emphasis`,
 `underline`, `strike`, `code`, and `link`.
@@ -191,18 +191,18 @@ projected through a registered host renderer or sandboxed document. An artefact
 MUST NOT obtain DOM, filesystem, network, signing-key, collaboration or room
 capabilities merely by being embedded.
 
-`greenways.rich-text/1` remains valid for documents without artefacts. Adapters
+`greenways.rich-text/0-alpha` remains valid for documents without artefacts. Adapters
 return canonical AST/bytes plus a loss report. Delivery commits the adapter
 package, runtime, options, assets and fonts.
 
 ## 8. Ledger storage and receipts
 
 `hestia.document_head` is only a mutable pointer. Authoritative history is the
-append-only set of HCV1 `document/revision`, operation and signed receipt roots
+append-only set of HCV0 `document/revision`, operation and signed receipt roots
 stored through `gw_ledger`.
 
 A JSON AST or operation may be retained beside its root to make replay and UI
-projection efficient. That JSON is non-canonical. The corresponding HCV1 root,
+projection efficient. That JSON is non-canonical. The corresponding HCV0 root,
 transformation signature and import receipt remain authoritative.
 
 The prepare stage MUST:

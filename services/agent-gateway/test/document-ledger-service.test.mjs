@@ -17,7 +17,7 @@ const root = (character) => character.repeat(64);
 
 function fixture(text = "Hello world", revision = 0) {
   return {
-    profile: "greenways.rich-text/2",
+    profile: "greenways.rich-text/0-alpha",
     id: "document:service",
     revision,
     children: [{
@@ -174,7 +174,7 @@ test("rejects an expected-result projection altered after the batch was signed",
       signer: environmentSigner(),
       environmentId: "hestia-test"
     }).admit({ batch: bundle }),
-    /signed HCV1 record/
+    /signed HCV0 record/
   );
 });
 

@@ -24,7 +24,7 @@ let lastArtefact = null;
 function initialDocument(roomId) {
   const documentId = `document:${roomId}`;
   return {
-    profile: "greenways.rich-text/2",
+    profile: "greenways.rich-text/0-alpha",
     id: documentId,
     title: "Living systems memorandum",
     revision: 0,

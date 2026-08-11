@@ -46,7 +46,7 @@ REVOKE ALL ON FUNCTION hestia.document_record_verification_guard() FROM PUBLIC;
 
 COMMENT ON CONSTRAINT document_batch_admission_batch_verification_fk
   ON hestia.document_batch_admission IS
-  'Keeps every admitted batch bound to its immutable GWDP1 verification record.';
+  'Keeps every admitted batch bound to its immutable GWDP0 verification record.';
 COMMENT ON CONSTRAINT document_batch_admission_transformation_verification_fk
   ON hestia.document_batch_admission IS
-  'Keeps every environment transformation bound to its immutable GWDP1 verification record.';
+  'Keeps every environment transformation bound to its immutable GWDP0 verification record.';

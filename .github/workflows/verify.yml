@@ -65,7 +65,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Verify HCP1 import and signed receipts in PostgreSQL
+      - name: Verify HCP0 import and signed receipts in PostgreSQL
         run: bash scripts/test-agent-record-verification
 
   postgres-agent-rooms:

@@ -1,13 +1,13 @@
 (ns gw.ledger.agent-room
   (:require [gw.ledger.codec :as codec]))
 
-(def protocol "hestia-agent/1")
+(def protocol "hestia-agent/0-alpha")
 (def record-version 1)
 (def record-type-tag 14)
 
 (defn field-names
   "Returns the normative field order for one Hestia agent-room record. Every
-   field value is an HCV1 root; optional values use the canonical nil root."
+   field value is an HCV0 root; optional values use the canonical nil root."
   [kind]
   (cond
     (= kind "profile/version")
@@ -106,7 +106,7 @@
                      "actual" (count roots)}))
 
     (not (roots-valid roots 0))
-    (throw (ex-info "Hestia agent-room fields must be 64-character HCV1 root transport values"
+    (throw (ex-info "Hestia agent-room fields must be 64-character HCV0 root transport values"
                     {"kind" kind}))
 
     true true))
@@ -116,7 +116,7 @@
   (reduce (fn [out root] (str out root)) "" roots))
 
 (defn record-payload
-  "Frames one native HCV1 record payload. Schema order makes every position
+  "Frames one native HCV0 record payload. Schema order makes every position
    meaningful, and fixed-width roots make the payload unambiguous."
   [kind roots]
   (let [names (field-names kind)]
@@ -144,8 +144,8 @@
       (record-refs-tail names roots 0 []))))
 
 (defn record-cell
-  "Constructs one native HCV1 record through explicit UTF-8 and SHA-256 host
-   capabilities. The returned references are suitable for HCP1 transport."
+  "Constructs one native HCV0 record through explicit UTF-8 and SHA-256 host
+   capabilities. The returned references are suitable for HCP0 transport."
   [utf8-byte-count utf8-hex sha256 kind roots]
   (codec/canonical-text-cell
    utf8-byte-count utf8-hex sha256 record-type-tag
@@ -158,12 +158,12 @@
   (do
     (if (= 64 (count body-root))
       true
-      (throw (ex-info "agent-room signing body must be one HCV1 root"
+      (throw (ex-info "agent-room signing body must be one HCV0 root"
                       {"kind" kind})))
-    (str "GWAR1:" kind ":" body-root)))
+    (str "GWAR0:" kind ":" body-root)))
 
 (defn signed-envelope
-  "Portable diagnostic envelope. The body and signature remain canonical HCV1
+  "Portable diagnostic envelope. The body and signature remain canonical HCV0
    cells; this map is transport metadata and is not itself signed."
   [kind body-root signer-key-root signature-root]
   {:protocol protocol
