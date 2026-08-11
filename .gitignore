@@ -13,6 +13,8 @@
 /site/.astro/
 /site/.netlify/
 /.netlify/
+/hoplite/runtime/target/
+/hoplite/runtime/Cargo.lock
 
 # macOS
 .DS_Store
