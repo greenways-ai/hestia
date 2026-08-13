@@ -20,4 +20,17 @@ if grep -R -n -E '(postgres(ql)?://|PGPASSWORD|DATABASE_URL)' \
   fail=1
 fi
 
+if grep -R -n -E '(hoplite\.(auth|value)|:hoplite/authentication|:route/auth)' \
+    hal/src hal/project.edn --include='*.hal' --include='project.edn'; then
+  echo 'Hestia must consume Hoplite only through generic application and HTTP boundaries.' >&2
+  fail=1
+fi
+
+if grep -R -n -E '(hestia\.(profile|room|mandate|approval)|:hestia/(profile|room|mandate|approval))' \
+    ../hoplite/core ../hoplite/docs/public-surfaces.json \
+    --include='*.rs' --include='*.hal' --include='*.json' 2>/dev/null; then
+  echo 'Hestia authority types must not enter Hoplite core or public contracts.' >&2
+  fail=1
+fi
+
 exit "$fail"
