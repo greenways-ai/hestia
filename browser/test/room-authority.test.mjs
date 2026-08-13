@@ -6,6 +6,7 @@ import {
   ROOM_AUTHORITY_DECISION_PROTOCOL,
   RoomAuthorityError,
   authorizeRoomInvocation,
+  validateRoomAuthorityDecision,
   validateRoomInvocation
 } from "../src/room-authority.js";
 
@@ -48,11 +49,15 @@ function caseInput(overrides) {
 
 test("published room authority conformance cases are deterministic", () => {
   assert.equal(fixture.protocol, ROOM_AUTHORITY_CONFORMANCE_PROTOCOL);
+  assert.equal(fixture.decisionCorrelation, "exact-invocation-projection");
   for (const entry of fixture.cases) {
-    const decision = authorizeRoomInvocation(caseInput(entry.overrides));
+    const input = caseInput(entry.overrides);
+    const decision = authorizeRoomInvocation(input);
     assert.equal(decision.protocol, ROOM_AUTHORITY_DECISION_PROTOCOL, entry.name);
     assert.equal(decision.allowed, entry.expected.allowed, entry.name);
     assert.equal(decision.reason, entry.expected.reason, entry.name);
+    assert.deepEqual(decision.invocation, input.invocation, entry.name);
+    assert.notEqual(decision.invocation, input.invocation, entry.name);
     assert.equal(
       decision.requiresUserInteraction,
       entry.expected.requiresUserInteraction,
@@ -61,8 +66,11 @@ test("published room authority conformance cases are deterministic", () => {
   }
 });
 
-test("allowed decisions retain the exact Hestia authority roots", () => {
+test("allowed decisions retain the exact invocation and Hestia authority roots", () => {
   const decision = authorizeRoomInvocation(caseInput({}));
+  assert.deepEqual(decision.invocation, fixture.base.invocation);
+  assert.equal(Object.isFrozen(decision.invocation), true);
+  assert.equal(Object.isFrozen(decision.invocation.application), true);
   assert.deepEqual(
     {
       membershipRoot: decision.membershipRoot,
@@ -77,14 +85,44 @@ test("allowed decisions retain the exact Hestia authority roots", () => {
   );
 });
 
-test("denials do not project authority roots as successful evidence", () => {
-  const decision = authorizeRoomInvocation(caseInput({
+test("denials retain the exact invocation without successful authority evidence", () => {
+  const input = caseInput({
     invocation: { operation: "conversation.delete" }
-  }));
+  });
+  const decision = authorizeRoomInvocation(input);
   assert.equal(decision.allowed, false);
+  assert.deepEqual(decision.invocation, input.invocation);
   assert.equal(decision.membershipRoot, null);
   assert.equal(decision.sourceMandateRoot, null);
   assert.equal(decision.grantRoot, null);
+  assert.equal(decision.requiresUserInteraction, false);
+});
+
+test("decisions detach the exact invocation from caller mutation", () => {
+  const input = caseInput({});
+  const decision = authorizeRoomInvocation(input);
+  input.invocation.argumentsDigest = `sha256:${"7".repeat(64)}`;
+  input.invocation.application.approvalDigest = `sha256:${"8".repeat(64)}`;
+  input.invocation.timeoutMs = 1;
+  assert.deepEqual(decision.invocation, fixture.base.invocation);
+});
+
+test("decision validation rejects partial correlation and secret-shaped fields", () => {
+  const decision = authorizeRoomInvocation(caseInput({}));
+  const { invocation: _invocation, ...partial } = decision;
+  assert.throws(
+    () => validateRoomAuthorityDecision(partial),
+    (error) => error instanceof RoomAuthorityError
+      && error.code === "invalid-projection"
+  );
+  assert.throws(
+    () => validateRoomAuthorityDecision({
+      ...decision,
+      browserCookie: "must-not-cross-the-boundary"
+    }),
+    (error) => error instanceof RoomAuthorityError
+      && error.code === "invalid-projection"
+  );
 });
 
 test("projections reject unknown and secret-shaped fields", () => {

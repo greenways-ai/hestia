@@ -123,6 +123,17 @@ const INVOCATION_FIELDS = [
   "expiresAt"
 ];
 
+const DECISION_FIELDS = [
+  "protocol",
+  "allowed",
+  "reason",
+  "invocation",
+  "membershipRoot",
+  "sourceMandateRoot",
+  "grantRoot",
+  "requiresUserInteraction"
+];
+
 export class RoomAuthorityError extends Error {
   constructor(code, message) {
     super(message);
@@ -413,6 +424,45 @@ export function validateRoomInvocation(value) {
   });
 }
 
+export function validateRoomAuthorityDecision(value) {
+  return validatedCopy(value, (authorityDecision) => {
+    assertClosedObject(authorityDecision, "decision", DECISION_FIELDS);
+    if (authorityDecision.protocol !== ROOM_AUTHORITY_DECISION_PROTOCOL) {
+      fail("unsupported-protocol", "room authority decision protocol is unsupported");
+    }
+    if (typeof authorityDecision.allowed !== "boolean") {
+      fail("invalid-projection", "decision.allowed must be boolean");
+    }
+    assertString(authorityDecision.reason, "decision.reason", MAX_OPERATION_BYTES);
+    validateRoomInvocation(authorityDecision.invocation);
+    if (typeof authorityDecision.requiresUserInteraction !== "boolean") {
+      fail(
+        "invalid-projection",
+        "decision.requiresUserInteraction must be boolean"
+      );
+    }
+    if (authorityDecision.allowed) {
+      if (authorityDecision.reason !== "allowed") {
+        fail("invalid-projection", "allowed decision reason must be allowed");
+      }
+      assertRoot(authorityDecision.membershipRoot, "decision.membershipRoot");
+      assertRoot(
+        authorityDecision.sourceMandateRoot,
+        "decision.sourceMandateRoot"
+      );
+      assertRoot(authorityDecision.grantRoot, "decision.grantRoot");
+    } else if (authorityDecision.membershipRoot !== null
+        || authorityDecision.sourceMandateRoot !== null
+        || authorityDecision.grantRoot !== null
+        || authorityDecision.requiresUserInteraction) {
+      fail(
+        "invalid-projection",
+        "denied decision cannot project successful authority evidence"
+      );
+    }
+  });
+}
+
 function exactApplication(left, right) {
   return APPLICATION_FIELDS.every((field) => left[field] === right[field]);
 }
@@ -446,13 +496,11 @@ function decision(invocation, allowed, reason, sourceMandate = null) {
         sourceMandateRoot: null,
         grantRoot: null
       };
-  return deepFreeze({
+  return validateRoomAuthorityDecision({
     protocol: ROOM_AUTHORITY_DECISION_PROTOCOL,
     allowed,
     reason,
-    requestId: invocation.requestId,
-    roomId: invocation.roomId,
-    operation: invocation.operation,
+    invocation,
     ...exactRoots,
     requiresUserInteraction:
       allowed && sourceMandate !== null

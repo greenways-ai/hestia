@@ -66,9 +66,15 @@ open room at governance root G
   -> allowed or one closed denial reason
 ```
 
-An allowed decision includes the exact membership, source-mandate, and grant
-roots. A denied decision does not project those roots as successful authority
-evidence.
+Every decision includes one detached, immutable copy of the complete validated
+`hestia-room-invocation/0-alpha` projection. This binds the result to the exact
+member, node, source, application, operation, arguments digest, limits and
+validity interval evaluated by Hestia without requiring a consumer to reproduce
+HCV1 hashing.
+
+An allowed decision additionally includes the exact membership, source-mandate,
+and grant roots. A denied decision retains the exact evaluated invocation for
+correlation, but does not project those roots as successful authority evidence.
 
 The module rejects unknown fields. Its closed values cannot contain provider
 credentials, browser cookies, private keys, key-store handles, reusable bearer
@@ -107,7 +113,8 @@ The browser package publishes:
 @greenways/hestia-browser/room-authority-conformance
 ```
 
-`room-authority-import.json` declares the owner, export, protocols, and fixture.
+`room-authority-import.json` declares the owner, export, protocols, fixture, and
+`exact-invocation-projection` decision-correlation contract.
 `fixtures/room-authority-conformance.json` is cross-runtime input for Greenways
 OS adapters. Fixture `overrides` use recursive object replacement: objects merge
 by field, while arrays and scalar values replace the base value.
@@ -126,7 +133,8 @@ closed local request
   -> exact local application approval
   -> active local capability grant
   -> verified Hestia import version
-  -> Hestia room authority decision
+  -> Hestia room authority decision carrying the exact invocation projection
+  -> exact decision/invocation equality check
   -> durable invocation ownership
   -> route/source lookup
   -> browser or provider execution
