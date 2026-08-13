@@ -15,7 +15,8 @@ const ROOTS = Object.freeze({
   admissionSigned: "1".repeat(64),
   state: "2".repeat(64),
   environment: "3".repeat(64),
-  activity: "4".repeat(64)
+  activity: "4".repeat(64),
+  authority: "5".repeat(64)
 });
 
 function signer() {
@@ -115,6 +116,21 @@ function database(environmentSigner) {
     async commitActivity(input) {
       calls.push(["commitActivity", input]);
       return ROOTS.admissionSigned;
+    },
+    async prepareAuthority(input) {
+      calls.push(["prepareAuthority", input]);
+      return {
+        ...prepared({
+          room_id: "room:test",
+          authority_kind: "source-mandate"
+        }),
+        result_state_root_hex: undefined,
+        result_authority_root_hex: ROOTS.authority
+      };
+    },
+    async commitAuthority(input) {
+      calls.push(["commitAuthority", input]);
+      return ROOTS.admissionSigned;
     }
   };
   return {
@@ -144,7 +160,21 @@ for (const [kind, prepare, commit, resultRoot] of [
   ["room/invitation", "prepareInvitation", "commitInvitation", "state"],
   ["room/admission-proof", "prepareMember", "commitMember", "state"],
   ["room/document-attachment", "prepareActivity", "commitActivity", "activity"],
-  ["room/message-intent", "prepareActivity", "commitActivity", "activity"]
+  ["room/message-intent", "prepareActivity", "commitActivity", "activity"],
+  ["room/source-mandate", "prepareAuthority", "commitAuthority", "authority"],
+  [
+    "room/source-mandate-revocation",
+    "prepareAuthority",
+    "commitAuthority",
+    "authority"
+  ],
+  ["room/application-grant", "prepareAuthority", "commitAuthority", "authority"],
+  [
+    "room/application-grant-revocation",
+    "prepareAuthority",
+    "commitAuthority",
+    "authority"
+  ]
 ]) {
   test(`verifies and admits ${kind} through the exact database capability`, async () => {
     const environmentSigner = signer();
@@ -167,9 +197,15 @@ for (const [kind, prepare, commit, resultRoot] of [
     if (resultRoot === "state") {
       assert.equal(result.admission.result_state_root, `sha256:${ROOTS.state}`);
       assert.equal(result.admission.result_activity_root, undefined);
-    } else {
+      assert.equal(result.admission.result_authority_root, undefined);
+    } else if (resultRoot === "activity") {
       assert.equal(result.admission.result_activity_root, `sha256:${ROOTS.activity}`);
       assert.equal(result.admission.result_state_root, undefined);
+      assert.equal(result.admission.result_authority_root, undefined);
+    } else {
+      assert.equal(result.admission.result_authority_root, `sha256:${ROOTS.authority}`);
+      assert.equal(result.admission.result_state_root, undefined);
+      assert.equal(result.admission.result_activity_root, undefined);
     }
     assert.deepEqual(
       db.calls.map(([name]) => name),
