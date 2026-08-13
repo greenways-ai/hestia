@@ -112,7 +112,7 @@ test("portable HAL frames native HCV0 agent records", async ({ page }) => {
   });
 
   expect(result.recordTypeTag).toBe(14);
-  expect(result.payload).toMatch(/^R:hestia-agent\/1:profile\/version:1:8:/);
+  expect(result.payload).toMatch(/^R:hestia-agent\/0-alpha:profile\/version:1:8:/);
   expect(result.payload).toHaveLength("R:hestia-agent/0-alpha:profile/version:1:8:".length + 8 * 64);
   expect(result.signing).toBe(`GWAR0:profile/version:${"a".repeat(64)}`);
   expect(result.fieldCount).toBe(5);
