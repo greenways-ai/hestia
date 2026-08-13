@@ -1,0 +1,38 @@
+name: Room authority admission
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - ".github/workflows/room-authority-admission.yml"
+      - "browser/src/agent-hcv1.js"
+      - "browser/src/agent-protocol.js"
+      - "browser/src/agent-room-records.js"
+      - "browser/src/room-authority-records.js"
+      - "browser/test-support/room-authority-admission-fixture.mjs"
+      - "migrations/**"
+      - "services/agent-gateway/**"
+      - "scripts/hestia"
+      - "scripts/test-room-authority-admission"
+      - "compose.yaml"
+      - "postgres/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: room-authority-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  postgres-room-authority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Admit, narrow, replay and revoke room authority
+        run: bash scripts/test-room-authority-admission
