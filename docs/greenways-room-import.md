@@ -73,8 +73,11 @@ validity interval evaluated by Hestia without requiring a consumer to reproduce
 HCV1 hashing.
 
 An allowed decision additionally includes the exact membership, source-mandate,
-and grant roots. A denied decision retains the exact evaluated invocation for
-correlation, but does not project those roots as successful authority evidence.
+and grant roots. The public decision validator requires those successful roots
+to equal the corresponding roots in the nested invocation, so changing authority
+evidence after evaluation fails closed. A denied decision retains the exact
+evaluated invocation for correlation, but does not project those roots as
+successful authority evidence.
 
 The module rejects unknown fields. Its closed values cannot contain provider
 credentials, browser cookies, private keys, key-store handles, reusable bearer
