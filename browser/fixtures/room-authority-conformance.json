@@ -1,5 +1,6 @@
 {
   "protocol": "hestia-room-authority-conformance/0-alpha",
+  "decisionCorrelation": "exact-invocation-projection",
   "observedAt": "2026-08-13T00:00:00.000Z",
   "base": {
     "room": {
@@ -21,7 +22,9 @@
       "memberProfileRoot": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
       "memberNodeId": "node/bob-macbook",
       "role": "member",
-      "purposes": ["room.app.invoke"],
+      "purposes": [
+        "room.app.invoke"
+      ],
       "membershipEpoch": 2,
       "validFrom": "2026-08-01T00:00:00.000Z",
       "validUntil": "2026-09-01T00:00:00.000Z",
@@ -43,7 +46,11 @@
         "lockDigest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
         "approvalDigest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
       },
-      "operations": ["conversation.create", "message.submit", "response.read"],
+      "operations": [
+        "conversation.create",
+        "message.submit",
+        "response.read"
+      ],
       "membershipEpoch": 2,
       "policyRevision": 4,
       "requiresUserInteraction": true,
@@ -67,7 +74,11 @@
         "lockDigest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
         "approvalDigest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
       },
-      "operations": ["conversation.create", "message.submit", "response.read"],
+      "operations": [
+        "conversation.create",
+        "message.submit",
+        "response.read"
+      ],
       "limits": {
         "requestsPerDay": 20,
         "maxInputBytes": 20000,
@@ -120,7 +131,11 @@
     },
     {
       "name": "stale membership epoch",
-      "overrides": {"membership": {"membershipEpoch": 1}},
+      "overrides": {
+        "membership": {
+          "membershipEpoch": 1
+        }
+      },
       "expected": {
         "allowed": false,
         "reason": "membership-epoch-mismatch",
@@ -129,7 +144,11 @@
     },
     {
       "name": "source substitution",
-      "overrides": {"invocation": {"sourceId": "source/other"}},
+      "overrides": {
+        "invocation": {
+          "sourceId": "source/other"
+        }
+      },
       "expected": {
         "allowed": false,
         "reason": "source-mismatch",
@@ -153,7 +172,11 @@
     },
     {
       "name": "operation not exposed by source",
-      "overrides": {"invocation": {"operation": "conversation.delete"}},
+      "overrides": {
+        "invocation": {
+          "operation": "conversation.delete"
+        }
+      },
       "expected": {
         "allowed": false,
         "reason": "source-operation-denied",
@@ -162,7 +185,11 @@
     },
     {
       "name": "revoked room application grant",
-      "overrides": {"grant": {"revokedAt": "2026-08-12T00:00:00.000Z"}},
+      "overrides": {
+        "grant": {
+          "revokedAt": "2026-08-12T00:00:00.000Z"
+        }
+      },
       "expected": {
         "allowed": false,
         "reason": "grant-inactive",
@@ -171,7 +198,11 @@
     },
     {
       "name": "changed source policy revision",
-      "overrides": {"sourceMandate": {"policyRevision": 3}},
+      "overrides": {
+        "sourceMandate": {
+          "policyRevision": 3
+        }
+      },
       "expected": {
         "allowed": false,
         "reason": "source-policy-mismatch",
@@ -180,7 +211,11 @@
     },
     {
       "name": "per-call input limit exceeded",
-      "overrides": {"invocation": {"inputBytes": 25000}},
+      "overrides": {
+        "invocation": {
+          "inputBytes": 25000
+        }
+      },
       "expected": {
         "allowed": false,
         "reason": "grant-limit-exceeded",
@@ -189,7 +224,11 @@
     },
     {
       "name": "cross-room substitution",
-      "overrides": {"invocation": {"roomId": "room/other"}},
+      "overrides": {
+        "invocation": {
+          "roomId": "room/other"
+        }
+      },
       "expected": {
         "allowed": false,
         "reason": "room-mismatch",
