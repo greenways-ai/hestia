@@ -1,0 +1,36 @@
+{:schema/protocol "hestia.control-schemas/0-alpha"
+ :schema/closed true
+ :schema/requests
+ {:fields
+  [:control/protocol :control/request-id :control/operation
+   :control/workflow-id :control/subject]
+  :protocol "hestia.control-request/0-alpha"
+  :operations
+  ["control/check" "control/explain" "control/propose" "control/approve"
+   "control/execute" "control/cancel" "control/status" "control/receipt"]}
+ :schema/subject
+ {:fields
+  [:subject/protocol :subject/application :subject/operation :subject/root
+   :subject/capabilities :subject/arguments-root]
+  :protocol "hestia.control-subject/0-alpha"}
+ :schema/authority
+ {:host-injected true
+  :fields
+  [:authority/protocol :authority/verified :authority/actor-root
+   :authority/application :authority/operations :authority/subject-root
+   :authority/mandate-root :authority/room-root :authority/membership-root
+   :authority/membership-epoch :authority/policy-revision
+   :authority/valid-from :authority/valid-until :authority/revoked-at
+   :authority/approval-root :authority/approval-subject-root]
+  :protocol "hestia.control-authority/0-alpha"}
+ :schema/result
+ {:fields
+  [:result/protocol :result/request-id :result/operation :result/status
+   :result/reason :result/value :result/authority-roots]
+  :protocol "hestia.control-result/0-alpha"}
+ :schema/security
+ {:forbidden-request-fields
+  [:actor :credential :private-key :signing-handle :database-handle
+   :mandate-root :room-root :membership-root :policy-revision]
+  :canonical-codecs ["HCV1" "HCP1"]
+  :execution-boundary :authorization-only}}

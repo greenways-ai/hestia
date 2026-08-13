@@ -1,9 +1,21 @@
 {:hara/type :project
  :hara/version "1.0.0"
- :project/id greenways/hestia-controller
+ :project/id greenways/hestia-control
  :project/version "0.1.0-dev"
  :project/source-paths ["src"]
  :project/test-paths ["test"]
  :project/extension-paths []
- :project/capabilities #{}
- :project/main hestia.controller}
+ :project/capabilities #{:host/nginx :host/hash}
+ :project/dependencies
+ {"gh:greenways-ai/hoplite" {:version "0.2.0"}}
+ :project/main hestia.control
+ :project/recipe "hara.recipe.edn"
+ :hestia/exports
+ {:hestia/control {:export/namespace hestia.control}
+  :hestia/control-http {:export/namespace hestia.control.http}}
+ :project/default-profile :server
+ :project/profiles
+ {:server
+  {:profile/language :hoplite
+   :profile/main hestia.control.http/app
+   :profile/options {:port 58200 :workers 1}}}}

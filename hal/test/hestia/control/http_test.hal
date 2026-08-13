@@ -1,0 +1,117 @@
+(ns hestia.control.http-test
+  (:require [std.foundation :refer :all]
+            [std.lib.test :as test]
+            [hestia.control :as control]
+            [hestia.control.http :as http]))
+
+(def subject-root
+  "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+(def arguments-root
+  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+(def actor-root
+  "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+(def mandate-root
+  "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
+(def room-root
+  "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+(def membership-root
+  "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+(def state-revision
+  "sha256:1111111111111111111111111111111111111111111111111111111111111111")
+(def value-root
+  "sha256:2222222222222222222222222222222222222222222222222222222222222222")
+
+(def subject
+  {:subject/protocol control/subject-protocol
+   :subject/application "greenways.chats"
+   :subject/operation "chat/message.send"
+   :subject/root subject-root
+   :subject/capabilities [:network/share]
+   :subject/arguments-root arguments-root})
+
+(def authority
+  {:authority/protocol control/authority-protocol
+   :authority/verified true
+   :authority/actor-root actor-root
+   :authority/application "greenways.chats"
+   :authority/operations ["chat/message.send"]
+   :authority/subject-root subject-root
+   :authority/mandate-root mandate-root
+   :authority/room-root room-root
+   :authority/membership-root membership-root
+   :authority/membership-epoch 7
+   :authority/policy-revision 11
+   :authority/valid-from 100
+   :authority/valid-until 200
+   :authority/revoked-at nil
+   :authority/approval-root nil
+   :authority/approval-subject-root nil})
+
+(def context
+  {:context/protocol http/context-protocol
+   :context/state (control/initial-state)
+   :context/state-revision state-revision
+   :context/authority authority
+   :context/now 150})
+
+(def request
+  {:control/protocol control/request-protocol
+   :control/request-id "check-1"
+   :control/operation "control/check"
+   :control/workflow-id nil
+   :control/subject subject})
+
+(defn root-of [_value] value-root)
+
+(def checked
+  (http/evaluate "control/check" context request root-of))
+
+(test/print-results
+ [(test/check
+   "HTTP delegates to the same portable Hara function"
+   [(get-in checked [:value :result/status])
+    (get-in checked [:value :result/authority-roots :room-root])
+    (get (http/http-response (get checked :value)) :status)]
+   [:approval-required room-root 200])
+
+  (test/check
+   "a route cannot change the operation declared by the closed body"
+   [(get-in
+     (http/evaluate "control/execute" context request root-of)
+     [:value :result/reason])
+    (get
+     (http/http-response
+      (get
+       (http/evaluate "control/execute" context request root-of)
+       :value))
+     :status)]
+   [:request-invalid 400])
+
+  (test/check
+   "context values reject extra authority and native handles"
+   [(http/context? context)
+    (http/context? (assoc context :database-handle 42))]
+   [true false])
+
+  (test/check
+   "Hoplite exposes only eight reviewed POST routes"
+   [(count (get http/app :resources))
+    (every?
+     (fn [entry]
+       (= [:post] (vec (keys (get entry 1)))))
+     (get http/app :resources))
+    (count (get http/openapi :paths))]
+   [8 true 8])
+
+  (test/check
+   "commit values are closed and revision-bound"
+   [(http/commit-result?
+     {:protocol http/commit-protocol
+      :status :applied
+      :state-revision state-revision})
+    (http/commit-result?
+     {:protocol http/commit-protocol
+      :status :applied
+      :state-revision state-revision
+      :path "/private/database"})]
+   [true false])])

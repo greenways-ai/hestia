@@ -1,0 +1,41 @@
+{
+  "protocol": "hestia.control-conformance/0-alpha",
+  "now": 150,
+  "subject": {
+    "protocol": "hestia.control-subject/0-alpha",
+    "application": "greenways.chats",
+    "operation": "chat/message.send",
+    "root": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "capabilities": ["network/share"],
+    "argumentsRoot": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "authority": {
+    "protocol": "hestia.control-authority/0-alpha",
+    "verified": true,
+    "actorRoot": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "application": "greenways.chats",
+    "operations": ["chat/message.send"],
+    "subjectRoot": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "mandateRoot": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "roomRoot": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "membershipRoot": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "membershipEpoch": 7,
+    "policyRevision": 11,
+    "validFrom": 100,
+    "validUntil": 200,
+    "revokedAt": null,
+    "approvalRoot": null,
+    "approvalSubjectRoot": null
+  },
+  "fixtures": [
+    {"id": "check-requires-approval", "operation": "control/check", "status": "approval-required", "reason": "exact-root-approval-required"},
+    {"id": "approved-check-allows", "operation": "control/check", "authorityOverrides": {"approvalRoot": "sha256:2222222222222222222222222222222222222222222222222222222222222222", "approvalSubjectRoot": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}, "status": "allowed", "reason": null},
+    {"id": "changed-subject-denies", "operation": "control/check", "subjectOverrides": {"root": "sha256:9999999999999999999999999999999999999999999999999999999999999999"}, "status": "denied", "reason": "subject-root-mismatch"},
+    {"id": "changed-policy-stales", "operation": "control/execute", "authorityOverrides": {"policyRevision": 12}, "status": "denied", "reason": "authority-roots-stale"},
+    {"id": "revoked-execution-denies", "operation": "control/execute", "authorityOverrides": {"revokedAt": 149}, "status": "denied", "reason": "authority-revoked"},
+    {"id": "exact-replay", "operation": "control/propose", "repeat": 2, "status": "proposed", "replayed": true},
+    {"id": "request-id-collision", "operation": "control/propose", "repeatWithChangedSubject": true, "status": "denied", "reason": "request-id-collision"},
+    {"id": "cancel-before-authorization", "operation": "control/cancel", "workflowStatus": "proposed", "status": "cancelled", "reason": null},
+    {"id": "cancel-after-authorization", "operation": "control/cancel", "workflowStatus": "authorized", "status": "denied", "reason": "workflow-not-cancellable"}
+  ]
+}

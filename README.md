@@ -1,5 +1,10 @@
 # Hestia
 
+The terms verification, authentication, approval, grant, authorization,
+admission and resource scope have distinct meanings. See
+[`docs/authority-model.md`](docs/authority-model.md) for Hestia's exact boundary
+with Greenways OS, Tahto and installed providers.
+
 Hestia is the controller for consequential operations performed by applications
 and agents. It gives each
 agent a lasting identity, a bounded daily key and a signed mandate; keeps their

@@ -1,0 +1,198 @@
+(ns hestia.control.http
+  (:require [std.foundation :refer :all]
+            [hestia.control :as control]))
+
+(def context-protocol "hestia.control-http-context/0-alpha")
+(def commit-protocol "hestia.control-http-commit/0-alpha")
+(def maximum-body-bytes 65536)
+
+(def route-operations
+  [["/agent/v1/control/check" "control/check"]
+   ["/agent/v1/control/explain" "control/explain"]
+   ["/agent/v1/control/propose" "control/propose"]
+   ["/agent/v1/control/approve" "control/approve"]
+   ["/agent/v1/control/execute" "control/execute"]
+   ["/agent/v1/control/cancel" "control/cancel"]
+   ["/agent/v1/control/status" "control/status"]
+   ["/agent/v1/control/receipt" "control/receipt"]])
+
+(def context-fields
+  [:context/protocol :context/state :context/state-revision
+   :context/authority :context/now])
+
+(defn context?
+  [value]
+  (and (control/exact-fields? value context-fields)
+       (= context-protocol (get value :context/protocol))
+       (= control/protocol
+          (get-in value [:context/state :control/protocol]))
+       (control/root? (get value :context/state-revision))
+       (control/authority? (get value :context/authority))
+       (number? (get value :context/now))))
+
+(defn route-request?
+  [operation request]
+  (and (control/request? request)
+       (= operation (get request :control/operation))))
+
+(defn status-code
+  [result]
+  (let [status (get result :result/status)
+        reason (get result :result/reason)]
+    (cond
+      (not (= status :denied)) 200
+      (or (= reason :request-invalid)
+          (= reason :operation-unsupported)) 400
+      (or (= reason :request-id-collision)
+          (= reason :authority-roots-stale)
+          (= reason :approval-root-stale)) 409
+      :else 403)))
+
+(defn http-response
+  [result]
+  {:status (status-code result)
+   :headers {"content-type" "application/json; charset=utf-8"
+             "cache-control" "no-store"}
+   :body result})
+
+(defn evaluate
+  [operation context request root-of]
+  (if (not (route-request? operation request))
+    {:ok false
+     :state (get context :context/state)
+     :value
+     (control/result request :denied :request-invalid nil nil)}
+    (control/dispatch
+     (get context :context/state)
+     request
+     (get context :context/authority)
+     (get context :context/now)
+     root-of)))
+
+(defn context-request
+  [operation request]
+  {:protocol context-protocol
+   :operation operation
+   :request-id (get request :control/request-id)
+   :subject (get request :control/subject)})
+
+(defn canonical-root
+  [value]
+  (host/call "hestia.control"
+             "canonical-root"
+             [{:protocol context-protocol :value value}]))
+
+(defn commit-request
+  [context request state]
+  {:protocol commit-protocol
+   :request-id (get request :control/request-id)
+   :expected-state-revision (get context :context/state-revision)
+   :state state})
+
+(defn commit-result?
+  [value]
+  (and (control/exact-fields?
+        value
+        [:protocol :status :state-revision])
+       (= commit-protocol (get value :protocol))
+       (or (= :applied (get value :status))
+           (= :replayed (get value :status)))
+       (control/root? (get value :state-revision))))
+
+(defn hosted
+  [operation http-request]
+  (let [request (get http-request :body)]
+    (if (not (route-request? operation request))
+      (http-response
+       (control/result request :denied :request-invalid nil nil))
+      (let [context
+            (host/call
+             "hestia.control"
+             "context/read"
+             [(context-request operation request)])]
+        (if (not (context? context))
+          {:status 503
+           :headers {"content-type" "application/json; charset=utf-8"
+                     "cache-control" "no-store"}
+           :body
+           (control/result request :denied :authority-unavailable nil nil)}
+          (let [outcome (evaluate operation context request canonical-root)
+                previous (get context :context/state)
+                next (get outcome :state)]
+            (if (= previous next)
+              (http-response (get outcome :value))
+              (let [committed
+                    (host/call
+                     "hestia.control"
+                     "state/commit"
+                     [(commit-request context request next)])]
+                (if (commit-result? committed)
+                  (http-response (get outcome :value))
+                  {:status 409
+                   :headers
+                   {"content-type" "application/json; charset=utf-8"
+                    "cache-control" "no-store"}
+                   :body
+                   (control/result
+                    request :denied :state-commit-conflict nil
+                    (get context :context/authority))})))))))))
+
+(defn check-handler [request] (hosted "control/check" request))
+(defn explain-handler [request] (hosted "control/explain" request))
+(defn propose-handler [request] (hosted "control/propose" request))
+(defn approve-handler [request] (hosted "control/approve" request))
+(defn execute-handler [request] (hosted "control/execute" request))
+(defn cancel-handler [request] (hosted "control/cancel" request))
+(defn status-handler [request] (hosted "control/status" request))
+(defn receipt-handler [request] (hosted "control/receipt" request))
+
+(def resources
+  [["/agent/v1/control/check"
+    {:post {:name "hestia-control-check"
+            :handler #'check-handler}}]
+   ["/agent/v1/control/explain"
+    {:post {:name "hestia-control-explain"
+            :handler #'explain-handler}}]
+   ["/agent/v1/control/propose"
+    {:post {:name "hestia-control-propose"
+            :handler #'propose-handler}}]
+   ["/agent/v1/control/approve"
+    {:post {:name "hestia-control-approve"
+            :handler #'approve-handler}}]
+   ["/agent/v1/control/execute"
+    {:post {:name "hestia-control-execute"
+            :handler #'execute-handler}}]
+   ["/agent/v1/control/cancel"
+    {:post {:name "hestia-control-cancel"
+            :handler #'cancel-handler}}]
+   ["/agent/v1/control/status"
+    {:post {:name "hestia-control-status"
+            :handler #'status-handler}}]
+   ["/agent/v1/control/receipt"
+    {:post {:name "hestia-control-receipt"
+            :handler #'receipt-handler}}]])
+
+(def app
+  {:hoplite/type :application
+   :name "hestia-control"
+   :request/body {:max-bytes maximum-body-bytes}
+   :resources resources})
+
+(def openapi
+  {:openapi "3.1.0"
+   :info {:title "Hestia Control API" :version "0-alpha"}
+   :paths
+   (reduce
+    (fn [paths entry]
+      (assoc paths
+             (get entry 0)
+             {:post
+              {:operationId (get entry 1)
+               :requestBody {:required true}
+               :responses
+               {"200" {:description "Closed Hestia control result"}
+                "400" {:description "Malformed closed request"}
+                "403" {:description "Authority denied"}
+                "409" {:description "Replay or state conflict"}}}}))
+    {}
+    route-operations)})

@@ -1,0 +1,463 @@
+(ns hestia.control
+  (:require [std.foundation :refer :all]))
+
+(def protocol "hestia.control/0-alpha")
+(def request-protocol "hestia.control-request/0-alpha")
+(def subject-protocol "hestia.control-subject/0-alpha")
+(def authority-protocol "hestia.control-authority/0-alpha")
+(def result-protocol "hestia.control-result/0-alpha")
+(def receipt-protocol "hestia.control-receipt/0-alpha")
+
+(def operations
+  ["control/check" "control/explain" "control/propose" "control/approve"
+   "control/execute" "control/cancel" "control/status" "control/receipt"])
+
+(def request-fields
+  [:control/protocol :control/request-id :control/operation
+   :control/workflow-id :control/subject])
+
+(def subject-fields
+  [:subject/protocol :subject/application :subject/operation :subject/root
+   :subject/capabilities :subject/arguments-root])
+
+(def authority-fields
+  [:authority/protocol :authority/verified :authority/actor-root
+   :authority/application :authority/operations :authority/subject-root
+   :authority/mandate-root :authority/room-root :authority/membership-root
+   :authority/membership-epoch :authority/policy-revision
+   :authority/valid-from :authority/valid-until :authority/revoked-at
+   :authority/approval-root :authority/approval-subject-root])
+
+(def hex-digits
+  #{"0" "1" "2" "3" "4" "5" "6" "7" "8" "9"
+    "a" "b" "c" "d" "e" "f"})
+
+(defn member?
+  [values expected]
+  (reduce (fn [found value] (or found (= value expected))) false values))
+
+(defn exact-fields?
+  [value expected]
+  (and (map? value)
+       (= (set (keys value)) (set expected))))
+
+(defn root?
+  [value]
+  (and (string? value)
+       (= 71 (str/length value))
+       (str/starts-with? value "sha256:")
+       (loop [index 7]
+         (if (= index 71)
+           true
+           (if (has? hex-digits (str/slice value index (inc index)))
+             (recur (inc index))
+             false)))))
+
+(defn bounded-string?
+  [value maximum]
+  (and (string? value)
+       (< 0 (str/length value))
+       (<= (str/length value) maximum)
+       (= value (str/trim value))))
+
+(defn canonical-list?
+  [value maximum]
+  (and (vector? value)
+       (<= (count value) maximum)
+       (= (count value) (count (set value)))
+       (= value (vec (sort value)))))
+
+(defn subject?
+  [value]
+  (and (exact-fields? value subject-fields)
+       (= subject-protocol (get value :subject/protocol))
+       (bounded-string? (get value :subject/application) 240)
+       (bounded-string? (get value :subject/operation) 160)
+       (root? (get value :subject/root))
+       (canonical-list? (get value :subject/capabilities) 64)
+       (root? (get value :subject/arguments-root))))
+
+(defn request?
+  [value]
+  (and (exact-fields? value request-fields)
+       (= request-protocol (get value :control/protocol))
+       (bounded-string? (get value :control/request-id) 240)
+       (member? operations (get value :control/operation))
+       (or (nil? (get value :control/workflow-id))
+           (bounded-string? (get value :control/workflow-id) 240))
+       (subject? (get value :control/subject))))
+
+(defn approval-pair?
+  [authority]
+  (let [approval-root (get authority :authority/approval-root)
+        subject-root (get authority :authority/approval-subject-root)]
+    (or (and (nil? approval-root) (nil? subject-root))
+        (and (root? approval-root) (root? subject-root)))))
+
+(defn authority?
+  [value]
+  (and (exact-fields? value authority-fields)
+       (= authority-protocol (get value :authority/protocol))
+       (= true (get value :authority/verified))
+       (root? (get value :authority/actor-root))
+       (bounded-string? (get value :authority/application) 240)
+       (canonical-list? (get value :authority/operations) 64)
+       (root? (get value :authority/subject-root))
+       (root? (get value :authority/mandate-root))
+       (root? (get value :authority/room-root))
+       (root? (get value :authority/membership-root))
+       (number? (get value :authority/membership-epoch))
+       (number? (get value :authority/policy-revision))
+       (number? (get value :authority/valid-from))
+       (number? (get value :authority/valid-until))
+       (< (get value :authority/valid-from)
+          (get value :authority/valid-until))
+       (or (nil? (get value :authority/revoked-at))
+           (number? (get value :authority/revoked-at)))
+       (approval-pair? value)))
+
+(defn authority-roots
+  [authority]
+  {:actor-root (get authority :authority/actor-root)
+   :mandate-root (get authority :authority/mandate-root)
+   :room-root (get authority :authority/room-root)
+   :membership-root (get authority :authority/membership-root)
+   :membership-epoch (get authority :authority/membership-epoch)
+   :policy-revision (get authority :authority/policy-revision)
+   :subject-root (get authority :authority/subject-root)
+   :approval-root (get authority :authority/approval-root)})
+
+(defn result
+  [request status reason value authority]
+  {:result/protocol result-protocol
+   :result/request-id (get request :control/request-id)
+   :result/operation (get request :control/operation)
+   :result/status status
+   :result/reason reason
+   :result/value value
+   :result/authority-roots
+   (if (authority? authority) (authority-roots authority) nil)})
+
+(defn response
+  [state request status reason value authority]
+  {:ok (not (= status :denied))
+   :state state
+   :value (result request status reason value authority)})
+
+(defn deny
+  [state request reason authority]
+  (response state request :denied reason nil authority))
+
+(defn initial-state
+  []
+  {:control/protocol protocol :control/workflows {} :control/operations {}})
+
+(defn base-decision
+  [subject authority now]
+  (cond
+    (not (authority? authority)) :authority-invalid
+    (not (= (get subject :subject/application)
+            (get authority :authority/application))) :application-mismatch
+    (not (member? (get authority :authority/operations)
+                  (get subject :subject/operation))) :operation-not-authorized
+    (not (= (get subject :subject/root)
+            (get authority :authority/subject-root))) :subject-root-mismatch
+    (not (nil? (get authority :authority/revoked-at))) :authority-revoked
+    (< now (get authority :authority/valid-from)) :authority-not-current
+    (>= now (get authority :authority/valid-until)) :authority-not-current
+    :else nil))
+
+(defn approval-current?
+  [subject authority]
+  (and (root? (get authority :authority/approval-root))
+       (= (get subject :subject/root)
+          (get authority :authority/approval-subject-root))))
+
+(defn check
+  [state request authority now]
+  (if (not (request? request))
+    (deny state request :request-invalid nil)
+    (let [reason (base-decision (get request :control/subject) authority now)]
+      (cond
+        reason (deny state request reason authority)
+        (approval-current? (get request :control/subject) authority)
+        (response state request :allowed nil {:decision :allow} authority)
+        :else
+        (response state request :approval-required
+                  :exact-root-approval-required
+                  {:decision :approval-required}
+                  authority)))))
+
+(defn explain
+  [state request authority now]
+  (let [decision (check state request authority now)
+        value (get decision :value)
+        status (get value :result/status)
+        reason (get value :result/reason)
+        requirements
+        (cond
+          (= status :allowed) []
+          (= status :approval-required)
+          [:verified-human-approval :exact-subject-root]
+          :else [reason])]
+    (assoc decision :value
+           (result request status reason
+                   {:decision (get-in value [:result/value :decision])
+                    :requirements requirements}
+                   authority))))
+
+(defn workflow
+  [state request]
+  (get-in state [:control/workflows (get request :control/workflow-id)]))
+
+(defn operation-replay
+  [state request request-root]
+  (let [entry (get-in state
+                      [:control/operations (get request :control/request-id)])]
+    (cond
+      (nil? entry) nil
+      (= request-root (get entry :request-root))
+      {:ok true :state state :value (get entry :result) :replayed true}
+      :else (deny state request :request-id-collision nil))))
+
+(defn record-operation
+  [state request request-root value]
+  (assoc-in state
+            [:control/operations (get request :control/request-id)]
+            {:request-root request-root :result value}))
+
+(defn propose
+  [state request authority now root-of]
+  (if (not (request? request))
+    (deny state request :request-invalid nil)
+    (let [request-root (root-of request)
+          replay (operation-replay state request request-root)
+          subject (get request :control/subject)
+          reason (base-decision subject authority now)]
+      (cond
+        replay replay
+        (not (nil? (get request :control/workflow-id)))
+        (deny state request :workflow-id-must-be-nil authority)
+        reason (deny state request reason authority)
+        :else
+        (let [proposal-root
+              (root-of
+               {:canonical/codec "HCV1"
+                :proposal/request-root request-root
+                :proposal/subject subject
+                :proposal/authority-roots (authority-roots authority)})
+              workflow-id (get request :control/request-id)
+              item
+              {:workflow/id workflow-id
+               :workflow/status :proposed
+               :workflow/subject subject
+               :workflow/authority-roots (authority-roots authority)
+               :workflow/proposal-root proposal-root
+               :workflow/approval-root nil
+               :workflow/authorization-root nil
+               :workflow/receipt-root nil
+               :workflow/cancellation-root nil}
+              next (assoc-in state [:control/workflows workflow-id] item)
+              value
+              (result request :proposed nil
+                      {:workflow-id workflow-id :proposal-root proposal-root}
+                      authority)]
+          {:ok true
+           :state (record-operation next request request-root value)
+           :value value})))))
+
+(defn require-workflow
+  [state request authority]
+  (let [item (workflow state request)
+        expected-approval
+        (if (nil? item)
+          nil
+          (if (nil? (get item :workflow/approval-root))
+            (get authority :authority/approval-root)
+            (get item :workflow/approval-root)))
+        expected
+        (if (nil? item)
+          nil
+          (assoc (get item :workflow/authority-roots)
+                 :approval-root expected-approval))]
+    (cond
+      (not (authority? authority)) :authority-invalid
+      (nil? (get request :control/workflow-id)) :workflow-id-required
+      (nil? item) :workflow-not-found
+      (not (= (get item :workflow/subject)
+              (get request :control/subject))) :workflow-subject-mismatch
+      (not (= expected (authority-roots authority))) :authority-roots-stale
+      :else nil)))
+
+(defn approve
+  [state request authority now root-of]
+  (if (not (request? request))
+    (deny state request :request-invalid nil)
+    (let [request-root (root-of request)
+          replay (operation-replay state request request-root)
+          item (workflow state request)
+          subject (get request :control/subject)
+          base-reason (base-decision subject authority now)
+          workflow-reason (require-workflow state request authority)]
+      (cond
+        replay replay
+        base-reason (deny state request base-reason authority)
+        workflow-reason (deny state request workflow-reason authority)
+        (not (= :proposed (get item :workflow/status)))
+        (deny state request :workflow-not-approvable authority)
+        (not (approval-current? subject authority))
+        (deny state request :exact-root-approval-required authority)
+        :else
+        (let [approval-root (get authority :authority/approval-root)
+              next-item
+              (assoc item :workflow/status :approved
+                          :workflow/approval-root approval-root)
+              next (assoc-in state
+                             [:control/workflows
+                              (get request :control/workflow-id)]
+                             next-item)
+              value
+              (result request :approved nil
+                      {:workflow-id (get request :control/workflow-id)
+                       :proposal-root (get item :workflow/proposal-root)
+                       :approval-root approval-root}
+                      authority)]
+          {:ok true
+           :state (record-operation next request request-root value)
+           :value value})))))
+
+(defn execute
+  [state request authority now root-of]
+  (if (not (request? request))
+    (deny state request :request-invalid nil)
+    (let [request-root (root-of request)
+          replay (operation-replay state request request-root)
+          item (workflow state request)
+          subject (get request :control/subject)
+          base-reason (base-decision subject authority now)
+          workflow-reason (require-workflow state request authority)]
+      (cond
+        replay replay
+        base-reason (deny state request base-reason authority)
+        workflow-reason (deny state request workflow-reason authority)
+        (not (= :approved (get item :workflow/status)))
+        (deny state request :workflow-not-executable authority)
+        (not (= (get item :workflow/approval-root)
+                (get authority :authority/approval-root)))
+        (deny state request :approval-root-stale authority)
+        :else
+        (let [authorization-root
+              (root-of
+               {:canonical/codec "HCV1"
+                :authorization/proposal-root (get item :workflow/proposal-root)
+                :authorization/approval-root (get item :workflow/approval-root)
+                :authorization/subject-root (get subject :subject/root)
+                :authorization/authority-roots (authority-roots authority)})
+              receipt-root
+              (root-of
+               {:canonical/codec "HCP1"
+                :receipt/proposal-root (get item :workflow/proposal-root)
+                :receipt/approval-root (get item :workflow/approval-root)
+                :receipt/authorization-root authorization-root
+                :receipt/authority-roots (authority-roots authority)})
+              next-item
+              (assoc item :workflow/status :authorized
+                          :workflow/authorization-root authorization-root
+                          :workflow/receipt-root receipt-root)
+              next (assoc-in state
+                             [:control/workflows
+                              (get request :control/workflow-id)]
+                             next-item)
+              value
+              (result request :authorized nil
+                      {:workflow-id (get request :control/workflow-id)
+                       :authorization-root authorization-root
+                       :receipt-root receipt-root}
+                      authority)]
+          {:ok true
+           :state (record-operation next request request-root value)
+           :value value})))))
+
+(defn cancel
+  [state request authority now root-of]
+  (if (not (request? request))
+    (deny state request :request-invalid nil)
+    (let [request-root (root-of request)
+          replay (operation-replay state request request-root)
+          item (workflow state request)
+          subject (get request :control/subject)
+          base-reason (base-decision subject authority now)
+          workflow-reason (require-workflow state request authority)]
+      (cond
+        replay replay
+        base-reason (deny state request base-reason authority)
+        workflow-reason (deny state request workflow-reason authority)
+        (not (member? [:proposed :approved] (get item :workflow/status)))
+        (deny state request :workflow-not-cancellable authority)
+        :else
+        (let [cancellation-root
+              (root-of
+               {:canonical/codec "HCV1"
+                :cancellation/proposal-root (get item :workflow/proposal-root)
+                :cancellation/subject-root (get subject :subject/root)
+                :cancellation/authority-roots (authority-roots authority)})
+              next-item
+              (assoc item :workflow/status :cancelled
+                          :workflow/cancellation-root cancellation-root)
+              next (assoc-in state
+                             [:control/workflows
+                              (get request :control/workflow-id)]
+                             next-item)
+              value
+              (result request :cancelled nil
+                      {:workflow-id (get request :control/workflow-id)
+                       :cancellation-root cancellation-root}
+                      authority)]
+          {:ok true
+           :state (record-operation next request request-root value)
+           :value value})))))
+
+(defn observe
+  [state request authority receipt?]
+  (if (not (request? request))
+    (deny state request :request-invalid nil)
+    (let [item (workflow state request)
+          reason (require-workflow state request authority)]
+      (cond
+        reason (deny state request reason authority)
+        receipt?
+        (response
+         state request :receipt nil
+         {:receipt/protocol receipt-protocol
+          :receipt/workflow-id (get item :workflow/id)
+          :receipt/status (get item :workflow/status)
+          :receipt/proposal-root (get item :workflow/proposal-root)
+          :receipt/approval-root (get item :workflow/approval-root)
+          :receipt/authorization-root (get item :workflow/authorization-root)
+          :receipt/cancellation-root (get item :workflow/cancellation-root)
+          :receipt/root (get item :workflow/receipt-root)
+          :receipt/authority-roots (get item :workflow/authority-roots)}
+         authority)
+        :else
+        (response state request :observed nil
+                  {:workflow-id (get item :workflow/id)
+                   :status (get item :workflow/status)}
+                  authority)))))
+
+(defn dispatch
+  [state request authority now root-of]
+  (let [operation (get request :control/operation)]
+    (cond
+      (= operation "control/check") (check state request authority now)
+      (= operation "control/explain") (explain state request authority now)
+      (= operation "control/propose")
+      (propose state request authority now root-of)
+      (= operation "control/approve")
+      (approve state request authority now root-of)
+      (= operation "control/execute")
+      (execute state request authority now root-of)
+      (= operation "control/cancel")
+      (cancel state request authority now root-of)
+      (= operation "control/status") (observe state request authority false)
+      (= operation "control/receipt") (observe state request authority true)
+      :else (deny state request :operation-unsupported nil))))

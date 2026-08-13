@@ -1,0 +1,196 @@
+(ns hestia.control-test
+  (:require [std.foundation :refer :all]
+            [std.lib.test :as test]
+            [hestia.control :as control]))
+
+(def root-a "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+(def root-b "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+(def root-c "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+(def root-d "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
+(def root-e "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+(def root-f "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+(def root-1 "sha256:1111111111111111111111111111111111111111111111111111111111111111")
+(def root-2 "sha256:2222222222222222222222222222222222222222222222222222222222222222")
+(def root-3 "sha256:3333333333333333333333333333333333333333333333333333333333333333")
+(def root-4 "sha256:4444444444444444444444444444444444444444444444444444444444444444")
+(def root-5 "sha256:5555555555555555555555555555555555555555555555555555555555555555")
+(def root-9 "sha256:9999999999999999999999999999999999999999999999999999999999999999")
+
+(def subject
+  {:subject/protocol control/subject-protocol
+   :subject/application "greenways.chats"
+   :subject/operation "chat/message.send"
+   :subject/root root-a
+   :subject/capabilities [:network/share]
+   :subject/arguments-root root-b})
+
+(def authority
+  {:authority/protocol control/authority-protocol
+   :authority/verified true
+   :authority/actor-root root-c
+   :authority/application "greenways.chats"
+   :authority/operations ["chat/message.send"]
+   :authority/subject-root root-a
+   :authority/mandate-root root-d
+   :authority/room-root root-e
+   :authority/membership-root root-f
+   :authority/membership-epoch 7
+   :authority/policy-revision 11
+   :authority/valid-from 100
+   :authority/valid-until 200
+   :authority/revoked-at nil
+   :authority/approval-root nil
+   :authority/approval-subject-root nil})
+
+(def approved-authority
+  (assoc authority
+         :authority/approval-root root-2
+         :authority/approval-subject-root root-a))
+
+(defn request
+  [request-id operation workflow-id value]
+  {:control/protocol control/request-protocol
+   :control/request-id request-id
+   :control/operation operation
+   :control/workflow-id workflow-id
+   :control/subject value})
+
+(defn root-of
+  [value]
+  (cond
+    (= root-9 (get-in value [:control/subject :subject/root])) root-9
+    (= "proposal-1" (get value :control/request-id)) root-1
+    (= "approve-1" (get value :control/request-id)) root-2
+    (= "execute-1" (get value :control/request-id)) root-3
+    (= "HCP1" (get value :canonical/codec)) root-5
+    :else root-4))
+
+(def propose-request (request "proposal-1" "control/propose" nil subject))
+(def proposed
+  (control/dispatch
+   (control/initial-state) propose-request authority 150 root-of))
+
+(def approve-request
+  (request "approve-1" "control/approve" "proposal-1" subject))
+(def approved
+  (control/dispatch
+   (get proposed :state) approve-request approved-authority 150 root-of))
+
+(def execute-request
+  (request "execute-1" "control/execute" "proposal-1" subject))
+(def executed
+  (control/dispatch
+   (get approved :state) execute-request approved-authority 150 root-of))
+
+(test/print-results
+ [(test/check
+   "the portable surface is closed and transport-neutral"
+   [control/operations
+    (get-in executed [:value :result/status])
+    (get-in executed [:value :result/value :authorization-root])]
+   [["control/check" "control/explain" "control/propose" "control/approve"
+     "control/execute" "control/cancel" "control/status" "control/receipt"]
+    :authorized
+    root-4])
+
+  (test/check
+   "check and explain return bounded approval requirements"
+   [(get-in
+     (control/dispatch
+      (control/initial-state)
+      (request "check-1" "control/check" nil subject)
+      authority 150 root-of)
+     [:value :result/status])
+    (get-in
+     (control/dispatch
+      (control/initial-state)
+      (request "explain-1" "control/explain" nil subject)
+      authority 150 root-of)
+     [:value :result/value :requirements])]
+   [:approval-required
+    [:verified-human-approval :exact-subject-root]])
+
+  (test/check
+   "every successful transition retains exact canonical authority roots"
+   [(get-in proposed [:value :result/authority-roots :mandate-root])
+    (get-in approved [:value :result/authority-roots :approval-root])
+    (get-in executed [:value :result/value :receipt-root])]
+   [root-d root-2 root-5])
+
+  (test/check
+   "exact replay is idempotent while a changed request collides"
+   [(get
+     (control/dispatch
+      (get proposed :state) propose-request authority 150 root-of)
+     :replayed)
+    (get-in
+     (control/dispatch
+      (get proposed :state)
+      (assoc-in propose-request [:control/subject :subject/root] root-9)
+      (assoc authority :authority/subject-root root-9)
+      150 root-of)
+     [:value :result/reason])]
+   [true :request-id-collision])
+
+  (test/check
+   "stale policy, subject and revocation fail before execution"
+   [(get-in
+     (control/dispatch
+      (get approved :state) execute-request
+      (assoc approved-authority :authority/policy-revision 12)
+      150 root-of)
+     [:value :result/reason])
+    (get-in
+     (control/dispatch
+      (control/initial-state)
+      (request "check-2" "control/check" nil subject)
+      (assoc authority :authority/subject-root root-9)
+      150 root-of)
+     [:value :result/reason])
+    (get-in
+     (control/dispatch
+      (get approved :state) execute-request
+      (assoc approved-authority :authority/revoked-at 149)
+      150 root-of)
+     [:value :result/reason])]
+   [:authority-roots-stale :subject-root-mismatch :authority-revoked])
+
+  (test/check
+   "status and receipt project state without issuing host calls"
+   [(get-in
+     (control/dispatch
+      (get executed :state)
+      (request "status-1" "control/status" "proposal-1" subject)
+      approved-authority 250 root-of)
+     [:value :result/value :status])
+    (get-in
+     (control/dispatch
+      (get executed :state)
+      (request "receipt-1" "control/receipt" "proposal-1" subject)
+      approved-authority 250 root-of)
+     [:value :result/value :receipt/root])]
+   [:authorized root-5])
+
+  (test/check
+   "cancellation is permitted before authorization and denied afterward"
+   [(get-in
+     (control/dispatch
+      (get proposed :state)
+      (request "cancel-1" "control/cancel" "proposal-1" subject)
+      authority 150 root-of)
+     [:value :result/status])
+    (get-in
+     (control/dispatch
+      (get executed :state)
+      (request "cancel-2" "control/cancel" "proposal-1" subject)
+      approved-authority 150 root-of)
+     [:value :result/reason])]
+   [:cancelled :workflow-not-cancellable])
+
+  (test/check
+   "unknown fields and request-selected authority are rejected"
+   [(control/request? (assoc propose-request :credential "secret"))
+    (control/authority? (assoc authority :private-key "secret"))
+    (control/root?
+     "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+   [false false false])])

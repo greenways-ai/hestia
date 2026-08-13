@@ -1,0 +1,41 @@
+{
+  "protocol": "hestia.control-import/0-alpha",
+  "package": "hara:greenways/hestia-control",
+  "version": "0.1.0-dev",
+  "contentRevision": "sha256:02ac728bdadd6ad643c1b6cfd17c6ec8d79809bb6c00e0d334d346f7d11406fb",
+  "dependencies": {
+    "gh:greenways-ai/hoplite": "0.2.0"
+  },
+  "exports": {
+    "hestia/control": "hestia.control",
+    "hestia/control-http": "hestia.control.http"
+  },
+  "modules": [
+    {
+      "namespace": "hestia.control",
+      "sha256": "60405d71b6361a7d0147f2fe9068d9cde13007e6e378f792d4474b3c91fdb532",
+      "requires": ["std.foundation"]
+    },
+    {
+      "namespace": "hestia.control.http",
+      "sha256": "f36afbe01e89aeec679890c0263768edc252978f2a1606c89b1e11c70a043e8c",
+      "requires": ["std.foundation", "hestia.control"]
+    }
+  ],
+  "artifacts": [
+    {"path": "resources/hestia-control-schemas.edn", "sha256": "96cb7bc3e82a747504c1d11b0a6233cc4801d46be6e9263279336772428b205d"},
+    {"path": "resources/hestia-control-openapi.json", "sha256": "664560e1d25cc5d3746359aeef98ebf036965c22a41bf67db25c9409dae3d5ee"},
+    {"path": "fixtures/hestia-control-conformance.json", "sha256": "302c310a22f9ddb0883415f4954eb3ff8c31bcfb9fa400730d21235da9744022"},
+    {"path": "project.edn", "sha256": "f8fa5c1086f2528f89db17a32099abbe323b7ed3d07742d4ad345df12111d85d"},
+    {"path": "hara.recipe.edn", "sha256": "ef0fbcbe858cc97e7443b9b80929180d6573cd597e2acbff3eb0a2b655346379"}
+  ],
+  "security": {
+    "rejectMixedRevisions": true,
+    "rejectChangedBytes": true,
+    "remoteSourceEvaluation": false,
+    "transportOwnsPolicy": false,
+    "requiredHostServices": {
+      "hestia.control": ["context/read", "canonical-root", "state/commit"]
+    }
+  }
+}

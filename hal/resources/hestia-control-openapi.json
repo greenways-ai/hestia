@@ -1,0 +1,14 @@
+{
+  "openapi": "3.1.0",
+  "info": {"title": "Hestia Control API", "version": "0-alpha"},
+  "paths": {
+    "/agent/v1/control/check": {"post": {"operationId": "control/check"}},
+    "/agent/v1/control/explain": {"post": {"operationId": "control/explain"}},
+    "/agent/v1/control/propose": {"post": {"operationId": "control/propose"}},
+    "/agent/v1/control/approve": {"post": {"operationId": "control/approve"}},
+    "/agent/v1/control/execute": {"post": {"operationId": "control/execute"}},
+    "/agent/v1/control/cancel": {"post": {"operationId": "control/cancel"}},
+    "/agent/v1/control/status": {"post": {"operationId": "control/status"}},
+    "/agent/v1/control/receipt": {"post": {"operationId": "control/receipt"}}
+  }
+}
