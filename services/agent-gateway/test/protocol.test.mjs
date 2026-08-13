@@ -29,8 +29,15 @@ test("normalizes one bounded signed-record admission request", () => {
   assert.equal(normalized.capability, null);
 });
 
-test("accepts canonical document and message activity records without capabilities", () => {
-  for (const kind of ["room/document-attachment", "room/message-intent"]) {
+test("accepts canonical room activity and authority records without capabilities", () => {
+  for (const kind of [
+    "room/document-attachment",
+    "room/message-intent",
+    "room/source-mandate",
+    "room/source-mandate-revocation",
+    "room/application-grant",
+    "room/application-grant-revocation"
+  ]) {
     const normalized = normalizeAdmissionRequest(request(kind));
     assert.equal(normalized.recordKind, kind);
     assert.equal(normalized.capability, null);
@@ -50,7 +57,9 @@ test("requires a canonical 32-byte capability only for guest admission", () => {
   for (const kind of [
     "room/version",
     "room/document-attachment",
-    "room/message-intent"
+    "room/message-intent",
+    "room/source-mandate",
+    "room/application-grant"
   ]) {
     assert.throws(
       () => normalizeAdmissionRequest(request(kind, { capability })),
