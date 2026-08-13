@@ -8,6 +8,7 @@ import {
 } from "./room-authority.js";
 
 const ROOT_PATTERN = /^sha256:[0-9a-f]{64}$/;
+const SIGNER_KEY_PATTERN = /^ed25519:[0-9a-f]{64}$/;
 const ROOM_OPTION_FIELDS = [
   "roomRecord",
   "signerPublicKey",
@@ -74,6 +75,13 @@ function assertOptionalRoot(value, name) {
   return value;
 }
 
+function assertSignerKey(value, name) {
+  if (typeof value !== "string" || !SIGNER_KEY_PATTERN.test(value)) {
+    fail("invalid-record", `${name} must be one lowercase Ed25519 key identifier`);
+  }
+  return value;
+}
+
 function assertPositiveInteger(value, name) {
   if (!Number.isSafeInteger(value) || value < 1) {
     fail("invalid-record", `${name} must be a positive safe integer`);
@@ -94,9 +102,9 @@ function assertCanonicalInstant(value, name) {
 }
 
 function assertSigner(record, expectedSignerKeyId, name) {
-  assertRoot(record?.signer_key, `${name}.signer_key`);
+  assertSignerKey(record?.signer_key, `${name}.signer_key`);
   if (expectedSignerKeyId !== null) {
-    assertRoot(expectedSignerKeyId, `${name}.expectedSignerKeyId`);
+    assertSignerKey(expectedSignerKeyId, `${name}.expectedSignerKeyId`);
     if (record.signer_key !== expectedSignerKeyId) {
       fail("signer-mismatch", `${name} signer does not match the expected key`);
     }
