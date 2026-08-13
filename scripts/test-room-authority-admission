@@ -1,0 +1,312 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+repo_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
+cd "$repo_root"
+
+fixture="$(mktemp)"
+project="hestia-room-authority-ci"
+endpoint="http://127.0.0.1:58787/v1/records/admit"
+compose=(docker compose --project-name "$project" --env-file .hestia/env -f compose.yaml)
+
+cleanup() {
+  rm -f "$fixture"
+  if [[ -f .hestia/env ]]; then
+    "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
+
+scripts/hestia init >/dev/null
+# shellcheck disable=SC1091
+source .hestia/env
+
+node browser/test-support/room-authority-admission-fixture.mjs create "$fixture"
+
+"${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
+"${compose[@]}" up --detach --build postgres
+
+postgres_ready=false
+for _ in $(seq 1 120); do
+  if "${compose[@]}" exec -T postgres \
+       pg_isready -U postgres -d hestia >/dev/null 2>&1 \
+     && "${compose[@]}" exec -T postgres \
+       test -f /var/lib/postgresql/data/.hestia-migrations-complete \
+       >/dev/null 2>&1; then
+    postgres_ready=true
+    break
+  fi
+  sleep 1
+done
+if [[ "$postgres_ready" != true ]]; then
+  "${compose[@]}" logs postgres >&2
+  echo "Hestia PostgreSQL did not complete room-authority initialization" >&2
+  exit 1
+fi
+
+"${compose[@]}" build agent-gateway
+"${compose[@]}" run --rm --no-deps \
+  -e "HESTIA_ADMIN_DATABASE_URL=postgres://postgres:${HESTIA_POSTGRES_PASSWORD}@postgres:5432/hestia?sslmode=disable" \
+  -e "HESTIA_ENVIRONMENT_ID=${HESTIA_ENVIRONMENT_ID:-hestia-local}" \
+  -e "HESTIA_ENVIRONMENT_SIGNING_KEY_FILE=/run/secrets/environment-signing.pem" \
+  agent-gateway node src/bootstrap.mjs >/dev/null
+"${compose[@]}" up --detach agent-gateway
+
+gateway_ready=false
+for _ in $(seq 1 60); do
+  if node -e "fetch('http://127.0.0.1:58787/health').then(async r=>{const j=await r.json();if(!r.ok||j.ok!==true)process.exit(1)}).catch(()=>process.exit(1))"; then
+    gateway_ready=true
+    break
+  fi
+  sleep 1
+done
+if [[ "$gateway_ready" != true ]]; then
+  "${compose[@]}" logs agent-gateway >&2
+  echo "Hestia agent gateway did not become ready" >&2
+  exit 1
+fi
+
+admit() {
+  local prefix="$1"
+  local status="${2:-200}"
+  node services/agent-gateway/test-support/admit-fixture.mjs \
+    admit "$endpoint" "$fixture" "$prefix" "$status"
+}
+
+admin_psql() {
+  "${compose[@]}" exec -T -e PGPASSWORD="$HESTIA_POSTGRES_PASSWORD" postgres \
+    psql --no-psqlrc --set=ON_ERROR_STOP=1 --host 127.0.0.1 \
+      --username postgres --dbname hestia "$@"
+}
+
+app_psql() {
+  "${compose[@]}" exec -T -e PGPASSWORD="$HESTIA_APP_PASSWORD" postgres \
+    psql --no-psqlrc --set=ON_ERROR_STOP=1 --host 127.0.0.1 \
+      --username hestia_app --dbname hestia "$@"
+}
+
+admit host_profile >/dev/null
+admit guest_profile >/dev/null
+admit room >/dev/null
+admit invitation >/dev/null
+admit proof >/dev/null
+
+room_id="room:authority-admission"
+baseline="$(
+  admin_psql --tuples-only --no-align --field-separator='|' \
+    --set=room_id="$room_id" <<'SQL'
+SELECT
+  encode(room.current_state_root, 'hex'),
+  room.membership_epoch,
+  room.authority_policy_revision,
+  room.authority_sequence,
+  COALESCE(encode(room.authority_head_root, 'hex'), 'none'),
+  COALESCE((
+    SELECT head.latest_activity_sequence::text
+      FROM hestia.agent_room_activity_head AS head
+     WHERE head.room_id = room.room_id
+  ), '0'),
+  COALESCE((
+    SELECT encode(head.latest_activity_root, 'hex')
+      FROM hestia.agent_room_activity_head AS head
+     WHERE head.room_id = room.room_id
+  ), 'none')
+FROM hestia.agent_room AS room
+WHERE room.room_id = :'room_id';
+SQL
+)"
+IFS='|' read -r governance_root membership_epoch policy_revision \
+  authority_sequence authority_head activity_sequence activity_head <<<"$baseline"
+if [[ ! "$governance_root" =~ ^[0-9a-f]{64}$ \
+   || "$membership_epoch" != "2" \
+   || "$policy_revision" != "1" \
+   || "$authority_sequence" != "0" \
+   || "$authority_head" != "none" ]]; then
+  echo "unexpected room authority baseline: $baseline" >&2
+  exit 1
+fi
+
+node browser/test-support/room-authority-admission-fixture.mjs \
+  authority "$fixture" "$governance_root"
+
+admit stale_source 409 >/dev/null
+stale_state="$(
+  admin_psql --tuples-only --no-align --set=room_id="$room_id" \
+    -c "SELECT authority_sequence FROM hestia.agent_room WHERE room_id = :'room_id';"
+)"
+if [[ "$stale_state" != "0" ]]; then
+  echo "stale governance advanced room authority: $stale_state" >&2
+  exit 1
+fi
+
+source_first="$(admit source_mandate)"
+source_second="$(admit source_mandate)"
+node - "$source_first" "$source_second" <<'NODE'
+const [first, second] = process.argv.slice(2).map(JSON.parse);
+if (first.admission.authority_kind !== "source-mandate"
+    || first.admission.sequence !== "1"
+    || !/^sha256:[0-9a-f]{64}$/.test(first.admission.result_authority_root ?? "")) {
+  throw new Error("source mandate did not produce canonical authority sequence one");
+}
+if (first.admission.signed_receipt_root !== second.admission.signed_receipt_root
+    || first.admission.result_authority_root !== second.admission.result_authority_root) {
+  throw new Error("source mandate replay returned another authority result");
+}
+NODE
+
+admit broadened_grant 409 >/dev/null
+post_broadening="$(
+  admin_psql --tuples-only --no-align --set=room_id="$room_id" \
+    -c "SELECT authority_sequence FROM hestia.agent_room WHERE room_id = :'room_id';"
+)"
+if [[ "$post_broadening" != "1" ]]; then
+  echo "broadened grant advanced room authority: $post_broadening" >&2
+  exit 1
+fi
+
+grant_result="$(admit application_grant)"
+node - "$grant_result" <<'NODE'
+const result = JSON.parse(process.argv[2]);
+if (result.admission.authority_kind !== "application-grant"
+    || result.admission.sequence !== "2"
+    || !/^sha256:[0-9a-f]{64}$/.test(result.admission.result_authority_root ?? "")) {
+  throw new Error("application grant did not produce canonical authority sequence two");
+}
+NODE
+
+grant_revocation_result="$(admit grant_revocation)"
+node - "$grant_revocation_result" <<'NODE'
+const result = JSON.parse(process.argv[2]);
+if (result.admission.authority_kind !== "application-grant-revocation"
+    || result.admission.sequence !== "3") {
+  throw new Error("grant revocation did not produce authority sequence three");
+}
+NODE
+
+source_revocation_result="$(admit source_revocation)"
+node - "$source_revocation_result" <<'NODE'
+const result = JSON.parse(process.argv[2]);
+if (result.admission.authority_kind !== "source-mandate-revocation"
+    || result.admission.sequence !== "4") {
+  throw new Error("source revocation did not produce authority sequence four");
+}
+NODE
+
+final_state="$(
+  admin_psql --tuples-only --no-align --field-separator='|' \
+    --set=room_id="$room_id" <<'SQL'
+SELECT
+  encode(room.current_state_root, 'hex'),
+  room.membership_epoch,
+  room.authority_policy_revision,
+  room.authority_sequence,
+  encode(room.authority_head_root, 'hex'),
+  (SELECT count(*) FROM hestia.agent_room_authority AS authority
+    WHERE authority.room_id = room.room_id),
+  (SELECT status FROM hestia.agent_room_source_mandate AS mandate
+    WHERE mandate.room_id = room.room_id
+      AND mandate.mandate_id = 'source-mandate/host-chatgpt'),
+  (SELECT status FROM hestia.agent_room_application_grant AS grant_row
+    WHERE grant_row.room_id = room.room_id
+      AND grant_row.grant_id = 'room-application-grant/guest-chat'),
+  COALESCE((
+    SELECT head.latest_activity_sequence::text
+      FROM hestia.agent_room_activity_head AS head
+     WHERE head.room_id = room.room_id
+  ), '0'),
+  COALESCE((
+    SELECT encode(head.latest_activity_root, 'hex')
+      FROM hestia.agent_room_activity_head AS head
+     WHERE head.room_id = room.room_id
+  ), 'none'),
+  (SELECT count(*) FROM hestia.agent_room_source_mandate_revocation AS revocation
+    WHERE revocation.room_id = room.room_id),
+  (SELECT count(*) FROM hestia.agent_room_application_grant_revocation AS revocation
+    WHERE revocation.room_id = room.room_id)
+FROM hestia.agent_room AS room
+WHERE room.room_id = :'room_id';
+SQL
+)"
+IFS='|' read -r final_governance final_epoch final_policy final_sequence \
+  final_authority_head authority_count source_status grant_status \
+  final_activity_sequence final_activity_head source_revocations \
+  grant_revocations <<<"$final_state"
+if [[ "$final_governance" != "$governance_root" \
+   || "$final_epoch" != "$membership_epoch" \
+   || "$final_policy" != "$policy_revision" \
+   || "$final_sequence" != "4" \
+   || ! "$final_authority_head" =~ ^[0-9a-f]{64}$ \
+   || "$authority_count" != "4" \
+   || "$source_status" != "revoked" \
+   || "$grant_status" != "revoked" \
+   || "$final_activity_sequence" != "$activity_sequence" \
+   || "$final_activity_head" != "$activity_head" \
+   || "$source_revocations" != "1" \
+   || "$grant_revocations" != "1" ]]; then
+  echo "unexpected final room authority state: $final_state" >&2
+  "${compose[@]}" logs agent-gateway postgres >&2 || true
+  exit 1
+fi
+
+projection_state="$(
+  app_psql --tuples-only --no-align --field-separator='|' \
+    --set=room_id="$room_id" <<'SQL'
+SELECT
+  mandate.source_id,
+  mandate.source_node_id,
+  mandate.implementation,
+  mandate.app_id,
+  mandate.app_version,
+  mandate.publisher_id,
+  mandate.approval_digest,
+  array_to_string(mandate.operations, ','),
+  mandate.requires_user_interaction,
+  grant_row.member_profile_id,
+  grant_row.member_node_id,
+  array_to_string(grant_row.operations, ','),
+  grant_row.requests_per_day,
+  grant_row.max_input_bytes,
+  grant_row.max_output_bytes,
+  grant_row.max_timeout_ms
+FROM hestia.agent_room_source_mandate AS mandate
+JOIN hestia.agent_room_application_grant AS grant_row
+  ON grant_row.source_mandate_record_root = mandate.signed_record_root
+WHERE mandate.room_id = :'room_id'
+  AND mandate.mandate_id = 'source-mandate/host-chatgpt'
+  AND grant_row.grant_id = 'room-application-grant/guest-chat';
+SQL
+)"
+node - "$projection_state" <<'NODE'
+const fields = process.argv[2].split("|");
+const expected = [
+  "source/host-chatgpt-browser",
+  "node/authority-host",
+  "greenways.chatgpt-web",
+  "greenways.chat",
+  "0.1.0",
+  "greenways-ai",
+  `sha256:${"3".repeat(64)}`,
+  "conversation.create,message.submit,response.read",
+  "t",
+  "profile:authority-guest",
+  "node/authority-guest",
+  "message.submit,response.read",
+  "20",
+  "20000",
+  "100000",
+  "86400000"
+];
+if (JSON.stringify(fields) !== JSON.stringify(expected)) {
+  throw new Error(`unexpected room authority projection: ${process.argv[2]}`);
+}
+NODE
+
+if app_psql -c \
+  "UPDATE hestia.agent_room_source_mandate SET status = 'active' WHERE room_id = 'room:authority-admission';" \
+  >/dev/null 2>&1; then
+  echo "hestia_app unexpectedly mutated room authority projections" >&2
+  exit 1
+fi
+
+printf 'admitted and revoked one room source and member grant at authority sequence 4\n'

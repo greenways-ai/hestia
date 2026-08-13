@@ -13,6 +13,10 @@ export const ADMISSIBLE_RECORD_KINDS = Object.freeze(new Set([
   "room/version",
   "room/invitation",
   "room/admission-proof",
+  "room/source-mandate",
+  "room/source-mandate-revocation",
+  "room/application-grant",
+  "room/application-grant-revocation",
   "room/document-attachment",
   "room/message-intent"
 ]));

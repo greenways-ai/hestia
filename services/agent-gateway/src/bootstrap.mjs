@@ -12,6 +12,7 @@ import { loadEnvironmentSigner } from "./environment-signer.mjs";
 const DEFAULT_INVITE_PURPOSES = Object.freeze([
   "document.comment",
   "negotiation.propose",
+  "room.app.invoke",
   "room.message"
 ]);
 

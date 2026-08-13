@@ -13,21 +13,29 @@ async function fixture(path) {
 }
 
 function requestBody(data, prefix) {
-  const root = data[`${prefix}_record_root_hex`];
-  const kind = data[`${prefix}_record_kind`];
+  const nested = data.recordFields?.[prefix];
+  const root = nested?.root ?? data[`${prefix}_record_root_hex`];
+  const kind = nested?.kind ?? data[`${prefix}_record_kind`];
+  const pack = nested?.hcp1Pack;
   const packHex = data[`${prefix}_pack_hex`];
-  if (!root || !kind || !packHex) throw new Error(`missing fixture record: ${prefix}`);
+  if (!root || !kind || (!pack && !packHex)) {
+    throw new Error(`missing fixture record: ${prefix}`);
+  }
+  const canonicalRoot = String(root).replace(/^sha256:/, "");
+  if (!/^[0-9a-f]{64}$/.test(canonicalRoot)) {
+    throw new Error(`invalid fixture record root: ${prefix}`);
+  }
   const body = {
     protocol: AGENT_HTTP_PROTOCOL,
     request_id: `request:${prefix}`,
     record: {
-      root: `sha256:${root}`,
+      root: `sha256:${canonicalRoot}`,
       kind,
-      hcp1_pack: Buffer.from(packHex, "hex").toString("utf8")
+      hcp1_pack: pack ?? Buffer.from(packHex, "hex").toString("utf8")
     }
   };
   if (kind === "room/admission-proof") {
-    body.capability = hexToBase64Url(data.capability_hex);
+    body.capability = data.capability ?? hexToBase64Url(data.capability_hex);
   }
   return body;
 }
@@ -71,7 +79,7 @@ const [command, endpoint, path, prefix, expected = "200"] = process.argv.slice(2
 if (command === "admit" && endpoint && path && prefix) {
   await admit(endpoint, path, prefix, Number(expected));
 } else if (command === "request" && path && prefix) {
-  process.stdout.write(JSON.stringify(requestBody(await fixture(path), prefix)));
+  process.stdout.write(JSON.stringify(requestBody(await fixture(path), prefix));
 } else {
   throw new Error(
     "usage: admit-fixture.mjs admit ENDPOINT FIXTURE PREFIX [STATUS] | request ignored FIXTURE PREFIX"
