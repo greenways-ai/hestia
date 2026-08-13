@@ -1,0 +1,11 @@
+{
+  "protocol": "hestia-room-authority-import/0-alpha",
+  "ownerRepository": "greenways-ai/hestia",
+  "package": "@greenways/hestia-browser",
+  "export": "./room-authority",
+  "authorityDecisionProtocol": "hestia-room-authority-decision/0-alpha",
+  "conformanceProtocol": "hestia-room-authority-conformance/0-alpha",
+  "conformanceFixture": "./fixtures/room-authority-conformance.json",
+  "canonicalAuthority": "HCV1/HCP1 room records and exact Hestia receipt roots",
+  "consumerBoundary": "Greenways OS imports and executes this policy without defining parallel room authority"
+}

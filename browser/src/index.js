@@ -9,6 +9,7 @@ export * from "./agent-room-kernel.js";
 export * from "./agent-protocol.js";
 export * from "./agent-hcv1.js";
 export * from "./agent-room-records.js";
+export * from "./room-authority.js";
 export * from "./agent-gateway.js";
 export * from "./agent-room-storage.js";
 export * from "./document-hcv1.js";

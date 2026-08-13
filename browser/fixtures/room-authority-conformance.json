@@ -1,0 +1,200 @@
+{
+  "protocol": "hestia-room-authority-conformance/0-alpha",
+  "observedAt": "2026-08-13T00:00:00.000Z",
+  "base": {
+    "room": {
+      "protocol": "hestia-room-projection/0-alpha",
+      "roomId": "room/design-studio",
+      "roomRecordRoot": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "governanceRoot": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "hostProfileRoot": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "membershipEpoch": 2,
+      "policyRevision": 4,
+      "activityHeadRoot": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "status": "open"
+    },
+    "membership": {
+      "protocol": "hestia-room-membership-projection/0-alpha",
+      "roomId": "room/design-studio",
+      "governanceRoot": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "membershipRoot": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "memberProfileRoot": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "memberNodeId": "node/bob-macbook",
+      "role": "member",
+      "purposes": ["room.app.invoke"],
+      "membershipEpoch": 2,
+      "validFrom": "2026-08-01T00:00:00.000Z",
+      "validUntil": "2026-09-01T00:00:00.000Z",
+      "revokedAt": null
+    },
+    "sourceMandate": {
+      "protocol": "hestia-room-source-mandate-projection/0-alpha",
+      "roomId": "room/design-studio",
+      "governanceRoot": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "mandateRoot": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "sourceId": "source/alice-chatgpt-browser",
+      "sourceNodeId": "node/alice-macbook",
+      "implementation": "greenways.chatgpt-web",
+      "application": {
+        "appId": "greenways.chat",
+        "version": "0.1.0",
+        "publisherId": "greenways-ai",
+        "manifestDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "lockDigest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "approvalDigest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "operations": ["conversation.create", "message.submit", "response.read"],
+      "membershipEpoch": 2,
+      "policyRevision": 4,
+      "requiresUserInteraction": true,
+      "validFrom": "2026-08-01T00:00:00.000Z",
+      "validUntil": "2026-09-01T00:00:00.000Z",
+      "revokedAt": null
+    },
+    "grant": {
+      "protocol": "hestia-room-application-grant-projection/0-alpha",
+      "roomId": "room/design-studio",
+      "governanceRoot": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRoot": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "memberProfileRoot": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "memberNodeId": "node/bob-macbook",
+      "sourceMandateRoot": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "application": {
+        "appId": "greenways.chat",
+        "version": "0.1.0",
+        "publisherId": "greenways-ai",
+        "manifestDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "lockDigest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "approvalDigest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "operations": ["conversation.create", "message.submit", "response.read"],
+      "limits": {
+        "requestsPerDay": 20,
+        "maxInputBytes": 20000,
+        "maxOutputBytes": 100000,
+        "maxTimeoutMs": 86400000
+      },
+      "membershipEpoch": 2,
+      "policyRevision": 4,
+      "validFrom": "2026-08-01T00:00:00.000Z",
+      "validUntil": "2026-09-01T00:00:00.000Z",
+      "revokedAt": null
+    },
+    "invocation": {
+      "protocol": "hestia-room-invocation/0-alpha",
+      "requestId": "room-request/0001",
+      "roomId": "room/design-studio",
+      "governanceRoot": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "membershipRoot": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "memberProfileRoot": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "memberNodeId": "node/bob-macbook",
+      "sourceId": "source/alice-chatgpt-browser",
+      "sourceMandateRoot": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "grantRoot": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "application": {
+        "appId": "greenways.chat",
+        "version": "0.1.0",
+        "publisherId": "greenways-ai",
+        "manifestDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "lockDigest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "approvalDigest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "operation": "message.submit",
+      "argumentsDigest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "inputBytes": 1200,
+      "maxOutputBytes": 50000,
+      "timeoutMs": 3600000,
+      "createdAt": "2026-08-12T23:59:00.000Z",
+      "expiresAt": "2026-08-13T01:00:00.000Z"
+    }
+  },
+  "cases": [
+    {
+      "name": "allowed host-mediated ChatGPT source",
+      "overrides": {},
+      "expected": {
+        "allowed": true,
+        "reason": "allowed",
+        "requiresUserInteraction": true
+      }
+    },
+    {
+      "name": "stale membership epoch",
+      "overrides": {"membership": {"membershipEpoch": 1}},
+      "expected": {
+        "allowed": false,
+        "reason": "membership-epoch-mismatch",
+        "requiresUserInteraction": false
+      }
+    },
+    {
+      "name": "source substitution",
+      "overrides": {"invocation": {"sourceId": "source/other"}},
+      "expected": {
+        "allowed": false,
+        "reason": "source-mismatch",
+        "requiresUserInteraction": false
+      }
+    },
+    {
+      "name": "changed application approval",
+      "overrides": {
+        "invocation": {
+          "application": {
+            "approvalDigest": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+          }
+        }
+      },
+      "expected": {
+        "allowed": false,
+        "reason": "source-application-mismatch",
+        "requiresUserInteraction": false
+      }
+    },
+    {
+      "name": "operation not exposed by source",
+      "overrides": {"invocation": {"operation": "conversation.delete"}},
+      "expected": {
+        "allowed": false,
+        "reason": "source-operation-denied",
+        "requiresUserInteraction": false
+      }
+    },
+    {
+      "name": "revoked room application grant",
+      "overrides": {"grant": {"revokedAt": "2026-08-12T00:00:00.000Z"}},
+      "expected": {
+        "allowed": false,
+        "reason": "grant-inactive",
+        "requiresUserInteraction": false
+      }
+    },
+    {
+      "name": "changed source policy revision",
+      "overrides": {"sourceMandate": {"policyRevision": 3}},
+      "expected": {
+        "allowed": false,
+        "reason": "source-policy-mismatch",
+        "requiresUserInteraction": false
+      }
+    },
+    {
+      "name": "per-call input limit exceeded",
+      "overrides": {"invocation": {"inputBytes": 25000}},
+      "expected": {
+        "allowed": false,
+        "reason": "grant-limit-exceeded",
+        "requiresUserInteraction": false
+      }
+    },
+    {
+      "name": "cross-room substitution",
+      "overrides": {"invocation": {"roomId": "room/other"}},
+      "expected": {
+        "allowed": false,
+        "reason": "room-mismatch",
+        "requiresUserInteraction": false
+      }
+    }
+  ]
+}
