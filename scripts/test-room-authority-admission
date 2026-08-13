@@ -277,10 +277,6 @@ WHERE mandate.room_id = :'room_id'
   AND grant_row.grant_id = 'room-application-grant/guest-chat';
 SQL
 )"
-if [[ "$projection_state" != \
-"source/host-chatgpt-browser|node/authority-host|greenways.chatgpt-web|greenways.chat|0.1.0|greenways-ai|sha256:${3//3/3}${3//3/3}" ]]; then
-  :
-fi
 node - "$projection_state" <<'NODE'
 const fields = process.argv[2].split("|");
 const expected = [
