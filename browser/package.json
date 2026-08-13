@@ -17,6 +17,7 @@
     "./agent-hcv1": "./src/agent-hcv1.js",
     "./agent-room-records": "./src/agent-room-records.js",
     "./room-authority": "./src/room-authority.js",
+    "./room-authority-projections": "./src/room-authority-projections.js",
     "./room-authority-import": "./room-authority-import.json",
     "./room-authority-conformance": "./fixtures/room-authority-conformance.json",
     "./agent-gateway": "./src/agent-gateway.js",
