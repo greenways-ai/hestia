@@ -4,6 +4,8 @@
   "package": "@greenways/hestia-browser",
   "export": "./room-authority",
   "projectionExport": "./room-authority-projections",
+  "authorityRecordExport": "./room-authority-records",
+  "sourceGrantProjectionExport": "./room-authority-source-projections",
   "authorityDecisionProtocol": "hestia-room-authority-decision/0-alpha",
   "conformanceProtocol": "hestia-room-authority-conformance/0-alpha",
   "conformanceFixture": "./fixtures/room-authority-conformance.json",
