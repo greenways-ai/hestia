@@ -451,6 +451,15 @@ export function validateRoomAuthorityDecision(value) {
         "decision.sourceMandateRoot"
       );
       assertRoot(authorityDecision.grantRoot, "decision.grantRoot");
+      if (authorityDecision.membershipRoot !== authorityDecision.invocation.membershipRoot
+          || authorityDecision.sourceMandateRoot
+            !== authorityDecision.invocation.sourceMandateRoot
+          || authorityDecision.grantRoot !== authorityDecision.invocation.grantRoot) {
+        fail(
+          "invalid-projection",
+          "allowed decision roots must match the exact invocation"
+        );
+      }
     } else if (authorityDecision.membershipRoot !== null
         || authorityDecision.sourceMandateRoot !== null
         || authorityDecision.grantRoot !== null

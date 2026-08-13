@@ -107,6 +107,18 @@ test("decisions detach the exact invocation from caller mutation", () => {
   assert.deepEqual(decision.invocation, fixture.base.invocation);
 });
 
+test("decision validation rejects authority roots changed after evaluation", () => {
+  const decision = authorizeRoomInvocation(caseInput({}));
+  assert.throws(
+    () => validateRoomAuthorityDecision({
+      ...decision,
+      grantRoot: `sha256:${"9".repeat(64)}`
+    }),
+    (error) => error instanceof RoomAuthorityError
+      && error.code === "invalid-projection"
+  );
+});
+
 test("decision validation rejects partial correlation and secret-shaped fields", () => {
   const decision = authorizeRoomInvocation(caseInput({}));
   const { invocation: _invocation, ...partial } = decision;
