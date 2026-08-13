@@ -19,6 +19,19 @@ const MAX_REQUESTS_PER_DAY = 1_000_000;
 const MAX_CONTENT_BYTES = 16 * 1024 * 1024;
 const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
+const SIGNED_RECORD_FIELDS = [
+  "protocol",
+  "version",
+  "type",
+  "signer_key",
+  "signer_key_root",
+  "body",
+  "body_root",
+  "root",
+  "signature",
+  "hcp1_pack",
+  "hcv1_cells"
+];
 const APPLICATION_FIELDS = [
   "appId",
   "version",
@@ -46,6 +59,60 @@ const CANONICAL_LIMIT_FIELDS = [
   "max_input_bytes",
   "max_output_bytes",
   "max_timeout_ms"
+];
+const SOURCE_BODY_FIELDS = [
+  "mandate_id",
+  "room_root",
+  "governance_root",
+  "issued_by_profile_root",
+  "authority_root",
+  "source_id",
+  "source_node_id",
+  "implementation",
+  "application",
+  "operations",
+  "membership_epoch",
+  "policy_revision",
+  "requires_user_interaction",
+  "valid_from",
+  "valid_until"
+];
+const SOURCE_REVOCATION_BODY_FIELDS = [
+  "revocation_id",
+  "room_root",
+  "governance_root",
+  "mandate_root",
+  "revoked_by_profile_root",
+  "authority_root",
+  "reason",
+  "revoked_at"
+];
+const GRANT_BODY_FIELDS = [
+  "grant_id",
+  "room_root",
+  "governance_root",
+  "issued_by_profile_root",
+  "authority_root",
+  "member_profile_root",
+  "member_node_id",
+  "source_mandate_root",
+  "application",
+  "operations",
+  "limits",
+  "membership_epoch",
+  "policy_revision",
+  "valid_from",
+  "valid_until"
+];
+const GRANT_REVOCATION_BODY_FIELDS = [
+  "revocation_id",
+  "room_root",
+  "governance_root",
+  "grant_root",
+  "revoked_by_profile_root",
+  "authority_root",
+  "reason",
+  "revoked_at"
 ];
 
 const SOURCE_CREATE_FIELDS = [
@@ -149,6 +216,14 @@ function assertClosedObject(value, name, fields) {
       || actual.some((field, index) => field !== expected[index])) {
     fail("invalid-record", `${name} fields must be exactly: ${expected.join(", ")}`);
   }
+}
+
+function assertSignedRecord(record, name, kind) {
+  assertClosedObject(record, name, SIGNED_RECORD_FIELDS);
+  if (record.type !== kind) {
+    fail("invalid-record", `${name} must be a ${kind} record`);
+  }
+  return record;
 }
 
 function assertString(value, name, maximum = MAX_IDENTIFIER_BYTES) {
@@ -334,6 +409,7 @@ export function canonicalOperationsAreSubset(candidate, allowed) {
 }
 
 function validateSourceBody(body) {
+  assertClosedObject(body, "sourceMandate", SOURCE_BODY_FIELDS);
   assertIdentifier(body.mandate_id, "sourceMandate.mandate_id");
   assertRoot(body.room_root, "sourceMandate.room_root");
   assertRoot(body.governance_root, "sourceMandate.governance_root");
@@ -352,6 +428,7 @@ function validateSourceBody(body) {
 }
 
 function validateSourceRevocationBody(body) {
+  assertClosedObject(body, "sourceRevocation", SOURCE_REVOCATION_BODY_FIELDS);
   assertIdentifier(body.revocation_id, "sourceRevocation.revocation_id");
   assertRoot(body.room_root, "sourceRevocation.room_root");
   assertRoot(body.governance_root, "sourceRevocation.governance_root");
@@ -364,6 +441,7 @@ function validateSourceRevocationBody(body) {
 }
 
 function validateGrantBody(body) {
+  assertClosedObject(body, "roomGrant", GRANT_BODY_FIELDS);
   assertIdentifier(body.grant_id, "roomGrant.grant_id");
   assertRoot(body.room_root, "roomGrant.room_root");
   assertRoot(body.governance_root, "roomGrant.governance_root");
@@ -382,6 +460,7 @@ function validateGrantBody(body) {
 }
 
 function validateGrantRevocationBody(body) {
+  assertClosedObject(body, "grantRevocation", GRANT_REVOCATION_BODY_FIELDS);
   assertIdentifier(body.revocation_id, "grantRevocation.revocation_id");
   assertRoot(body.room_root, "grantRevocation.room_root");
   assertRoot(body.governance_root, "grantRevocation.governance_root");
@@ -440,6 +519,7 @@ export async function createRoomSourceMandate(options) {
 
 export async function verifyRoomSourceMandate(record, signerPublicKey) {
   try {
+    assertSignedRecord(record, "sourceMandateRecord", ROOM_SOURCE_MANDATE_KIND);
     return validateSourceBody(await verifyAgentRecord(
       record,
       signerPublicKey,
@@ -464,9 +544,8 @@ export async function createRoomSourceMandateRevocation(options) {
     revokedAt,
     signingKey
   } = options;
-  if (mandateRecord?.type !== ROOM_SOURCE_MANDATE_KIND) {
-    fail("invalid-record", "a canonical source mandate record is required");
-  }
+  assertSignedRecord(mandateRecord, "mandateRecord", ROOM_SOURCE_MANDATE_KIND);
+  validateSourceBody(mandateRecord.body);
   const body = {
     revocation_id: assertIdentifier(revocationId, "revocationId"),
     room_root: assertRoot(roomRecord?.root, "roomRecord.root"),
@@ -483,6 +562,11 @@ export async function createRoomSourceMandateRevocation(options) {
 
 export async function verifyRoomSourceMandateRevocation(record, signerPublicKey) {
   try {
+    assertSignedRecord(
+      record,
+      "sourceMandateRevocationRecord",
+      ROOM_SOURCE_MANDATE_REVOCATION_KIND
+    );
     return validateSourceRevocationBody(await verifyAgentRecord(
       record,
       signerPublicKey,
@@ -515,9 +599,7 @@ export async function createRoomApplicationGrant(options) {
     signingKey
   } = options;
 
-  if (sourceMandateRecord?.type !== ROOM_SOURCE_MANDATE_KIND) {
-    fail("invalid-record", "a canonical source mandate record is required");
-  }
+  assertSignedRecord(sourceMandateRecord, "sourceMandateRecord", ROOM_SOURCE_MANDATE_KIND);
   const sourceBody = validateSourceBody(sourceMandateRecord.body);
   const canonicalApp = canonicalApplication(application);
   const canonicalOps = [...assertCanonicalList(operations, "operations")];
@@ -569,6 +651,7 @@ export async function createRoomApplicationGrant(options) {
 
 export async function verifyRoomApplicationGrant(record, signerPublicKey) {
   try {
+    assertSignedRecord(record, "roomApplicationGrantRecord", ROOM_APPLICATION_GRANT_KIND);
     return validateGrantBody(await verifyAgentRecord(
       record,
       signerPublicKey,
@@ -593,9 +676,8 @@ export async function createRoomApplicationGrantRevocation(options) {
     revokedAt,
     signingKey
   } = options;
-  if (grantRecord?.type !== ROOM_APPLICATION_GRANT_KIND) {
-    fail("invalid-record", "a canonical room application grant record is required");
-  }
+  assertSignedRecord(grantRecord, "grantRecord", ROOM_APPLICATION_GRANT_KIND);
+  validateGrantBody(grantRecord.body);
   const body = {
     revocation_id: assertIdentifier(revocationId, "revocationId"),
     room_root: assertRoot(roomRecord?.root, "roomRecord.root"),
@@ -612,6 +694,11 @@ export async function createRoomApplicationGrantRevocation(options) {
 
 export async function verifyRoomApplicationGrantRevocation(record, signerPublicKey) {
   try {
+    assertSignedRecord(
+      record,
+      "roomApplicationGrantRevocationRecord",
+      ROOM_APPLICATION_GRANT_REVOCATION_KIND
+    );
     return validateGrantRevocationBody(await verifyAgentRecord(
       record,
       signerPublicKey,
