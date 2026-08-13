@@ -6,6 +6,13 @@ import {
   rootHex
 } from "./protocol.mjs";
 
+const ROOM_AUTHORITY_KINDS = Object.freeze(new Set([
+  "room/source-mandate",
+  "room/source-mandate-revocation",
+  "room/application-grant",
+  "room/application-grant-revocation"
+]));
+
 function databaseRoot(value, name) {
   return rootHex(value, name);
 }
@@ -46,6 +53,11 @@ function publicAdmissionResult(prepared, signedReceiptRootHex, signature) {
   if (prepared.result_activity_root_hex) {
     result.result_activity_root = prefixedRoot(
       databaseRoot(prepared.result_activity_root_hex, "result activity root")
+    );
+  }
+  if (prepared.result_authority_root_hex) {
+    result.result_authority_root = prefixedRoot(
+      databaseRoot(prepared.result_authority_root_hex, "result authority root")
     );
   }
   return Object.freeze(result);
@@ -103,6 +115,9 @@ async function admitRecord(transaction, submission, environmentId, signer) {
       capability: submission.capability
     });
     commit = (signature) => transaction.commitMember({ ...common, signature });
+  } else if (ROOM_AUTHORITY_KINDS.has(submission.recordKind)) {
+    prepared = await transaction.prepareAuthority(common);
+    commit = (signature) => transaction.commitAuthority({ ...common, signature });
   } else if (submission.recordKind === "room/document-attachment"
       || submission.recordKind === "room/message-intent") {
     prepared = await transaction.prepareActivity(common);
