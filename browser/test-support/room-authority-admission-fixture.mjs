@@ -330,8 +330,8 @@ async function addAuthorityRecords(path, governanceRoot) {
   await chmod(path, 0o600);
 }
 
-function signReceipt(path, payloadHex) {
-  const fixture = JSON.parse(require("node:fs").readFileSync(path, "utf8"));
+async function signReceipt(path, payloadHex) {
+  const fixture = JSON.parse(await readFile(path, "utf8"));
   const privateKey = createPrivateKey(fixture.environment.privateKeyPem);
   const signature = sign(null, Buffer.from(payloadHex, "hex"), privateKey);
   process.stdout.write(signature.toString("hex"));
@@ -343,7 +343,7 @@ if (command === "create" && path) {
 } else if (command === "authority" && path && value) {
   await addAuthorityRecords(path, value);
 } else if (command === "sign" && path && value) {
-  signReceipt(path, value);
+  await signReceipt(path, value);
 } else {
   throw new Error(
     "usage: room-authority-admission-fixture.mjs "
