@@ -2677,7 +2677,7 @@ mod tests {
         let mut runtime = Runtime::new();
         assert_eq!(
             runtime
-                .eval_text("(require 'std.lib.substrate.protocol) :loaded")
+                .eval_text("(require 'std.substrate.protocol) :loaded")
                 .unwrap(),
             ":loaded"
         );
@@ -3047,7 +3047,7 @@ mod tests {
         assert_eq!(
             runtime
                 .eval_text(include_str!(
-                    "../../lib/test-fixtures/std/lib/substrate/protocol_conformance.hal"
+                    "../../lib/test-fixtures/std/substrate/protocol_conformance.hal"
                 ))
                 .unwrap(),
             "[40 42]"
@@ -3060,15 +3060,15 @@ mod tests {
         assert_eq!(
             runtime
                 .eval_text(include_str!(
-                    "../../lib/test-fixtures/std/lib/substrate/frame_conformance.hal"
+                    "../../lib/test-fixtures/std/substrate/frame_conformance.hal"
                 ))
                 .unwrap(),
             "\"{\\\"version\\\":\\\"substrate.v1\\\",\\\"kind\\\":\\\"request\\\",\\\"id\\\":\\\"req-1\\\",\\\"source\\\":\\\"client/a\\\",\\\"target\\\":\\\"server/b\\\",\\\"space\\\":\\\"workspace/main\\\",\\\"meta\\\":{\\\"trace\\\":\\\"trace-1\\\"},\\\"action\\\":\\\"math/add\\\",\\\"args\\\":[19,23],\\\"reply_to\\\":null,\\\"status\\\":null,\\\"data\\\":null,\\\"error\\\":null,\\\"signal\\\":null,\\\"cause\\\":null}\""
         );
         assert!(runtime
             .eval_text(
-                "(do (require 'std.lib.substrate.frame) \\
-                     (std.lib.substrate.frame/normalize-frame {:kind :unknown :id \"evt-1\"}))",
+                "(do (require 'std.substrate.frame) \\
+                     (std.substrate.frame/normalize-frame {:kind :unknown :id \"evt-1\"}))",
             )
             .is_err());
     }
@@ -3079,7 +3079,7 @@ mod tests {
         assert_eq!(
             runtime
                 .eval_text(include_str!(
-                    "../../lib/test-fixtures/std/lib/substrate/node_lifecycle_conformance.hal"
+                    "../../lib/test-fixtures/std/substrate/node_lifecycle_conformance.hal"
                 ))
                 .unwrap(),
             "[84 42 :rejected]"
@@ -3092,18 +3092,18 @@ mod tests {
         assert_eq!(
             runtime
                 .eval_text(
-                    "(require 'std.lib.substrate) \
-                     (def node (std.lib.substrate/node-create \"node-1\")) \
-                     [(std.lib.substrate.protocol/set-service node \"cache\" 42) \
-                      (std.lib.substrate.protocol/get-service node \"cache\") \
-                      (std.lib.substrate.protocol/set-space-state node \"main\" {:count 1}) \
-                      (std.lib.substrate.protocol/get-space-state node \"main\") \
-                      (def subscription (std.lib.substrate.protocol/subscribe node \"main\" \"changed\" \"sub-1\" {})) \
-                      (std.lib.substrate.protocol/receive-frame node subscription {:transport-id \"peer-a\"}) \
-                      (std.lib.substrate.protocol/list-subscriptions node \"main\" \"changed\")]",
+                    "(require 'std.substrate) \
+                     (def node (std.substrate/node-create \"node-1\")) \
+                     [(std.substrate.protocol/set-service node \"cache\" 42) \
+                      (std.substrate.protocol/get-service node \"cache\") \
+                      (std.substrate.protocol/set-space-state node \"main\" {:count 1}) \
+                      (std.substrate.protocol/get-space-state node \"main\") \
+                      (def subscription (std.substrate.protocol/subscribe node \"main\" \"changed\" \"sub-1\" {})) \
+                      (std.substrate.protocol/receive-frame node subscription {:transport-id \"peer-a\"}) \
+                      (std.substrate.protocol/list-subscriptions node \"main\" \"changed\")]",
                 )
                 .unwrap(),
-            "[42 42 {:count 1} {:count 1} #std.lib.substrate/SubstrateFrame{:id \"sub-1\" :kind :subscribe :space \"main\" :meta {} :action nil :args [] :reply-to nil :status nil :data nil :error nil :signal \"changed\" :cause nil} {\"peer-a\" {:id \"sub-1\" :meta {}}} [\"peer-a\"]]"
+            "[42 42 {:count 1} {:count 1} #std.substrate/SubstrateFrame{:id \"sub-1\" :kind :subscribe :space \"main\" :meta {} :action nil :args [] :reply-to nil :status nil :data nil :error nil :signal \"changed\" :cause nil} {\"peer-a\" {:id \"sub-1\" :meta {}}} [\"peer-a\"]]"
         );
     }
 
@@ -3113,16 +3113,16 @@ mod tests {
         assert_eq!(
             runtime
                 .eval_text(
-                    "(require 'std.lib.substrate) \
-                     (def node (std.lib.substrate/node-create \"node-1\")) \
-                     (std.lib.substrate.protocol/attach-transport node \"peer-a\" \
+                    "(require 'std.substrate) \
+                     (def node (std.substrate/node-create \"node-1\")) \
+                     (std.substrate.protocol/attach-transport node \"peer-a\" \
                        (fn [frame] \
-                         (std.lib.substrate.protocol/set-service node \"sent\" \
-                           (std.lib.substrate.protocol/frame-data frame)))) \
-                     (def subscription (std.lib.substrate.protocol/subscribe node \"main\" \"changed\" \"sub-1\" {})) \
-                     (std.lib.substrate.protocol/receive-frame node subscription {:transport-id \"peer-a\"}) \
-                     (std.lib.substrate.protocol/publish node \"main\" \"changed\" 42 {:id \"evt-1\"}) \
-                     (std.lib.substrate.protocol/get-service node \"sent\")",
+                         (std.substrate.protocol/set-service node \"sent\" \
+                           (std.substrate.protocol/frame-data frame)))) \
+                     (def subscription (std.substrate.protocol/subscribe node \"main\" \"changed\" \"sub-1\" {})) \
+                     (std.substrate.protocol/receive-frame node subscription {:transport-id \"peer-a\"}) \
+                     (std.substrate.protocol/publish node \"main\" \"changed\" 42 {:id \"evt-1\"}) \
+                     (std.substrate.protocol/get-service node \"sent\")",
                 )
                 .unwrap(),
             "42"
@@ -3131,14 +3131,14 @@ mod tests {
         assert_eq!(
             runtime
                 .eval_text(
-                    "(def requester (std.lib.substrate/node-create \"node-2\")) \
-                     (std.lib.substrate.protocol/attach-transport requester \"peer-b\" \
+                    "(def requester (std.substrate/node-create \"node-2\")) \
+                     (std.substrate.protocol/attach-transport requester \"peer-b\" \
                        (fn [frame] \
-                         (std.lib.substrate.protocol/receive-frame requester \
-                           (std.lib.substrate/node-frame :response \"res-1\" \"main\" {} nil [] \
-                             (std.lib.substrate.protocol/frame-id frame) :ok 84 nil nil nil) \
+                         (std.substrate.protocol/receive-frame requester \
+                           (std.substrate/node-frame :response \"res-1\" \"main\" {} nil [] \
+                             (std.substrate.protocol/frame-id frame) :ok 84 nil nil nil) \
                            {:transport-id \"peer-b\"}))) \
-                     (def reply (std.lib.substrate.protocol/request requester \"main\" \"sum\" [] \
+                     (def reply (std.substrate.protocol/request requester \"main\" \"sum\" [] \
                                   {:id \"req-1\" :transport-id \"peer-b\"})) \
                      (promise/value reply)",
                 )
@@ -3153,12 +3153,12 @@ mod tests {
         assert_eq!(
             runtime
                 .eval_text(
-                    "(require 'std.lib.substrate) \
-                     (def node (std.lib.substrate/node-create \"node-1\")) \
-                     (std.lib.substrate.protocol/attach-transport node \"peer-a\" (fn [frame] nil)) \
-                     (def cancelled (std.lib.substrate.protocol/request node \"main\" \"wait\" [] \
+                    "(require 'std.substrate) \
+                     (def node (std.substrate/node-create \"node-1\")) \
+                     (std.substrate.protocol/attach-transport node \"peer-a\" (fn [frame] nil)) \
+                     (def cancelled (std.substrate.protocol/request node \"main\" \"wait\" [] \
                                       {:id \"req-cancel\" :transport-id \"peer-a\"})) \
-                     (std.lib.substrate.protocol/cancel-request node \"req-cancel\" :cancelled) \
+                     (std.substrate.protocol/cancel-request node \"req-cancel\" :cancelled) \
                      (promise/state cancelled)",
                 )
                 .unwrap(),
