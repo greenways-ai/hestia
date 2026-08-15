@@ -1,6 +1,6 @@
 (ns hestia.controller-test
-  (:require [std.foundation :refer :all]
-            [std.lib.test :as test]
+  (:config {})
+  (:require
             [hestia.controller :as controller]))
 
 (defn root-of
@@ -83,8 +83,7 @@
    "chat/share-1"
    (assoc expected-receipt :status :applied)))
 
-(test/print-results
- [(test/check
+[(test-check
    "semantic, work, ledger, signing and effect ports are closed"
    [controller/port-services]
    [{:semantic "tahto.semantic"
@@ -93,7 +92,7 @@
      :signing "greenways.keyring"
      :effect "greenways.connector"}])
 
-  (test/check
+  (test-check
    "an exact intent is proposed idempotently"
    [(get proposed :ok)
     (get
@@ -107,21 +106,21 @@
      :error)]
    [true true :hestia/intent-id-collision])
 
-  (test/check
+  (test-check
    "approval binds the exact proposal and uses the OS keyring"
    [(get-in prepared-approval [:call :service])
     (get-in prepared-approval [:call :operation])
     (get-in approved [:value :proposal/status])]
    ["greenways.keyring" "sign" :approved])
 
-  (test/check
+  (test-check
    "approved work is queued through std.work"
    [(get-in queued [:call :service])
     (get-in queued [:call :operation])
     (get-in queued [:call :arguments 0 :idempotency-key])]
    ["std.work" "start" "chat/share-1"])
 
-  (test/check
+  (test-check
    "signed work evidence is committed once through the Ignatius ledger"
    [(get-in prepared-evidence [:call :service])
     (get-in ledger-pending [:call :service])
@@ -132,7 +131,7 @@
    ["greenways.keyring" "postgres.core" "ignatius/submit" :completed
     "sha256:transaction"])
 
-  (test/check
+  (test-check
    "a mismatched canonical receipt cannot complete the proposal"
    (get
     (controller/accept-evidence
@@ -140,4 +139,4 @@
      "chat/share-1"
      (assoc expected-receipt :status :applied :block-root "other"))
     :error)
-   :hestia/evidence-result-invalid)])
+   :hestia/evidence-result-invalid)]

@@ -1,6 +1,5 @@
 (ns gw.ledger.document-protocol-test
-  (:require [std.lib.test :as test]
-            [gw.ledger.document-protocol :as document]))
+  (:require [gw.ledger.document-protocol :as document]))
 
 (def results
   (let [operations [{:kind :append :value "a"}
@@ -24,10 +23,10 @@
         (document/change-batch
          "batch" "log" 2 "previous" "revision" "base" "result"
          "profile" "delegation" operations)]
-    [(test/check "frames domain-separated signing bytes"
+    [(test-check "frames domain-separated signing bytes"
                  (document/signing-payload "change-batch" "root")
                  (str "GWDP0" \0 "change-batch" \0 "root"))
-     (test/check "stores operations in one batch without hiding replay boundaries"
+     (test-check "stores operations in one batch without hiding replay boundaries"
                  [(get batch :operations)
                   (get replayed :document)
                   (get replayed :states)]
@@ -37,11 +36,11 @@
                     :result-root "document-a"}
                    {:index 1 :operation-root "operation-b"
                     :result-root "document-ab"}]])
-     (test/check "enforces the compact batch bound"
+     (test-check "enforces the compact batch bound"
                  [(document/batch-valid? [])
                   (document/batch-valid? operations)]
                  [false true])
-     (test/check "returns explicit booleans for terminal dispositions"
+     (test-check "returns explicit booleans for terminal dispositions"
                  [(document/terminal-disposition? :accepted)
                   (document/terminal-disposition? :resolved)
                   (document/terminal-disposition? :rejected)
@@ -49,10 +48,10 @@
                   (document/terminal-disposition? :conflict)
                   (document/terminal-disposition? nil)]
                  [true true true true false false])
-     (test/check "blocks delivery until every disclosed batch is terminal"
+     (test-check "blocks delivery until every disclosed batch is terminal"
                  [(document/delivery-ready? [:accepted :resolved :abandoned])
                   (document/delivery-ready? [:accepted :conflict])
                   (document/delivery-ready? [])]
                  [true false true])]))
 
-(test/print-results results)
+results

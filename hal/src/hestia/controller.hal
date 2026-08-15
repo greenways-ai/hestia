@@ -1,5 +1,5 @@
 (ns hestia.controller
-  (:require [std.foundation :refer :all]))
+  (:config {}))
 
 (def controller-protocol "hestia.controller/0-alpha")
 (def intent-protocol "hestia.control-intent/0-alpha")

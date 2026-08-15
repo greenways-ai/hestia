@@ -1,6 +1,6 @@
 (ns hestia.control.http-test
-  (:require [std.foundation :refer :all]
-            [std.lib.test :as test]
+  (:config {})
+  (:require
             [hestia.control :as control]
             [hestia.control.http :as http]))
 
@@ -66,15 +66,14 @@
 (def checked
   (http/evaluate "control/check" context request root-of))
 
-(test/print-results
- [(test/check
+[(test-check
    "HTTP delegates to the same portable Hara function"
    [(get-in checked [:value :result/status])
     (get-in checked [:value :result/authority-roots :room-root])
     (get (http/http-response (get checked :value)) :status)]
    [:approval-required room-root 200])
 
-  (test/check
+  (test-check
    "a route cannot change the operation declared by the closed body"
    [(get-in
      (http/evaluate "control/execute" context request root-of)
@@ -87,13 +86,13 @@
      :status)]
    [:request-invalid 400])
 
-  (test/check
+  (test-check
    "context values reject extra authority and native handles"
    [(http/context? context)
     (http/context? (assoc context :database-handle 42))]
    [true false])
 
-  (test/check
+  (test-check
    "Hoplite exposes only eight reviewed POST routes"
    [(count (get http/app :resources))
     (every?
@@ -103,7 +102,7 @@
     (count (get http/openapi :paths))]
    [8 true 8])
 
-  (test/check
+  (test-check
    "commit values are closed and revision-bound"
    [(http/commit-result?
      {:protocol http/commit-protocol
@@ -114,4 +113,4 @@
       :status :applied
       :state-revision state-revision
       :path "/private/database"})]
-   [true false])])
+   [true false])]

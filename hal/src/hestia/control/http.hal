@@ -1,6 +1,6 @@
 (ns hestia.control.http
-  (:require [std.foundation :refer :all]
-            [hestia.control :as control]))
+  (:config {})
+  (:require [hestia.control :as control]))
 
 (def context-protocol "hestia.control-http-context/0-alpha")
 (def commit-protocol "hestia.control-http-commit/0-alpha")

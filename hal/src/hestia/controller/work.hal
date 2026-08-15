@@ -1,6 +1,6 @@
 (ns hestia.controller.work
-  (:require [std.foundation :refer :all]
-            [hestia.controller :as controller]))
+  (:config {})
+  (:require [hestia.controller :as controller]))
 
 (def work-receipt-protocol "hara.work.receipt/0-alpha")
 

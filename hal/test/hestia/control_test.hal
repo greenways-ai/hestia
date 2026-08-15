@@ -1,6 +1,6 @@
 (ns hestia.control-test
-  (:require [std.foundation :refer :all]
-            [std.lib.test :as test]
+  (:config {})
+  (:require
             [hestia.control :as control]))
 
 (def root-a "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
@@ -82,8 +82,7 @@
   (control/dispatch
    (get approved :state) execute-request approved-authority 150 root-of))
 
-(test/print-results
- [(test/check
+[(test-check
    "the portable surface is closed and transport-neutral"
    [control/operations
     (get-in executed [:value :result/status])
@@ -93,7 +92,7 @@
     :authorized
     root-4])
 
-  (test/check
+  (test-check
    "check and explain return bounded approval requirements"
    [(get-in
      (control/dispatch
@@ -110,14 +109,14 @@
    [:approval-required
     [:verified-human-approval :exact-subject-root]])
 
-  (test/check
+  (test-check
    "every successful transition retains exact canonical authority roots"
    [(get-in proposed [:value :result/authority-roots :mandate-root])
     (get-in approved [:value :result/authority-roots :approval-root])
     (get-in executed [:value :result/value :receipt-root])]
    [root-d root-2 root-5])
 
-  (test/check
+  (test-check
    "exact replay is idempotent while a changed request collides"
    [(get
      (control/dispatch
@@ -132,7 +131,7 @@
      [:value :result/reason])]
    [true :request-id-collision])
 
-  (test/check
+  (test-check
    "stale policy, subject and revocation fail before execution"
    [(get-in
      (control/dispatch
@@ -155,7 +154,7 @@
      [:value :result/reason])]
    [:authority-roots-stale :subject-root-mismatch :authority-revoked])
 
-  (test/check
+  (test-check
    "status and receipt project state without issuing host calls"
    [(get-in
      (control/dispatch
@@ -171,7 +170,7 @@
      [:value :result/value :receipt/root])]
    [:authorized root-5])
 
-  (test/check
+  (test-check
    "cancellation is permitted before authorization and denied afterward"
    [(get-in
      (control/dispatch
@@ -187,10 +186,10 @@
      [:value :result/reason])]
    [:cancelled :workflow-not-cancellable])
 
-  (test/check
+  (test-check
    "unknown fields and request-selected authority are rejected"
    [(control/request? (assoc propose-request :credential "secret"))
     (control/authority? (assoc authority :private-key "secret"))
     (control/root?
      "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
-   [false false false])])
+   [false false false])]

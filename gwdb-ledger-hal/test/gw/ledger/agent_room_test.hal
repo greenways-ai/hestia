@@ -1,6 +1,6 @@
 (ns gw.ledger.agent-room-test
-  (:require [std.lib.test :as test]
-            [gw.ledger.agent-room :as agent-room]))
+  (:config {:override [A B C D E F G H I]})
+  (:require [gw.ledger.agent-room :as agent-room]))
 
 (def A "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 (def B "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
@@ -27,19 +27,19 @@
                  (fn [text] "00")
                  (fn [envelope] (str "sha(" envelope ")"))
                  A B C D E F G H I)]
-    [(test/check "uses the stable HCV0 record tag"
+    [(test-check "uses the stable HCV0 record tag"
                  agent-room/record-type-tag
                  14)
-     (test/check "frames profile fields in normative order"
+     (test-check "frames profile fields in normative order"
                  profile-payload
                  (str "R:hestia-agent/0-alpha:profile/version:1:8:"
                       A B C D E F G H))
-     (test/check "assigns field roles to HCP0 references"
+     (test-check "assigns field roles to HCP0 references"
                  [(get (nth profile-refs 0) :role)
                   (get (nth profile-refs 5) :role)
                   (get (nth profile-refs 7) :role)]
                  ["profile-id" "root-key" "delegation"])
-     (test/check "defines canonical profile, governance, and activity schemas"
+     (test-check "defines canonical profile, governance, and activity schemas"
                  [(agent-room/field-names "profile/state")
                   (agent-room/field-names "room/member-state")
                   (agent-room/field-names "room/invitation-state")
@@ -56,16 +56,16 @@
                    "acceptance-mode" "status"]
                   ["room-state" "previous-activity" "event" "activity-kind"
                    "actor-profile" "membership-epoch" "sequence"]])
-     (test/check "constructs an HCV0 record through explicit capabilities"
+     (test-check "constructs an HCV0 record through explicit capabilities"
                  (get profile-cell :root)
                  (str "sha(HCV0:14:" (count profile-payload) ":00)"))
-     (test/check "domain-separates agent-room signing bytes"
+     (test-check "domain-separates agent-room signing bytes"
                  (agent-room/signing-payload "negotiation/offer" A)
                  (str "GWAR0:negotiation/offer:" A))
-     (test/check "commits all admission transition boundaries"
+     (test-check "commits all admission transition boundaries"
                  [(count (get receipt :refs))
                   (get (nth (get receipt :refs) 0) :role)
                   (get (nth (get receipt :refs) 8) :role)]
                  [9 "previous-state" "sequence"])]))
 
-(test/print-results results)
+results

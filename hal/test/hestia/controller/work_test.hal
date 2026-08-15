@@ -1,6 +1,6 @@
 (ns hestia.controller.work-test
-  (:require [std.foundation :refer :all]
-            [std.lib.test :as test]
+  (:config {})
+  (:require
             [hestia.controller :as controller]
             [hestia.controller.work :as work]))
 
@@ -40,8 +40,7 @@
     :key-id "key/environment"
     :sequence 1}))
 
-(test/print-results
- [(test/check
+[(test-check
    "only the exact completed receipt for the proposal enters evidence"
    [(work/completed-receipt? "proposal-1" completed-envelope)
     (work/completed-receipt?
@@ -50,10 +49,10 @@
     (work/completed-receipt? "proposal-2" completed-envelope)]
    [true false false])
 
-  (test/check
+  (test-check
    "Hestia converts completion into a signed evidence preparation"
    [(get prepared :ok)
     (get-in prepared [:value :evidence/body :evidence/result-root])
     (get-in prepared [:call :service])
     (get-in prepared [:call :operation])]
-   [true "sha256:result" "greenways.keyring" "sign"])])
+   [true "sha256:result" "greenways.keyring" "sign"])]
