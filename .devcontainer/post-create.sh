@@ -111,12 +111,11 @@ ensure_lein
 need git; need python3; need psql
 
 ensure_checkout "$HARA_REPOSITORY" "$HARA_REVISION" "$HARA_CHECKOUT"
-hara_manifest="$HARA_CHECKOUT/core/rust/Cargo.toml"
-[[ -f "$hara_manifest" ]] || fail "pinned Hara checkout has no core/rust/Cargo.toml"
+hara_manifest="$HARA_CHECKOUT/rust/Cargo.toml"
+[[ -f "$hara_manifest" ]] || fail "pinned Hara checkout has no rust/Cargo.toml"
 cargo +1.88.0 fetch --locked --manifest-path "$hara_manifest"
-cargo +1.88.0 build --locked --release --manifest-path "$hara_manifest" --bin hara --bin hara-test
-install -m 0755 "$HARA_CHECKOUT/core/rust/target/release/hara" "$HOME/.local/bin/hara"
-install -m 0755 "$HARA_CHECKOUT/core/rust/target/release/hara-test" "$HOME/.local/bin/hara-test"
+cargo +1.88.0 build --locked --release --manifest-path "$hara_manifest" --bin hara
+install -m 0755 "$HARA_CHECKOUT/rust/target/release/hara" "$HOME/.local/bin/hara"
 
 while IFS= read -r -d '' manifest; do
   fetch_rust_graph "$manifest"
@@ -157,11 +156,11 @@ print_version "Rust" rustc +1.88.0
 print_version "Cargo" cargo +1.88.0
 print_version "PostgreSQL" psql
 print_version "Hara" hara
-print_version "hara-test" hara-test
 printf 'Hara revision: %s\n' "$(git -C "$HARA_CHECKOUT" rev-parse HEAD)"
 cat <<'CHECKS'
 
 Available checks (dependencies are prepared for offline execution):
+  hara eval '(+ 19 23)'
   make boundary-check
   make controller-check
   make controller-test
