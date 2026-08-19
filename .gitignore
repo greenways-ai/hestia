@@ -1,20 +1,22 @@
 /backups/
 /.hestia/
+/.local/
 *.local
 .env
 .env.*
 !.env.example
+**/node_modules/
+**/target/
+**/Cargo.lock
 /browser/test-results/
 /browser/playwright-report/
+/browser/.cache/
 /.pages/
 /cloudflare/signaling/.wrangler/
-/site/node_modules/
 /site/dist/
 /site/.astro/
 /site/.netlify/
 /.netlify/
-/hoplite/runtime/target/
-/hoplite/runtime/Cargo.lock
 
 # macOS
 .DS_Store

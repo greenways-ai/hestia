@@ -1,0 +1,44 @@
+{
+  "name": "Hestia",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "remoteUser": "vscode",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "24"
+    },
+    "ghcr.io/devcontainers/features/rust:1": {
+      "version": "1.88.0"
+    },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "enableNonRootDocker": "true"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "containerEnv": {
+    "CARGO_HOME": "/home/vscode/.cache/hestia/cargo",
+    "LEIN_HOME": "/home/vscode/.cache/hestia/lein",
+    "npm_config_cache": "/home/vscode/.cache/hestia/npm",
+    "PLAYWRIGHT_BROWSERS_PATH": "/home/vscode/.cache/hestia/playwright"
+  },
+  "forwardPorts": [58080, 58443, 59999, 55432, 4321],
+  "portsAttributes": {
+    "58080": { "label": "Hestia Hoplite" },
+    "58443": { "label": "Hestia signaling" },
+    "59999": { "label": "Hestia auth" },
+    "55432": { "label": "Hestia PostgreSQL" },
+    "4321": { "label": "Hestia Astro site" }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "vscjava.vscode-java-pack",
+        "dbaeumer.vscode-eslint"
+      ]
+    }
+  }
+}
