@@ -18,9 +18,17 @@ Use these Codex environment values:
 - **Docker integration:** run from the devcontainer or Codespaces only when `docker info` succeeds
 
 Setup materializes the exact extraction Hara revision under `.local/hara.lang`,
-builds `hara` and `hara-test`, prepares Lein and Cargo graphs, installs the five
+builds the extraction-era native `hara` CLI (which provides both `eval` and
+`test`), prepares Lein and Cargo graphs, installs the five
 locked Node package trees, and installs Playwright Chromium and Firefox. A
 cached dependency checkout must be clean and exact; setup never resets it.
+
+## Smoke test
+
+```sh
+hara --version
+hara eval '(+ 19 23)'
+```
 
 ## Representative offline checks
 
