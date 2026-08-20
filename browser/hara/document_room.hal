@@ -104,7 +104,7 @@
       (if (= (get state "role") "sequencer")
         (outcome (assoc state "phase" "sequencing")
                  [(command "document" "sequence-remote-batch" [data])])
-        (throw (ex-info "only the room sequencer may admit batches" {})))
+        (throw (ex :hestia.ex/sequencer-required {} :ex/message "only the room sequencer may admit batches" :ex/class :hestia.class/authorization)))
 
       (= kind "commit/received")
       (outcome (assoc state "phase" "verifying")
@@ -128,7 +128,7 @@
       (outcome (merge state {"phase" "error" "error" (get data "message")}) [])
 
       true
-      (throw (ex-info "unknown document room event" {"type" kind})))))
+      (throw (ex :hestia.ex/unknown-document-room-event {"type" kind} :ex/message "unknown document room event" :ex/class :hestia.class/event)))))
 
 (defn canonical-common
   [operation]
@@ -181,8 +181,7 @@
               :display (get operation "display")})
 
       true
-      (throw (ex-info "unsupported browser document operation"
-                      {"type" kind})))))
+      (throw (ex :hestia.ex/unsupported-document-operation {"type" kind} :ex/message "unsupported browser document operation" :ex/class :hestia.class/document-operation)))))
 
 (defn canonical-operations
   [operations]
@@ -242,8 +241,7 @@
               "display" (get operation :display)})
 
       true
-      (throw (ex-info "unsupported canonical document operation"
-                      {:type kind})))))
+      (throw (ex :hestia.ex/unsupported-document-operation {:type kind} :ex/message "unsupported canonical document operation" :ex/class :hestia.class/document-operation)))))
 
 (defn project-operations
   [operations]

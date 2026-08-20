@@ -23,10 +23,9 @@
   [state expected event]
   (if (= expected (get state "phase"))
     true
-    (throw (ex-info "invalid ceremony transition"
-                    {"event" event
+    (throw (ex :hestia.ex/invalid-transition {"event" event
                      "expected" expected
-                     "actual" (get state "phase")}))))
+                     "actual" (get state "phase")} :ex/message "invalid ceremony transition" :ex/class :hestia.class/transition))))
 
 (defn status-copy
   [phase]
@@ -87,9 +86,7 @@
       (outcome (merge state {"peer_ready" true "phase" "ready"}) commands)
 
       (not (= local-ready remote-ready))
-      (throw (ex-info
-              "one browser is missing its persisted share; this pairing cannot be reprovisioned"
-              {}))
+      (throw (ex :hestia.ex/share-missing {} :ex/message "one browser is missing its persisted share; this pairing cannot be reprovisioned" :ex/class :hestia.class/ceremony))
 
       (and (not remote-ready) (get data "leader"))
       (outcome (assoc state "phase" "provisioning")
@@ -183,4 +180,4 @@
       (outcome (merge state {"phase" "error" "error" (get data "message")}) [])
 
       true
-      (throw (ex-info "unknown ceremony event" {"type" kind})))))
+      (throw (ex :hestia.ex/unknown-ceremony-event {"type" kind} :ex/message "unknown ceremony event" :ex/class :hestia.class/event)))))

@@ -43,10 +43,9 @@
   [state expected event]
   (if (= expected (get state "phase"))
     true
-    (throw (ex-info "invalid agent-room transition"
-                    {"event" event
+    (throw (ex :hestia.ex/invalid-transition {"event" event
                      "expected" expected
-                     "actual" (get state "phase")}))))
+                     "actual" (get state "phase")} :ex/message "invalid agent-room transition" :ex/class :hestia.class/transition))))
 
 (defn require-open
   [state event]
@@ -56,13 +55,13 @@
   [value field]
   (if (= true value)
     true
-    (throw (ex-info "verified fact required" {"field" field}))))
+    (throw (ex :hestia.ex/unverified-fact {"field" field} :ex/message "verified fact required" :ex/class :hestia.class/verification))))
 
 (defn require-present
   [value field]
   (if value
     value
-    (throw (ex-info "required agent-room field is missing" {"field" field}))))
+    (throw (ex :not-found {"field" field} :ex/message "required agent-room field is missing"))))
 
 (defn initial-state
   []
@@ -123,8 +122,7 @@
   (let [phase (get state "phase")]
     (if (or (= phase "profile-ready") (= phase "open"))
       true
-      (throw (ex-info "profile key rotation is not allowed in this phase"
-                      {"phase" phase})))
+      (throw (ex :hestia.ex/key-rotation-not-allowed {"phase" phase} :ex/message "profile key rotation is not allowed in this phase" :ex/class :hestia.class/key-management)))
     (require-true (get data "authority_verified") "authority_verified")
     (require-present (get data "operational_key") "operational_key")
     (require-present (get data "delegation_root") "delegation_root")
@@ -238,9 +236,8 @@
       (require-present invite "invite")
       (if (= "pending" (get invite "status"))
         true
-        (throw (ex-info "invitation is not pending"
-                        {"invite_id" invite-id
-                         "status" (get invite "status")})))
+        (throw (ex :hestia.ex/invitation-not-pending {"invite_id" invite-id
+                         "status" (get invite "status")} :ex/message "invitation is not pending" :ex/class :hestia.class/invitation)))
       (let [member-id (get data "member_id")
             epoch (+ 1 (get state "membership_epoch"))
             member {"member_id" member-id
@@ -279,9 +276,8 @@
       (require-present member "member")
       (if (= "active" (get member "status"))
         true
-        (throw (ex-info "mandate requires an active agent"
-                        {"member_id" member-id
-                         "status" (get member "status")})))
+        (throw (ex :hestia.ex/member-not-active {"member_id" member-id
+                         "status" (get member "status")} :ex/message "mandate requires an active agent" :ex/class :hestia.class/membership)))
       (require-present (get data "brief_root") "brief_root")
       (require-present (get data "workflow_root") "workflow_root")
       (let [mandate (merge data
@@ -303,9 +299,8 @@
       (require-present mandate "mandate")
       (if (= "active" (get mandate "status"))
         true
-        (throw (ex-info "work may only be recorded against an active mandate"
-                        {"mandate_id" mandate-id
-                         "status" (get mandate "status")})))
+        (throw (ex :hestia.ex/mandate-not-active {"mandate_id" mandate-id
+                         "status" (get mandate "status")} :ex/message "work may only be recorded against an active mandate" :ex/class :hestia.class/mandate)))
       (require-present (get data "step_id") "step_id")
       (require-present (get data "action_root") "action_root")
       (require-present (get data "result_root") "result_root")
@@ -328,14 +323,12 @@
           member (get (get state "members") member-id)]
       (require-present member "member")
       (if (= member-id profile-id)
-        (throw (ex-info "the host profile cannot be revoked from its own room"
-                        {"member_id" member-id}))
+        (throw (ex :hestia.ex/host-profile-protected {"member_id" member-id} :ex/message "the host profile cannot be revoked from its own room" :ex/class :hestia.class/membership))
         true)
       (if (= "active" (get member "status"))
         true
-        (throw (ex-info "member is not active"
-                        {"member_id" member-id
-                         "status" (get member "status")})))
+        (throw (ex :hestia.ex/member-not-active {"member_id" member-id
+                         "status" (get member "status")} :ex/message "member is not active" :ex/class :hestia.class/membership)))
       (let [epoch (+ 1 (get state "membership_epoch"))
             revoked (merge member
                            {"status" "revoked"
@@ -413,9 +406,8 @@
       (require-present (get data "terms_root") "terms_root")
       (if (= "proposed" (get previous "status"))
         true
-        (throw (ex-info "only a proposed offer may be countered"
-                        {"offer_id" previous-id
-                         "status" (get previous "status")})))
+        (throw (ex :hestia.ex/offer-not-proposed {"offer_id" previous-id
+                         "status" (get previous "status")} :ex/message "only a proposed offer may be countered" :ex/class :hestia.class/offer)))
       (let [offers-with-previous
             (assoc (get state "offers")
                    previous-id
@@ -438,13 +430,11 @@
       (require-present offer "offer")
       (if (= "proposed" (get offer "status"))
         true
-        (throw (ex-info "only a proposed offer may be accepted"
-                        {"offer_id" offer-id
-                         "status" (get offer "status")})))
+        (throw (ex :hestia.ex/offer-not-proposed {"offer_id" offer-id
+                         "status" (get offer "status")} :ex/message "only a proposed offer may be accepted" :ex/class :hestia.class/offer)))
       (if (= (get offer "offer_root") (get data "offer_root"))
         true
-        (throw (ex-info "acceptance must bind the exact offer root"
-                        {"offer_id" offer-id})))
+        (throw (ex :hestia.ex/offer-root-mismatch {"offer_id" offer-id} :ex/message "acceptance must bind the exact offer root" :ex/class :hestia.class/offer)))
       (if (= "human-required" (get room "acceptance_mode"))
         (require-true (get data "human_approval_verified")
                       "human_approval_verified")
@@ -476,9 +466,8 @@
       (require-present mandate "mandate")
       (if (= "active" (get mandate "status"))
         true
-        (throw (ex-info "only an active mandate may be completed"
-                        {"mandate_id" mandate-id
-                         "status" (get mandate "status")})))
+        (throw (ex :hestia.ex/mandate-not-active {"mandate_id" mandate-id
+                         "status" (get mandate "status")} :ex/message "only an active mandate may be completed" :ex/class :hestia.class/mandate)))
       (require-present (get data "completion_root") "completion_root")
       (require-present (get data "receipt_root") "receipt_root")
       (let [completed (merge mandate
@@ -507,8 +496,7 @@
       (require-present receipt "receipt")
       (if (= (get receipt "receipt_root") (get data "receipt_root"))
         true
-        (throw (ex-info "shared receipt must bind the exact private receipt root"
-                        {"receipt_id" receipt-id})))
+        (throw (ex :hestia.ex/receipt-root-mismatch {"receipt_id" receipt-id} :ex/message "shared receipt must bind the exact private receipt root" :ex/class :hestia.class/receipt)))
       (require-present (get data "audience") "audience")
       (let [shared (merge receipt
                           {"status" "shared"
@@ -560,4 +548,4 @@
       (= kind "receipt/share") (share-receipt state data)
       (= kind "room/close") (close-room state data)
       true
-      (throw (ex-info "unknown agent-room event" {"type" kind})))))
+      (throw (ex :hestia.ex/unknown-agent-room-event {"type" kind} :ex/message "unknown agent-room event" :ex/class :hestia.class/event)))))

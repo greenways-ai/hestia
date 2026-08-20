@@ -55,7 +55,7 @@
     ["body" "signer-key" "signature"]
 
     true
-    (throw (ex-info "unknown document ledger record kind" {"kind" kind}))))
+    (throw (ex :hestia.ex/unknown-record-kind {"kind" kind} :ex/message "unknown document ledger record kind" :ex/class :hestia.class/ledger))))
 
 (defn signing-frame
   "Describes the normative signing frame. The host encodes the two text fields
@@ -124,10 +124,9 @@
              (= incoming-delete 0)
              (> incoming-start accepted-start)
              (< incoming-start accepted-end))
-        (throw (ex-info "insertion falls inside accepted deleted text"
-                        {:code :text.insert-inside-deleted-range
+        (throw (ex :hestia.ex/text-insert-inside-deleted-range {:code :text.insert-inside-deleted-range
                          :incoming incoming
-                         :accepted accepted}))
+                         :accepted accepted} :ex/message "insertion falls inside accepted deleted text" :ex/class :hestia.class/document-conflict))
 
         (and (= accepted-delete 0)
              (= incoming-delete 0)
@@ -161,10 +160,9 @@
 
     (and (= (get accepted :type) "node.delete")
          (targets-deleted-node? incoming (get accepted :target-id)))
-    (throw (ex-info "operation targets a deleted node"
-                    {:code :node.target-deleted
+    (throw (ex :hestia.ex/node-target-deleted {:code :node.target-deleted
                      :incoming incoming
-                     :accepted accepted}))
+                     :accepted accepted} :ex/message "operation targets a deleted node" :ex/class :hestia.class/document-conflict))
 
     true incoming))
 
@@ -173,13 +171,11 @@
   (cond
     (and (= (get accepted :type) "node.delete")
          (= (get incoming :artefact-node-id) (get accepted :target-id)))
-    (throw (ex-info "artefact was deleted before snapshot admission"
-                    {:code :artefact.deleted}))
+    (throw (ex :hestia.ex/artefact-deleted {:code :artefact.deleted} :ex/message "artefact was deleted before snapshot admission" :ex/class :hestia.class/artefact-conflict))
 
     (and (= (get accepted :type) "text.splice")
          (= (get incoming :source-text-id) (get accepted :target-id)))
-    (throw (ex-info "artefact source changed after the batch base"
-                    {:code :artefact.source-changed}))
+    (throw (ex :hestia.ex/artefact-source-changed {:code :artefact.source-changed} :ex/message "artefact source changed after the batch base" :ex/class :hestia.class/artefact-conflict))
 
     (and (= (get accepted :type) "artefact.commit")
          (= (get incoming :artefact-id) (get accepted :artefact-id))
@@ -189,8 +185,7 @@
 
     (and (= (get accepted :type) "artefact.commit")
          (= (get incoming :artefact-id) (get accepted :artefact-id)))
-    (throw (ex-info "competing artefact results"
-                    {:code :artefact.result-conflict}))
+    (throw (ex :hestia.ex/artefact-result-conflict {:code :artefact.result-conflict} :ex/message "competing artefact results" :ex/class :hestia.class/artefact-conflict))
 
     true incoming))
 

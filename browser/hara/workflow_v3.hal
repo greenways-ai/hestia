@@ -92,7 +92,7 @@
       (let [chosen (get data "authorities")]
         (if (= 3 (count chosen))
           (outcome (merge state {"phase" "explain-enrollment" "authorities" chosen}) [])
-          (throw (ex-info "select exactly three authorities" {"count" (count chosen)}))))
+          (throw (ex :hestia.ex/invalid-authority-selection {"count" (count chosen)} :ex/message "select exactly three authorities" :ex/class :hestia.class/authority))))
       (= kind "identity/create")
       (outcome (assoc state "phase" "creating-identity")
                [(command "crypto" "create-v3-identity" [])])
@@ -130,4 +130,4 @@
       (= kind "chat/message")
       (outcome (assoc state "chat" (conj (get state "chat") data))
                [(command "transport" "send-chat" [data])])
-      true (throw (ex-info "unknown v3 event" {"type" kind})))))
+      true (throw (ex :hestia.ex/unknown-workflow-event {"type" kind} :ex/message "unknown v3 event" :ex/class :hestia.class/event)))))
