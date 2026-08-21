@@ -22,7 +22,11 @@ case "$scope" in
     npm --prefix cloudflare/signaling run check
     ;;
   ledger)
-    bash scripts/validate_document_ledger.sh
+    npm --prefix browser ci
+    (cd browser && node --test test/document-*.test.mjs)
+    npm --prefix services/agent-gateway ci
+    (cd services/agent-gateway && node --test test/document-*.test.mjs)
+    bash scripts/test-document-ledger-gateway
     ;;
   website)
     git config --global url."https://github.com/".insteadOf "git+ssh://git@github.com/"
