@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+scope="${1:?usage: scripts/connector/run-code <architecture|browser|services|ledger|website>}"
+
+case "$scope" in
+  architecture)
+    make boundary-check
+    ;;
+  browser)
+    npm --prefix browser ci
+    npm --prefix browser test
+    npm --prefix browser run build:pages
+    ;;
+  services)
+    npm --prefix services/signaling ci
+    npm --prefix services/signaling test
+    npm --prefix services/agent-gateway ci
+    npm --prefix services/agent-gateway test
+    npm --prefix cloudflare/signaling ci
+    npm --prefix cloudflare/signaling test
+    npm --prefix cloudflare/signaling run check
+    ;;
+  ledger)
+    bash scripts/validate_document_ledger.sh
+    ;;
+  website)
+    git config --global url."https://github.com/".insteadOf "git+ssh://git@github.com/"
+    git config --global --add url."https://github.com/".insteadOf "ssh://git@github.com/"
+    git config --global --add url."https://github.com/".insteadOf "git@github.com:"
+    npm --prefix site ci
+    npm --prefix site run build
+    ;;
+  *)
+    printf 'unknown connector scope: %s\n' "$scope" >&2
+    exit 64
+    ;;
+esac
