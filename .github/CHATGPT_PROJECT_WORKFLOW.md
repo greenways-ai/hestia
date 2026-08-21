@@ -1,8 +1,11 @@
 # ChatGPT GitHub connector programming workflow
 
-**Repository:** `greenways-ai/hestia`  
-**Tracking issue:** `#48`  
-**Initial base:** `a79f1f93e194dc99be9c5dfa96e75d9bf4b5df7f`  
+**Repository:** `greenways-ai/hestia`
+
+**Tracking issue:** `#48`
+
+**Initial base:** `a79f1f93e194dc99be9c5dfa96e75d9bf4b5df7f`
+
 **Status:** canonical repository-local contract for programming initiated through the ChatGPT web application
 
 This contract specializes the organisation's
