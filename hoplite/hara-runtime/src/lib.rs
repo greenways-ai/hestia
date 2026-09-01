@@ -263,15 +263,6 @@ impl<'a> crate::lang::protocol::IApplicable<Session, &'a str> for Session {
     }
 }
 
-impl<'a> crate::lang::protocol::IInvokeIn<Session, &'a str> for Session {
-    type Output = Result<String, String>;
-
-    fn invoke_in(&self, context: &mut Session, source: &'a str) -> Self::Output {
-        self.ensure_active()?;
-        crate::lang::protocol::IContext::call(context, source)
-    }
-}
-
 struct FilesystemMount {
     provider: Rc<dyn core::FileProvider>,
     kind: &'static str,
@@ -1981,7 +1972,7 @@ mod tests {
 
     #[test]
     fn named_sessions_conform_to_context_component_and_applicative_protocols() {
-        use crate::lang::protocol::{IApplicable, IComponent, IContext, IInvokeIn};
+        use crate::lang::protocol::{IApplicable, IComponent, IContext};
 
         let mut alpha = Session::new("alpha", Runtime::new());
         let mut beta = Session::new("beta", Runtime::new());
@@ -1996,7 +1987,6 @@ mod tests {
         assert_eq!(beta.current_namespace(), "user");
 
         assert_eq!(alpha.apply_in(&mut beta, "(+ 20 22)"), Ok("42".into()));
-        assert_eq!(alpha.invoke_in(&mut beta, "(+ 40 2)"), Ok("42".into()));
         assert_eq!(alpha.transform_in(&beta, "answer"), "answer");
         assert_eq!(
             alpha.transform_out(&beta, "answer", Ok("41".into())),
