@@ -307,7 +307,6 @@ pub(crate) const FOUNDATION_PROTOCOLS: &[(&str, &[(&str, usize)])] = &[
     ("IHashCached", &[("hash-current", 1), ("hash-put", 2)]),
     ("IIndexed", &[("index-of", 2)]),
     ("IIndexedKV", &[("index-of-key", 2), ("index-of-val", 2)]),
-    ("IInvokeIn", &[("invoke-in", usize::MAX)]),
     ("IIter", &[("iter", 1)]),
     ("IIterator", &[("iter-next?", 1), ("iter-next", 1)]),
     ("ILookup", &[("lookup", usize::MAX)]),
@@ -452,7 +451,6 @@ fn builtin_protocol_arity_range(
     }
     match (protocol, method) {
         ("ILookup", "lookup") | ("IReduce", "reduce") => (2, Some(3)),
-        ("IInvokeIn", "invoke-in") => (2, None),
         _ => (1, None),
     }
 }
